@@ -1,0 +1,11 @@
+// Schema inicial — vazio de propósito.
+// Modelos (Cliente, OS, Orçamento) entram conforme o produto evolui.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}

@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.db-journal
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Uploads
+public/uploads/
+
+# Claude Code
+.claude/
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
