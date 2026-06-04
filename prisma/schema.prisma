@@ -1,11 +1,155 @@
-// Schema inicial — vazio de propósito.
-// Modelos (Cliente, OS, Orçamento) entram conforme o produto evolui.
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL") -- necessário para Supabase com connection pooling
+}
+
+model Cliente {
+  id        String   @id @default(cuid())
+  nome      String
+  telefone  String?
+  cpfCnpj   String?  @unique
+  email     String?
+  obs       String?
+  apelido   String?
+  origem    String?   // "INDICACAO" | "GOOGLE" | "INSTAGRAM" | "FACEBOOK" | "FAIXADA" | "OUTRO"
+  profissao String?
+  telefones String[]
+  cep       String?
+  endereco  String?
+  cidade    String?
+  estado    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  veiculos       Veiculo[]
+  ordens         OrdemServico[]
+  dividasAvulsas DividaAvulsa[]
+}
+
+model Veiculo {
+  id           String   @id @default(cuid())
+  clienteId    String
+  marca        String
+  modelo       String
+  ano          Int?
+  placa        String?  @unique
+  cor          String?
+  km           Int?
+  motorizacao  String?
+  valvulas     String?   // "8V" | "16V" | "12V" | "20V" | "24V"
+  anoFabricacao Int?
+  anoModelo    Int?
+  combustivel  String?   // "GASOLINA" | "ETANOL" | "FLEX" | "DIESEL" | "ELETRICO" | "HIBRIDO" | "GNV"
+  combustivelEmUso String? // para Flex/Híbrido: "GASOLINA" | "ETANOL"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  cliente Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  ordens  OrdemServico[]
+}
+
+// status: ABERTA | EM_ANDAMENTO | AGUARDANDO_PECA | PRONTA | FECHADA | ENTREGUE | CANCELADA
+model OrdemServico {
+  id               String    @id @default(cuid())
+  numero           Int       @unique
+  clienteId        String
+  veiculoId        String
+  status           String    @default("ABERTA")
+  descricao        String
+  kmEntrada        Int?
+  kmSaida          Int?
+  totalPecas       Float     @default(0)
+  totalMO          Float     @default(0)
+  desconto         Float     @default(0)
+  total            Float     @default(0)
+  pago             Boolean   @default(false)
+  valorPago        Float     @default(0)
+  formaPagamento   String?
+  obs              String?
+  mecanico         String?
+  nivelCombustivel String?   // "CHEIO" | "MEIO" | "VAZIO"
+  combustivelEmUso String?
+  custoTotalPecas  Float     @default(0)
+  lucroReal        Float     @default(0)
+  margemPecas      Float     @default(0)
+  nps              Int?
+  abertura         DateTime  @default(now())
+  fechamento       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  cliente    Cliente       @relation(fields: [clienteId], references: [id])
+  veiculo    Veiculo       @relation(fields: [veiculoId], references: [id])
+  itens      ItemOrdem[]
+  pagamentos PagamentoOS[]
+
+  @@index([status])
+  @@index([pago])
+  @@index([clienteId])
+}
+
+// tipo: PECA | MAO_DE_OBRA | SERVICO
+model ItemOrdem {
+  id         String   @id @default(cuid())
+  ordemId    String
+  tipo       String   @default("PECA")
+  descricao  String
+  quantidade Float    @default(1)
+  valorUnit  Float
+  valorTotal Float
+  custoUnit  Float?
+  fornecedor String?
+  createdAt  DateTime @default(now())
+
+  ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+}
+
+// formaPagamento: DINHEIRO | PIX | CARTAO_CREDITO | CARTAO_DEBITO | TRANSFERENCIA
+model PagamentoOS {
+  id             String   @id @default(cuid())
+  ordemId        String
+  valor          Float
+  formaPagamento String   @default("DINHEIRO")
+  data           DateTime @default(now())
+  obs            String?
+  createdAt      DateTime @default(now())
+
+  ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+
+  @@index([ordemId])
+}
+
+model DividaAvulsa {
+  id        Int      @id @default(autoincrement())
+  clienteId String
+  descricao String
+  valor     Float
+  valorPago Float    @default(0)
+  pago      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cliente    Cliente          @relation(fields: [clienteId], references: [id])
+  pagamentos PagamentoDivida[]
+}
+
+model PagamentoDivida {
+  id             Int          @id @default(autoincrement())
+  dividaId       Int
+  valor          Float
+  formaPagamento String
+  obs            String?
+  data           DateTime     @default(now())
+
+  divida DividaAvulsa @relation(fields: [dividaId], references: [id])
+}
+
+model Sequencia {
+  id     String @id
+  ultimo Int    @default(0)
 }
