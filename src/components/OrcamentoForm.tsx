@@ -126,8 +126,6 @@ export default function OrcamentoForm({
   }, [clienteId]);
 
   function addItem() {
-    if (!itemForm.descricao.trim()) { setItemError("Informe a descrição do item."); return; }
-    if (!itemForm.valorUnit) { setItemError("Informe o valor unitário."); return; }
     setItemError("");
     setItens([...itens, { ...itemForm }]);
     setItemForm({ tipo: "PECA", descricao: "", quantidade: "1", valorUnit: "", custoUnit: "" });

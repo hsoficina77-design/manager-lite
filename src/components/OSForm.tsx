@@ -85,8 +85,6 @@ export default function OSForm({
   const showCombUso = ["FLEX", "HIBRIDO"].includes(selectedVeiculo?.combustivel || "");
 
   function addItem() {
-    if (!itemForm.descricao.trim()) { setItemError("Informe a descrição do item."); return; }
-    if (!itemForm.valorUnit) { setItemError("Informe o valor unitário."); return; }
     setItemError("");
     setItens([...itens, { ...itemForm }]);
     setItemForm({ tipo: "PECA", descricao: "", quantidade: "1", valorUnit: "", custoUnit: "" });
@@ -168,112 +166,121 @@ export default function OSForm({
   const isEdit = mode === "edit";
 
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <Link href={isEdit && osId ? `/os/${osId}` : "/os"} className="text-sm text-zinc-500 hover:text-zinc-700">← Voltar</Link>
-        <h1 className="text-2xl font-bold text-zinc-900 mt-2">{isEdit ? "Editar OS" : "Nova OS"}</h1>
+    <div className="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <Link
+          href={isEdit && osId ? `/os/${osId}` : "/os"}
+          aria-label="Voltar"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </Link>
+        <div className="leading-tight">
+          <h1 className="text-xl font-bold text-zinc-900">{isEdit ? "Editar OS" : "Nova OS"}</h1>
+          <p className="text-xs text-zinc-500">Preencha os dados do serviço</p>
+        </div>
       </div>
 
-      <form onSubmit={submit} className="space-y-5">
-        {/* Cliente e Veículo */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-          <h2 className="font-semibold text-zinc-800">Cliente e Veículo</h2>
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">Cliente *</label>
-            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} required className={inputCls}>
-              <option value="">Selecionar cliente...</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>{c.nome}{c.telefone ? ` · ${c.telefone}` : ""}</option>
-              ))}
-            </select>
-          </div>
+      <form onSubmit={submit}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          {/* Coluna principal */}
+          <div className="lg:col-span-2 space-y-5">
+            {/* Cliente e Veículo */}
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+              <h2 className="font-semibold text-zinc-800">Cliente e Veículo</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Cliente *</label>
+                  <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} required className={inputCls}>
+                    <option value="">Selecionar cliente...</option>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}{c.telefone ? ` · ${c.telefone}` : ""}</option>
+                    ))}
+                  </select>
+                </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">Veículo *</label>
-            <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} required disabled={!clienteId || veiculos.length === 0} className={inputCls + " disabled:bg-zinc-50 disabled:text-zinc-400"}>
-              <option value="">{!clienteId ? "Selecione um cliente primeiro" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Selecionar veículo..."}</option>
-              {veiculos.map((v) => (
-                <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{v.ano ? ` (${v.ano})` : ""}</option>
-              ))}
-            </select>
-            {clienteId && veiculos.length === 0 && (
-              <p className="text-xs text-red-500 mt-1">
-                Cliente sem veículo.{" "}
-                <Link href={`/clientes/${clienteId}`} className="underline">Adicionar veículo</Link>
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição do serviço *</label>
-              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">KM de Entrada</label>
-              <input type="number" value={kmEntrada} onChange={(e) => setKmEntrada(e.target.value)} placeholder="Ex: 52000" className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Observações</label>
-              <input value={obs} onChange={(e) => setObs(e.target.value)} className={inputCls} />
-            </div>
-          </div>
-        </div>
-
-        {/* Mecânico */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-3">
-          <h2 className="font-semibold text-zinc-800">Mecânico</h2>
-          {mecanicos.length > 0 ? (
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Responsável</label>
-              <select value={mecanicoId} onChange={(e) => setMecanicoId(e.target.value)} className={inputCls}>
-                <option value="">— Não atribuído</option>
-                {mecanicos.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome}{m.especialidade ? ` · ${m.especialidade}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <p className="text-sm text-zinc-500">
-              Nenhum mecânico cadastrado.{" "}
-              <Link href="/mecanicos" className="text-red-600 underline">Cadastrar mecânico</Link>
-            </p>
-          )}
-        </div>
-
-        {/* Recepção do veículo */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-3">
-          <h2 className="font-semibold text-zinc-800">Recepção do veículo</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Nível de combustível</label>
-              <select value={nivelCombustivel} onChange={(e) => setNivelCombustivel(e.target.value)} className={inputCls}>
-                <option value="">Selecione...</option>
-                <option value="CHEIO">Cheio</option>
-                <option value="MEIO">Meio</option>
-                <option value="VAZIO">Vazio</option>
-              </select>
-            </div>
-            {showCombUso && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Combustível em uso</label>
-                <select value={combustivelEmUso} onChange={(e) => setCombustivelEmUso(e.target.value)} className={inputCls}>
-                  <option value="">Selecione...</option>
-                  <option value="GASOLINA">Gasolina</option>
-                  <option value="ETANOL">Etanol</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Veículo *</label>
+                  <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} required disabled={!clienteId || veiculos.length === 0} className={inputCls + " disabled:bg-zinc-50 disabled:text-zinc-400"}>
+                    <option value="">{!clienteId ? "Selecione um cliente primeiro" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Selecionar veículo..."}</option>
+                    {veiculos.map((v) => (
+                      <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{v.ano ? ` (${v.ano})` : ""}</option>
+                    ))}
+                  </select>
+                  {clienteId && veiculos.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Cliente sem veículo.{" "}
+                      <Link href={`/clientes/${clienteId}`} className="underline">Adicionar veículo</Link>
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Itens */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-          <h2 className="font-semibold text-zinc-800">Itens</h2>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição do serviço *</label>
+                <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+              </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Mecânico responsável</label>
+                {mecanicos.length > 0 ? (
+                  <select value={mecanicoId} onChange={(e) => setMecanicoId(e.target.value)} className={inputCls}>
+                    <option value="">— Não atribuído</option>
+                    {mecanicos.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.nome}{m.especialidade ? ` · ${m.especialidade}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm text-zinc-500">
+                    Nenhum mecânico cadastrado.{" "}
+                    <Link href="/mecanicos" className="text-red-600 underline">Cadastrar mecânico</Link>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Recepção do veículo */}
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-3">
+              <h2 className="font-semibold text-zinc-800">Recepção do veículo</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Nível de combustível</label>
+                  <select value={nivelCombustivel} onChange={(e) => setNivelCombustivel(e.target.value)} className={inputCls}>
+                    <option value="">Selecione...</option>
+                    <option value="CHEIO">Cheio</option>
+                    <option value="MEIO">Meio</option>
+                    <option value="VAZIO">Vazio</option>
+                  </select>
+                </div>
+                {showCombUso && (
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">Combustível em uso</label>
+                    <select value={combustivelEmUso} onChange={(e) => setCombustivelEmUso(e.target.value)} className={inputCls}>
+                      <option value="">Selecione...</option>
+                      <option value="GASOLINA">Gasolina</option>
+                      <option value="ETANOL">Etanol</option>
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">KM de Entrada</label>
+                  <input type="number" value={kmEntrada} onChange={(e) => setKmEntrada(e.target.value)} placeholder="Ex: 52000" className={inputCls} />
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Observação de entrada</label>
+                  <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex: avarias na lataria, riscos, itens no veículo..." className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Itens */}
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+              <h2 className="font-semibold text-zinc-800">Itens</h2>
+
+              <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end">
             <div className="col-span-2 sm:col-span-2">
               <label className="block text-xs text-zinc-500 mb-1">Tipo</label>
               <select value={itemForm.tipo} onChange={(e) => setItemForm({ ...itemForm, tipo: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
@@ -345,22 +352,33 @@ export default function OSForm({
             </div>
           )}
 
-          {itens.length > 0 && (
-            <div className="border-t border-zinc-100 pt-3 space-y-1 text-sm text-right">
-              {totalPecas > 0 && <div className="flex justify-between text-zinc-500"><span>Peças</span><span>{formatCurrency(totalPecas)}</span></div>}
-              {totalMO > 0 && <div className="flex justify-between text-zinc-500"><span>Mão de obra / Serviços</span><span>{formatCurrency(totalMO)}</span></div>}
-              <div className="flex justify-between font-bold text-zinc-900 text-base pt-1 border-t border-zinc-100">
-                <span>Total</span><span>{formatCurrency(total)}</span>
-              </div>
             </div>
-          )}
+          </div>
+
+          {/* Resumo */}
+          <aside className="lg:sticky lg:top-6 space-y-4">
+              <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-semibold text-zinc-800">Resumo</h2>
+                  <span className="text-xs text-zinc-400">{itens.length} {itens.length === 1 ? "item" : "itens"}</span>
+                </div>
+
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between text-zinc-500"><span>Peças</span><span>{formatCurrency(totalPecas)}</span></div>
+                  <div className="flex justify-between text-zinc-500"><span>Mão de obra / Serviços</span><span>{formatCurrency(totalMO)}</span></div>
+                  <div className="flex justify-between font-bold text-zinc-900 text-lg pt-2 mt-1 border-t border-zinc-100">
+                    <span>Total</span><span>{formatCurrency(total)}</span>
+                  </div>
+                </div>
+
+                {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+
+                <button type="submit" disabled={saving} className="w-full rounded-lg bg-red-600 py-3 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                  {saving ? (isEdit ? "Salvando..." : "Criando OS...") : (isEdit ? "Salvar alterações" : "Criar OS")}
+                </button>
+              </div>
+          </aside>
         </div>
-
-        {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
-
-        <button type="submit" disabled={saving} className="w-full rounded-lg bg-red-600 py-3 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
-          {saving ? (isEdit ? "Salvando..." : "Criando OS...") : (isEdit ? "Salvar alterações" : "Criar OS")}
-        </button>
       </form>
     </div>
   );
