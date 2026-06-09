@@ -42,8 +42,8 @@ export default async function ClientesPage({
   });
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="text-2xl font-bold text-zinc-900">Clientes</h1>
         <Link
           href="/clientes/novo"

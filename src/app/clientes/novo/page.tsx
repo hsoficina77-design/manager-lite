@@ -3,26 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-const ORIGENS = [
-  { value: "INDICACAO", label: "Indicação" },
-  { value: "GOOGLE", label: "Google" },
-  { value: "CHATGPT", label: "ChatGPT" },
-  { value: "INSTAGRAM", label: "Instagram" },
-  { value: "FACEBOOK", label: "Facebook" },
-  { value: "FAIXADA", label: "Faixada" },
-  { value: "OUTRO", label: "Outro" },
-];
-
-const COMBUSTIVEIS = [
-  { value: "GASOLINA", label: "Gasolina" },
-  { value: "ETANOL", label: "Etanol" },
-  { value: "FLEX", label: "Flex" },
-  { value: "DIESEL", label: "Diesel" },
-  { value: "ELETRICO", label: "Elétrico" },
-  { value: "HIBRIDO", label: "Híbrido" },
-  { value: "GNV", label: "GNV" },
-];
+import { ORIGENS, COMBUSTIVEIS, COMBUSTIVEIS_BICOMBUSTIVEL } from "@/lib/constants";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -88,10 +69,10 @@ export default function NovoClientePage() {
   }
 
   const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
-  const showCombUso = ["FLEX", "HIBRIDO"].includes(veiculo.combustivel);
+  const showCombUso = COMBUSTIVEIS_BICOMBUSTIVEL.includes(veiculo.combustivel);
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <div className="mb-6">
         <Link href="/clientes" className="text-sm text-zinc-500 hover:text-zinc-700">← Voltar</Link>
         <h1 className="text-2xl font-bold text-zinc-900 mt-2">Novo Cliente</h1>

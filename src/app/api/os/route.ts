@@ -6,6 +6,7 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const pendente = searchParams.get("pendente") === "true";
   const clienteId = searchParams.get("clienteId");
+  const mecanicoId = searchParams.get("mecanicoId");
 
   const where: Record<string, unknown> = {};
 
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
   }
   if (clienteId) {
     where.clienteId = clienteId;
+  }
+  if (mecanicoId) {
+    where.mecanicoId = mecanicoId;
   }
 
   const ordens = await prisma.ordemServico.findMany({
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
       descricao,
       kmEntrada,
       obs,
-      mecanico,
+      mecanicoId,
       nivelCombustivel,
       combustivelEmUso,
       itens = [],
@@ -53,6 +57,16 @@ export async function POST(request: Request) {
         { error: "Cliente, veículo e descrição são obrigatórios" },
         { status: 400 }
       );
+    }
+
+    // Resolve o nome do mecânico para gravar denormalizado (compat com PDF/listas).
+    let mecanicoNome: string | null = null;
+    if (mecanicoId) {
+      const mec = await prisma.mecanico.findUnique({
+        where: { id: mecanicoId },
+        select: { nome: true },
+      });
+      mecanicoNome = mec?.nome ?? null;
     }
 
     const totalPecas = (itens as any[])
@@ -86,7 +100,8 @@ export async function POST(request: Request) {
           descricao: descricao.trim(),
           kmEntrada: kmEntrada ? Number(kmEntrada) : null,
           obs: obs?.trim() || null,
-          mecanico: mecanico?.trim() || null,
+          mecanicoId: mecanicoId || null,
+          mecanico: mecanicoNome,
           nivelCombustivel: nivelCombustivel?.trim() || null,
           combustivelEmUso: combustivelEmUso?.trim() || null,
           totalPecas,

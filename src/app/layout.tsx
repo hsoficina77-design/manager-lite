@@ -1,11 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Sidebar } from "@/components/Sidebar";
 import { prisma } from "@/lib/prisma";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Manager Lite",
+  title: "HS Oficina Mecânica",
   description: "Gestão simples para oficinas mecânicas.",
+  icons: { icon: "/logo-hs.png", apple: "/logo-hs.png" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default async function RootLayout({
@@ -26,7 +33,7 @@ export default async function RootLayout({
       <body className="min-h-screen bg-gray-100 text-zinc-900 antialiased">
         <div className="flex h-screen overflow-hidden">
           <Sidebar pendingCount={pendingCount} />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
             <div className="max-w-6xl mx-auto">{children}</div>
           </main>
         </div>

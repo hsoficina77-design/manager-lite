@@ -183,8 +183,8 @@ export default function ClienteDetailPage() {
   const showCombUso = ["FLEX","HIBRIDO"].includes(veiculoForm.combustivel);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-6">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <Link href="/clientes" className="text-sm text-zinc-500 hover:text-zinc-700">← Clientes</Link>
           <div className="flex items-center gap-2 mt-1">

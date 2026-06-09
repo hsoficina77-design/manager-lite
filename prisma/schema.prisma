@@ -3,9 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL") -- necessário para Supabase com connection pooling
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Cliente {
@@ -28,6 +28,7 @@ model Cliente {
 
   veiculos       Veiculo[]
   ordens         OrdemServico[]
+  orcamentos     Orcamento[]
   dividasAvulsas DividaAvulsa[]
 }
 
@@ -49,8 +50,9 @@ model Veiculo {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  cliente Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  ordens  OrdemServico[]
+  cliente    Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  ordens     OrdemServico[]
+  orcamentos Orcamento[]
 }
 
 // status: ABERTA | EM_ANDAMENTO | AGUARDANDO_PECA | PRONTA | FECHADA | ENTREGUE | CANCELADA
@@ -71,7 +73,8 @@ model OrdemServico {
   valorPago        Float     @default(0)
   formaPagamento   String?
   obs              String?
-  mecanico         String?
+  mecanico         String?   // nome denormalizado (compat / OS antigas)
+  mecanicoId       String?
   nivelCombustivel String?   // "CHEIO" | "MEIO" | "VAZIO"
   combustivelEmUso String?
   custoTotalPecas  Float     @default(0)
@@ -83,14 +86,88 @@ model OrdemServico {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  cliente    Cliente       @relation(fields: [clienteId], references: [id])
-  veiculo    Veiculo       @relation(fields: [veiculoId], references: [id])
-  itens      ItemOrdem[]
-  pagamentos PagamentoOS[]
+  cliente     Cliente       @relation(fields: [clienteId], references: [id])
+  veiculo     Veiculo       @relation(fields: [veiculoId], references: [id])
+  mecanicoRef Mecanico?     @relation(fields: [mecanicoId], references: [id])
+  itens       ItemOrdem[]
+  pagamentos  PagamentoOS[]
+  orcamento   Orcamento?
 
   @@index([status])
   @@index([pago])
   @@index([clienteId])
+  @@index([mecanicoId])
+}
+
+model Mecanico {
+  id            String   @id @default(cuid())
+  nome          String
+  telefone      String?
+  especialidade String?
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ordens OrdemServico[]
+  metas  Meta[]
+}
+
+// Meta de faturamento total por mecânico, por mês.
+model Meta {
+  id         String   @id @default(cuid())
+  mecanicoId String
+  ano        Int
+  mes        Int      // 1-12
+  valorAlvo  Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  mecanico Mecanico @relation(fields: [mecanicoId], references: [id], onDelete: Cascade)
+
+  @@unique([mecanicoId, ano, mes])
+}
+
+// status: PENDENTE | APROVADO | RECUSADO | CONVERTIDO
+model Orcamento {
+  id         String    @id @default(cuid())
+  numero     Int       @unique
+  clienteId  String
+  veiculoId  String?
+  status     String    @default("PENDENTE")
+  descricao  String
+  totalPecas Float     @default(0)
+  totalMO    Float     @default(0)
+  desconto   Float     @default(0)
+  total      Float     @default(0)
+  validade   DateTime?
+  obs        String?
+  ordemId    String?   @unique // OS gerada na conversão
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  cliente Cliente         @relation(fields: [clienteId], references: [id])
+  veiculo Veiculo?        @relation(fields: [veiculoId], references: [id])
+  ordem   OrdemServico?   @relation(fields: [ordemId], references: [id])
+  itens   ItemOrcamento[]
+
+  @@index([status])
+  @@index([clienteId])
+}
+
+// tipo: PECA | MAO_DE_OBRA | SERVICO
+model ItemOrcamento {
+  id          String   @id @default(cuid())
+  orcamentoId String
+  tipo        String   @default("PECA")
+  descricao   String
+  quantidade  Float    @default(1)
+  valorUnit   Float
+  valorTotal  Float
+  custoUnit   Float?
+  fornecedor  String?
+  createdAt   DateTime @default(now())
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 }
 
 // tipo: PECA | MAO_DE_OBRA | SERVICO

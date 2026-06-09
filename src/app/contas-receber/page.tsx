@@ -219,7 +219,7 @@ export default function ContasReceberPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Toast */}
       {toastMsg && (
         <div className="fixed top-4 right-4 z-50 bg-zinc-900 text-white rounded-lg px-4 py-2 text-sm shadow-lg">
@@ -321,12 +321,12 @@ export default function ContasReceberPage() {
       )}
 
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Contas a Receber</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Pendências agrupadas por cliente</p>
         </div>
-        <button onClick={() => setNovaDividaModal(true)} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+        <button onClick={() => setNovaDividaModal(true)} className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
           + Nova dívida avulsa
         </button>
       </div>
@@ -340,12 +340,12 @@ export default function ContasReceberPage() {
       </div>
 
       {/* Busca e toggles */}
-      <div className="flex gap-3 mb-4 items-center">
+      <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por nome, apelido, placa, #OS..."
-          className="flex-1 max-w-sm rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full sm:flex-1 sm:max-w-sm rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         />
         <label className="flex items-center gap-2 text-sm text-zinc-600 cursor-pointer">
           <input type="checkbox" checked={mostrarQuitados} onChange={(e) => setMostrarQuitados(e.target.checked)} className="rounded" />
@@ -415,7 +415,7 @@ export default function ContasReceberPage() {
                       const diasOS = Math.floor((Date.now() - new Date(os.abertura).getTime()) / 86400000);
                       const atrasada = diasOS > 30;
                       return (
-                        <div key={os.id} className="flex items-center justify-between py-1.5 border-b border-zinc-50 last:border-0">
+                        <div key={os.id} className="flex flex-col gap-1.5 py-1.5 border-b border-zinc-50 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 text-sm">
                               <Link href={`/os/${os.id}`} className="font-medium text-red-600 hover:underline shrink-0">#{os.numero}</Link>
@@ -429,7 +429,7 @@ export default function ContasReceberPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <div className="flex items-center gap-2 shrink-0 sm:ml-3">
                             <span className="font-semibold text-red-600 text-sm">{formatCurrency(saldo)}</span>
                             <button
                               onClick={() => openHistorico("os", os.id)}
@@ -458,12 +458,12 @@ export default function ContasReceberPage() {
                       const saldo = div.valor - div.valorPago;
                       const dias = Math.floor((Date.now() - new Date(div.createdAt).getTime()) / 86400000);
                       return (
-                        <div key={div.id} className="flex items-center justify-between py-1.5 border-b border-zinc-50 last:border-0">
+                        <div key={div.id} className="flex flex-col gap-1.5 py-1.5 border-b border-zinc-50 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-zinc-800 truncate">{div.descricao}</p>
                             <p className="text-xs text-zinc-400">Há {dias} dias · {formatDate(div.createdAt)}</p>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <div className="flex items-center gap-2 shrink-0 sm:ml-3">
                             <span className="font-semibold text-red-600 text-sm">{formatCurrency(saldo)}</span>
                             <button
                               onClick={() => openHistorico("divida", div.id)}

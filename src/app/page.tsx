@@ -158,20 +158,20 @@ export default async function Dashboard({
     .sort((a, b) => b.saldo - a.saldo);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Dashboard</h1>
           <p className="text-sm text-zinc-500 mt-1">Visão geral da oficina</p>
         </div>
         {/* Filtro de período */}
-        <div className="flex gap-1 bg-zinc-100 rounded-lg p-1">
+        <div className="flex gap-1 bg-zinc-100 rounded-lg p-1 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-1">
           {PERIODO_OPTIONS.map((opt) => (
             <Link
               key={opt.value}
               href={`/?periodo=${opt.value}`}
               className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                "shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
                 periodo === opt.value
                   ? "bg-white text-zinc-900 shadow-sm"
                   : "text-zinc-500 hover:text-zinc-700"

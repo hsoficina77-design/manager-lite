@@ -8,6 +8,30 @@
     scrollbar-color: #d4d4d8 transparent;
   }
 
+  /* Evita zoom automático do iOS ao focar inputs (fontes < 16px) */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: drawer-in 0.2s ease-out;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -20,5 +44,30 @@
   ::-webkit-scrollbar-thumb {
     background-color: #d4d4d8;
     border-radius: 3px;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Esconde elementos do layout (sidebar etc.) que não fazem parte do documento */
+  .print-hide-layout {
+    display: none !important;
+  }
+
+  .print-doc {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  @page {
+    margin: 14mm;
   }
 }

@@ -53,7 +53,7 @@ function OSListContent() {
   const ate = searchParams.get("ate") || "";
 
   const [ordens, setOrdens] = useState<OS[]>([]);
-  const [mecanicos, setMecanicos] = useState<string[]>([]);
+  const [mecanicos, setMecanicos] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFiltros, setShowFiltros] = useState(false);
   const [localQ, setLocalQ] = useState(q);
@@ -128,22 +128,22 @@ function OSListContent() {
   const hasFilters = q || mecanico || de || ate;
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900">Ordens de Serviço</h1>
+    <div className="p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Ordens de Serviço</h1>
         <Link href="/os/nova" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
           + Nova OS
         </Link>
       </div>
 
       {/* Abas */}
-      <div className="flex gap-1 mb-4 bg-zinc-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 mb-4 bg-zinc-100 rounded-lg p-1 w-full sm:w-fit overflow-x-auto">
         {TABS.map((tab) => (
           <Link
             key={tab.value}
             href={tab.value ? `/os?status=${tab.value}` : "/os"}
             className={cn(
-              "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              "shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
               tabParam === tab.value ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
             )}
           >
@@ -171,7 +171,7 @@ function OSListContent() {
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <option value="">Todos mecânicos</option>
-              {mecanicos.map((m) => <option key={m} value={m}>{m}</option>)}
+              {mecanicos.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)}
             </select>
             <input type="date" value={localDe} onChange={(e) => setLocalDe(e.target.value)} title="De" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
             <input type="date" value={localAte} onChange={(e) => setLocalAte(e.target.value)} title="Até" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
