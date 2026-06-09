@@ -15,6 +15,10 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
+// O layout consulta o banco a cada render; força renderização dinâmica
+// para o Next não tentar pré-renderizar páginas (ex.: /_not-found) em build time.
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({
   children,
 }: {
