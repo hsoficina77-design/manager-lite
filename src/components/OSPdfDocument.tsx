@@ -9,6 +9,7 @@ type Pagamento = {
 };
 export type OSForPdf = {
   numero: number; status: string; descricao: string;
+  defeitoRelatado?: string | null;
   kmEntrada: number | null; kmSaida: number | null;
   totalPecas: number; totalMO: number; desconto: number; total: number;
   pago: boolean; valorPago: number; obs: string | null;
@@ -171,6 +172,14 @@ export function OSPdfDocument({ os, logoSrc }: { os: OSForPdf; logoSrc?: string 
             {os.mecanico ? <Text style={s.boxLine}>Mecânico responsável: {os.mecanico}</Text> : null}
           </View>
         </View>
+
+        {/* Defeito relatado */}
+        {os.defeitoRelatado ? (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Defeito Relatado pelo Cliente</Text>
+            <Text style={s.desc}>{os.defeitoRelatado}</Text>
+          </View>
+        ) : null}
 
         {/* Descrição */}
         <View style={s.section}>

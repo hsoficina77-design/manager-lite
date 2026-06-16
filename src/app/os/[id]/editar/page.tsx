@@ -19,6 +19,7 @@ export default function EditarOSPage() {
           clienteId: os.clienteId ?? os.cliente?.id ?? "",
           veiculoId: os.veiculoId ?? os.veiculo?.id ?? "",
           descricao: os.descricao ?? "",
+          defeitoRelatado: os.defeitoRelatado ?? "",
           kmEntrada: os.kmEntrada != null ? String(os.kmEntrada) : "",
           obs: os.obs ?? "",
           mecanicoId: os.mecanicoId ?? "",

@@ -20,6 +20,7 @@ export type OSFormInitial = {
   clienteId: string;
   veiculoId: string;
   descricao: string;
+  defeitoRelatado: string;
   kmEntrada: string;
   obs: string;
   mecanicoId: string;
@@ -48,6 +49,7 @@ export default function OSForm({
   const [clienteId, setClienteId] = useState(preClienteId);
   const [veiculoId, setVeiculoId] = useState(preVeiculoId);
   const [descricao, setDescricao] = useState(initial?.descricao ?? "");
+  const [defeitoRelatado, setDefeitoRelatado] = useState(initial?.defeitoRelatado ?? "");
   const [kmEntrada, setKmEntrada] = useState(initial?.kmEntrada ?? "");
   const [obs, setObs] = useState(initial?.obs ?? "");
   const [mecanicoId, setMecanicoId] = useState(initial?.mecanicoId ?? "");
@@ -157,6 +159,7 @@ export default function OSForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             clienteId, veiculoId, descricao,
+            defeitoRelatado,
             kmEntrada,
             obs,
             mecanicoId,
@@ -176,6 +179,7 @@ export default function OSForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clienteId, veiculoId, descricao,
+          defeitoRelatado: defeitoRelatado || undefined,
           kmEntrada: kmEntrada || undefined,
           obs: obs || undefined,
           mecanicoId: mecanicoId || undefined,
@@ -245,6 +249,12 @@ export default function OSForm({
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Defeito relatado pelo cliente</label>
+                <textarea value={defeitoRelatado} onChange={(e) => setDefeitoRelatado(e.target.value)} rows={2} placeholder="Ex: cliente relata barulho ao frear e luz da injeção acesa..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+                <p className="mt-1 text-xs text-zinc-400">A queixa/sintoma como o cliente descreveu — separado do serviço que será executado.</p>
               </div>
 
               <div>

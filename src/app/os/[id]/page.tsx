@@ -22,6 +22,7 @@ type Pagamento = {
 };
 type OS = {
   id: string; numero: number; status: string; descricao: string;
+  defeitoRelatado: string | null;
   kmEntrada: number | null; kmSaida: number | null;
   totalPecas: number; totalMO: number; desconto: number; total: number;
   pago: boolean; valorPago: number; formaPagamento: string | null; obs: string | null;
@@ -389,6 +390,14 @@ export default function OSDetailPage() {
                     <span><span className="text-zinc-400">Combustível em uso: </span>{os.combustivelEmUso}</span>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Defeito relatado pelo cliente */}
+            {os.defeitoRelatado && (
+              <div className="mb-6">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Defeito relatado pelo cliente</p>
+                <p className="text-sm leading-relaxed text-zinc-900 whitespace-pre-wrap">{os.defeitoRelatado}</p>
               </div>
             )}
 

@@ -63,6 +63,7 @@ model OrdemServico {
   veiculoId        String
   status           String    @default("ABERTA")
   descricao        String
+  defeitoRelatado  String?
   kmEntrada        Int?
   kmSaida          Int?
   totalPecas       Float     @default(0)

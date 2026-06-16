@@ -36,6 +36,7 @@ export async function PUT(
       clienteId,
       veiculoId,
       descricao,
+      defeitoRelatado,
       kmEntrada,
       kmSaida,
       desconto,
@@ -99,6 +100,7 @@ export async function PUT(
     if (clienteId !== undefined) data.clienteId = clienteId;
     if (veiculoId !== undefined) data.veiculoId = veiculoId;
     if (descricao !== undefined) data.descricao = descricao.trim();
+    if (defeitoRelatado !== undefined) data.defeitoRelatado = defeitoRelatado?.trim() || null;
     if (kmEntrada !== undefined) data.kmEntrada = kmEntrada ? Number(kmEntrada) : null;
     if (kmSaida !== undefined) data.kmSaida = kmSaida ? Number(kmSaida) : null;
     if (obs !== undefined) data.obs = obs?.trim() || null;
