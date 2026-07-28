@@ -16,6 +16,7 @@ type LinkDef = {
 export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   // Fecha o drawer ao navegar
   useEffect(() => {
@@ -51,6 +52,9 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
   const isLinkActive = (link: LinkDef) =>
     link.exact ? pathname === link.href : pathname.startsWith(link.href);
 
+  const toggleExpand = (href: string) =>
+    setExpanded((prev) => ({ ...prev, [href]: !prev[href] }));
+
   const brand = (
     <div className="flex items-center gap-2.5">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -67,25 +71,55 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
       {links.map((link) => {
         const isActive = isLinkActive(link);
         const childActive = link.children?.some(isLinkActive) ?? false;
+        const hasChildren = !!link.children?.length;
+        const isExpanded = expanded[link.href] ?? (isActive || childActive);
         return (
           <div key={link.href}>
-            <Link
-              href={link.href}
+            <div
               className={cn(
-                "flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                "flex items-center rounded-md transition-colors",
                 isActive && !childActive
                   ? "bg-red-700 text-white"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800"
               )}
             >
-              <span>{link.label}</span>
-              {link.badge != null && link.badge > 0 && (
-                <span className="rounded-full bg-red-600 text-white text-xs font-bold px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                  {link.badge > 99 ? "99+" : link.badge}
-                </span>
+              <Link
+                href={link.href}
+                className="flex flex-1 items-center justify-between px-3 py-2.5 text-sm font-medium"
+              >
+                <span>{link.label}</span>
+                {link.badge != null && link.badge > 0 && (
+                  <span className="rounded-full bg-red-600 text-white text-xs font-bold px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                    {link.badge > 99 ? "99+" : link.badge}
+                  </span>
+                )}
+              </Link>
+              {hasChildren && (
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(link.href)}
+                  aria-label={isExpanded ? `Recolher ${link.label}` : `Expandir ${link.label}`}
+                  aria-expanded={isExpanded}
+                  className="px-2 py-2.5 text-current hover:text-white"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className={cn("transition-transform", isExpanded && "rotate-180")}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
               )}
-            </Link>
-            {link.children && (isActive || childActive) && (
+            </div>
+            {link.children && isExpanded && (
               <div className="mt-0.5 ml-3 space-y-0.5 border-l border-zinc-800 pl-2">
                 {link.children.map((child) => (
                   <Link

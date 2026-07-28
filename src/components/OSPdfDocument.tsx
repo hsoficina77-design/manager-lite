@@ -109,6 +109,11 @@ const s = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between",
   },
   footerText: { fontSize: 7.5, color: C.mute },
+
+  // Assinatura
+  signature: { marginTop: 36, alignItems: "center" },
+  signatureLine: { width: 220, borderTopWidth: 1, borderTopColor: C.mute, paddingTop: 4 },
+  signatureLabel: { fontSize: 8, color: C.mute, textAlign: "center" },
 });
 
 export function OSPdfDocument({ os, logoSrc }: { os: OSForPdf; logoSrc?: string }) {
@@ -238,6 +243,13 @@ export function OSPdfDocument({ os, logoSrc }: { os: OSForPdf; logoSrc?: string 
             </View>
           </>
         ) : null}
+
+        {/* Assinatura */}
+        <View style={s.signature} wrap={false}>
+          <View style={s.signatureLine}>
+            <Text style={s.signatureLabel}>Assinatura do Cliente</Text>
+          </View>
+        </View>
 
         {/* Rodapé fixo */}
         <View style={s.footer} fixed>

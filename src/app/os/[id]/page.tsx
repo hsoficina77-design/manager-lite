@@ -485,6 +485,15 @@ export default function OSDetailPage() {
                 <p className="text-sm text-zinc-900 whitespace-pre-wrap">{os.obs}</p>
               </div>
             )}
+
+            {/* Assinatura do cliente */}
+            <div className="mt-10 flex justify-center">
+              <div className="w-72 text-center">
+                <div className="border-t border-zinc-400 pt-1.5 text-xs text-zinc-500">
+                  Assinatura do Cliente
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
