@@ -10,7 +10,7 @@ import OSFotos, { type Foto } from "@/components/OSFotos";
 const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
   ssr: false,
   loading: () => (
-    <span className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Visualizar PDF</span>
+    <span className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Baixar</span>
   ),
 });
 
@@ -266,9 +266,6 @@ export default function OSDetailPage() {
               <option key={s} value={s}>{STATUS_LABEL[s]}</option>
             ))}
           </select>
-          <button onClick={() => window.print()} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
-            Imprimir
-          </button>
           <OSPdfButton os={os} />
           <button onClick={deleteOS} disabled={deletingOS} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
             Excluir
