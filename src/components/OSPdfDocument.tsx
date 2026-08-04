@@ -25,7 +25,11 @@ export type OSForPdf = {
   };
   itens: Item[];
   pagamentos: Pagamento[];
+  fotos?: { id: string; url: string; legenda: string | null; createdAt: string }[];
 };
+
+/** Foto já convertida para data URL — o react-pdf não busca imagens remotas de forma confiável. */
+export type FotoPdf = { id: string; src: string; legenda: string | null; createdAt: string };
 
 const STATUS_LABEL: Record<string, string> = {
   ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Aguardando Peça",
@@ -114,9 +118,26 @@ const s = StyleSheet.create({
   signature: { marginTop: 36, alignItems: "center" },
   signatureLine: { width: 220, borderTopWidth: 1, borderTopColor: C.mute, paddingTop: 4 },
   signatureLabel: { fontSize: 8, color: C.mute, textAlign: "center" },
+
+  // Fotos
+  fotosTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 2 },
+  fotosSub: { fontSize: 8.5, color: C.sub, marginBottom: 12 },
+  fotosGrid: { flexDirection: "row", flexWrap: "wrap" },
+  fotoCell: { width: "33.33%", paddingRight: 8, marginBottom: 12 },
+  fotoImg: { width: "100%", height: 120, objectFit: "cover", borderRadius: 4 },
+  fotoLegenda: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, marginTop: 3 },
+  fotoData: { fontSize: 7.5, color: C.mute, marginTop: 1 },
 });
 
-export function OSPdfDocument({ os, logoSrc }: { os: OSForPdf; logoSrc?: string }) {
+export function OSPdfDocument({
+  os,
+  logoSrc,
+  fotos = [],
+}: {
+  os: OSForPdf;
+  logoSrc?: string;
+  fotos?: FotoPdf[];
+}) {
   const veicLinha2: string[] = [];
   if (os.veiculo.cor) veicLinha2.push(`Cor: ${os.veiculo.cor}`);
   if (os.veiculo.motorizacao) veicLinha2.push(`Motor: ${os.veiculo.motorizacao}`);
@@ -260,6 +281,36 @@ export function OSPdfDocument({ os, logoSrc }: { os: OSForPdf; logoSrc?: string 
           />
         </View>
       </Page>
+
+      {/* Fotos — páginas próprias, após o documento */}
+      {fotos.length > 0 ? (
+        <Page size="A4" style={s.page}>
+          <Text style={s.fotosTitle}>Fotos do Serviço</Text>
+          <Text style={s.fotosSub}>
+            OS Nº {os.numero} · {os.veiculo.marca} {os.veiculo.modelo}
+            {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
+          </Text>
+
+          <View style={s.fotosGrid}>
+            {fotos.map((foto) => (
+              <View key={foto.id} style={s.fotoCell} wrap={false}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                <Image style={s.fotoImg} src={foto.src} />
+                {foto.legenda ? <Text style={s.fotoLegenda}>{foto.legenda}</Text> : null}
+                <Text style={s.fotoData}>{dia(foto.createdAt)}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={s.footer} fixed>
+            <Text style={s.footerText}>HS Oficina Mecânica · (11) 91330-4006</Text>
+            <Text
+              style={s.footerText}
+              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            />
+          </View>
+        </Page>
+      ) : null}
     </Document>
   );
 }

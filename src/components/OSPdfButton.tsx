@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
-import { OSPdfDocument, type OSForPdf } from "./OSPdfDocument";
+import { OSPdfDocument, type FotoPdf, type OSForPdf } from "./OSPdfDocument";
 
 async function toDataUrl(url: string): Promise<string | undefined> {
   try {
@@ -23,10 +23,39 @@ async function toDataUrl(url: string): Promise<string | undefined> {
 export default function OSPdfButton({ os }: { os: OSForPdf }) {
   const [logo, setLogo] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [fotos, setFotos] = useState<FotoPdf[]>([]);
+  const [preparando, setPreparando] = useState(false);
+
+  const totalFotos = os.fotos?.length ?? 0;
 
   useEffect(() => {
     toDataUrl("/logo-hs.png").then(setLogo);
   }, []);
+
+  // As imagens precisam virar data URL antes de entrar no PDF.
+  const carregarFotos = useCallback(async () => {
+    if (totalFotos === 0) {
+      setFotos([]);
+      return;
+    }
+    setPreparando(true);
+    try {
+      const convertidas = await Promise.all(
+        (os.fotos ?? []).map(async (f) => {
+          const src = await toDataUrl(f.url);
+          return src ? { id: f.id, src, legenda: f.legenda, createdAt: f.createdAt } : null;
+        })
+      );
+      setFotos(convertidas.filter((f): f is FotoPdf => f !== null));
+    } finally {
+      setPreparando(false);
+    }
+  }, [os.fotos, totalFotos]);
+
+  async function abrir() {
+    setOpen(true);
+    await carregarFotos();
+  }
 
   // Fecha com ESC
   useEffect(() => {
@@ -37,7 +66,7 @@ export default function OSPdfButton({ os }: { os: OSForPdf }) {
   }, [open]);
 
   async function baixar() {
-    const blob = await pdf(<OSPdfDocument os={os} logoSrc={logo} />).toBlob();
+    const blob = await pdf(<OSPdfDocument os={os} logoSrc={logo} fotos={fotos} />).toBlob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -51,7 +80,7 @@ export default function OSPdfButton({ os }: { os: OSForPdf }) {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={abrir}
         className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
       >
         Visualizar PDF
@@ -69,11 +98,19 @@ export default function OSPdfButton({ os }: { os: OSForPdf }) {
           >
             <span className="text-sm font-medium text-zinc-700">
               Pré-visualização — OS #{os.numero}
+              {totalFotos > 0 && (
+                <span className="ml-2 text-xs font-normal text-zinc-400">
+                  {preparando
+                    ? `preparando ${totalFotos} foto${totalFotos > 1 ? "s" : ""}...`
+                    : `${fotos.length} foto${fotos.length > 1 ? "s" : ""} anexada${fotos.length > 1 ? "s" : ""}`}
+                </span>
+              )}
             </span>
             <div className="flex gap-2">
               <button
                 onClick={baixar}
-                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                disabled={preparando}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Baixar PDF
               </button>
@@ -88,9 +125,15 @@ export default function OSPdfButton({ os }: { os: OSForPdf }) {
 
           {/* Visualizador */}
           <div className="flex-1 p-4" onClick={(e) => e.stopPropagation()}>
-            <PDFViewer width="100%" height="100%" showToolbar style={{ border: "none", borderRadius: 8 }}>
-              <OSPdfDocument os={os} logoSrc={logo} />
-            </PDFViewer>
+            {preparando ? (
+              <div className="flex h-full items-center justify-center rounded-lg bg-white text-sm text-zinc-500">
+                Preparando as fotos do PDF...
+              </div>
+            ) : (
+              <PDFViewer width="100%" height="100%" showToolbar style={{ border: "none", borderRadius: 8 }}>
+                <OSPdfDocument os={os} logoSrc={logo} fotos={fotos} />
+              </PDFViewer>
+            )}
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
+import OSFotos, { type Foto } from "@/components/OSFotos";
 
 const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
   ssr: false,
@@ -39,6 +40,7 @@ type OS = {
   };
   itens: Item[];
   pagamentos: Pagamento[];
+  fotos: Foto[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -89,7 +91,7 @@ export default function OSDetailPage() {
     fetch(`/api/os/${id}`)
       .then((r) => r.json())
       .then((data: OS) => {
-        setOs(data);
+        setOs({ ...data, fotos: data.fotos ?? [] });
         setDescontoInput(data.desconto ? String(data.desconto) : "");
       })
       .finally(() => setLoading(false));
@@ -496,10 +498,47 @@ export default function OSDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Fotos no documento — páginas próprias na impressão */}
+        {os.fotos.length > 0 && (
+          <div className="print-fotos mt-6 rounded-xl border border-zinc-200 bg-white px-5 sm:px-8 py-6 shadow-sm print:border-none print:shadow-none">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Fotos do serviço
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {os.fotos.map((foto) => (
+                <figure key={foto.id}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={foto.url}
+                    alt={foto.legenda ?? "Foto do serviço"}
+                    className="aspect-[4/3] w-full rounded-lg border border-zinc-200 object-cover"
+                  />
+                  <figcaption className="mt-1 text-[11px] leading-tight text-zinc-500">
+                    {foto.legenda ? (
+                      <span className="block font-medium text-zinc-700">{foto.legenda}</span>
+                    ) : null}
+                    {formatDate(foto.createdAt)}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Ferramentas de gestão — não aparecem na impressão */}
       <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 space-y-6">
+        {/* Fotos */}
+        <OSFotos
+          osId={os.id}
+          fotos={os.fotos}
+          podeEditar={os.status !== "CANCELADA"}
+          onChange={(atualizar) =>
+            setOs((atual) => (atual ? { ...atual, fotos: atualizar(atual.fotos) } : atual))
+          }
+        />
+
         {/* Desconto */}
         {podeEditar && (
           <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">

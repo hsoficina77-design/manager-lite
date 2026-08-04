@@ -93,6 +93,7 @@ model OrdemServico {
   itens       ItemOrdem[]
   pagamentos  PagamentoOS[]
   orcamento   Orcamento?
+  fotos       FotoOS[]
 
   @@index([status])
   @@index([pago])
@@ -225,6 +226,20 @@ model PagamentoDivida {
   data           DateTime     @default(now())
 
   divida DividaAvulsa @relation(fields: [dividaId], references: [id])
+}
+
+// Foto anexada à OS — o arquivo fica no Supabase Storage, aqui só a referência.
+model FotoOS {
+  id        String   @id @default(cuid())
+  ordemId   String
+  path      String   // caminho do arquivo no bucket (usado para excluir)
+  url       String   // URL pública da imagem
+  legenda   String?
+  createdAt DateTime @default(now())
+
+  ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+
+  @@index([ordemId])
 }
 
 model Sequencia {

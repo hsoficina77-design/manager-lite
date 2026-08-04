@@ -33,6 +33,20 @@ prisma/
   schema.prisma
 ```
 
+## Segurança do banco (Supabase)
+
+Todas as tabelas do schema `public` têm **RLS habilitado sem policies**, o que bloqueia
+a API REST pública do Supabase (papéis `anon`/`authenticated`). O app não é afetado
+porque acessa o banco via Prisma, conectado como dono das tabelas.
+
+Ao criar uma tabela nova, adicione na mesma migração:
+
+```sql
+ALTER TABLE public."NomeDaTabela" ENABLE ROW LEVEL SECURITY;
+```
+
+Nunca usar `FORCE ROW LEVEL SECURITY` — derrubaria o acesso do Prisma.
+
 ## Escopo do MVP
 
 - [ ] Cadastro de clientes

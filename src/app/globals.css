@@ -67,6 +67,17 @@
     border-radius: 0 !important;
   }
 
+  /* Fotos vão em páginas próprias, fora do ajuste A4 aplicado ao .print-doc */
+  .print-fotos {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-fotos img {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   @page {
     margin: 14mm;
   }

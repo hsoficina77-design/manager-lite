@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { deleteFotos } from "@/lib/supabase-storage";
 
 export async function GET(
   _req: Request,
@@ -14,6 +15,7 @@ export async function GET(
       veiculo: true,
       itens: { orderBy: { createdAt: "asc" } },
       pagamentos: { orderBy: { data: "desc" } },
+      fotos: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -158,7 +160,9 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
+    const fotos = await prisma.fotoOS.findMany({ where: { ordemId: id }, select: { path: true } });
     await prisma.ordemServico.delete({ where: { id } });
+    await deleteFotos(fotos.map((f) => f.path));
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir OS" }, { status: 500 });
