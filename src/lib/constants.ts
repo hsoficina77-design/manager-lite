@@ -21,6 +21,26 @@ export const COMBUSTIVEIS = [
   { value: "GNV", label: "GNV" },
 ] as const;
 
+// Momento em que a foto da OS foi tirada.
+// A ordem daqui define a ordem das seções na tela, na impressão e no PDF.
+export const FOTO_TIPOS = [
+  { value: "ENTRADA", label: "Entrada", ajuda: "Estado do veículo na chegada" },
+  { value: "SERVICO", label: "Serviço", ajuda: "Peças trocadas, antes e depois" },
+  { value: "SAIDA", label: "Saída", ajuda: "Estado do veículo na entrega" },
+] as const;
+
+export type FotoTipo = (typeof FOTO_TIPOS)[number]["value"];
+
+export const FOTO_TIPO_VALUES: readonly string[] = FOTO_TIPOS.map((t) => t.value);
+
+// Fotos criadas antes da separação por momento ficam como serviço.
+export const FOTO_TIPO_PADRAO: FotoTipo = "SERVICO";
+
+/** Momento da foto, tolerante a valor desconhecido — assim nenhuma foto some da tela. */
+export function tipoDaFoto(tipo: string): FotoTipo {
+  return FOTO_TIPOS.find((t) => t.value === tipo)?.value ?? FOTO_TIPO_PADRAO;
+}
+
 // Combustíveis que admitem "combustível em uso" (motor bicombustível).
 export const COMBUSTIVEIS_BICOMBUSTIVEL = ["FLEX", "HIBRIDO"];
 

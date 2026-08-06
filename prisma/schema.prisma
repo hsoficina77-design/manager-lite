@@ -235,11 +235,12 @@ model FotoOS {
   path      String   // caminho do arquivo no bucket (usado para excluir)
   url       String   // URL pública da imagem
   legenda   String?
+  tipo      String   @default("SERVICO") // ENTRADA | SERVICO | SAIDA
   createdAt DateTime @default(now())
 
   ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
 
-  @@index([ordemId])
+  @@index([ordemId, tipo])
 }
 
 model Sequencia {

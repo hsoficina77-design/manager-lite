@@ -1,4 +1,5 @@
-import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
+import { FOTO_TIPOS, tipoDaFoto } from "@/lib/constants";
 
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
@@ -25,11 +26,22 @@ export type OSForPdf = {
   };
   itens: Item[];
   pagamentos: Pagamento[];
-  fotos?: { id: string; url: string; legenda: string | null; createdAt: string }[];
+  fotos?: { id: string; url: string; legenda: string | null; tipo: string; createdAt: string }[];
 };
 
-/** Foto já convertida para data URL — o react-pdf não busca imagens remotas de forma confiável. */
-export type FotoPdf = { id: string; src: string; legenda: string | null; createdAt: string };
+/**
+ * Foto pronta para o PDF: `src` é uma miniatura em data URL (o react-pdf não busca
+ * imagens remotas de forma confiável) e `url` é a original no Storage, usada como
+ * link — o PDF fica leve e a foto em alta continua a um toque, sem gravar nada novo.
+ */
+export type FotoPdf = {
+  id: string;
+  src: string;
+  url: string;
+  legenda: string | null;
+  tipo: string;
+  createdAt: string;
+};
 
 const STATUS_LABEL: Record<string, string> = {
   ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Aguardando Peça",
@@ -121,10 +133,24 @@ const s = StyleSheet.create({
 
   // Fotos
   fotosTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 2 },
-  fotosSub: { fontSize: 8.5, color: C.sub, marginBottom: 12 },
-  fotosGrid: { flexDirection: "row", flexWrap: "wrap" },
-  fotoCell: { width: "33.33%", paddingRight: 8, marginBottom: 12 },
-  fotoImg: { width: "100%", height: 120, objectFit: "cover", borderRadius: 4 },
+  fotosSub: { fontSize: 8.5, color: C.sub, marginBottom: 2 },
+  fotosDica: { fontSize: 7.5, color: C.mute, marginBottom: 12, fontFamily: "Helvetica-Oblique" },
+  fotosSecao: { marginBottom: 4 },
+  fotosSecaoTitulo: {
+    fontSize: 8, fontFamily: "Helvetica-Bold", color: C.sub, textTransform: "uppercase",
+    letterSpacing: 1, borderBottomWidth: 1, borderBottomColor: C.line, paddingBottom: 3, marginBottom: 8,
+  },
+  // Margem negativa + padding simétrico: as colunas ficam com respiro igual dos dois
+  // lados e a grade encosta certinho nas duas margens da página.
+  fotosGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 },
+  fotoCell: { width: "33.33%", paddingHorizontal: 4, marginBottom: 12 },
+  // "contain" em vez de "cover": foto de celular na vertical aparece inteira,
+  // centralizada na moldura, em vez de ter as bordas cortadas.
+  fotoBox: {
+    backgroundColor: C.soft, borderWidth: 1, borderColor: C.line, borderRadius: 4,
+    textDecoration: "none",
+  },
+  fotoImg: { width: "100%", height: 120, objectFit: "contain" },
   fotoLegenda: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, marginTop: 3 },
   fotoData: { fontSize: 7.5, color: C.mute, marginTop: 1 },
 });
@@ -290,17 +316,29 @@ export function OSPdfDocument({
             OS Nº {os.numero} · {os.veiculo.marca} {os.veiculo.modelo}
             {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
           </Text>
+          <Text style={s.fotosDica}>Toque em uma foto para abri-la em alta resolução.</Text>
 
-          <View style={s.fotosGrid}>
-            {fotos.map((foto) => (
-              <View key={foto.id} style={s.fotoCell} wrap={false}>
-                {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                <Image style={s.fotoImg} src={foto.src} />
-                {foto.legenda ? <Text style={s.fotoLegenda}>{foto.legenda}</Text> : null}
-                <Text style={s.fotoData}>{dia(foto.createdAt)}</Text>
+          {FOTO_TIPOS.map((t) => {
+            const doMomento = fotos.filter((f) => tipoDaFoto(f.tipo) === t.value);
+            if (doMomento.length === 0) return null;
+            return (
+              <View key={t.value} style={s.fotosSecao}>
+                <Text style={s.fotosSecaoTitulo}>{t.label}</Text>
+                <View style={s.fotosGrid}>
+                  {doMomento.map((foto) => (
+                    <View key={foto.id} style={s.fotoCell} wrap={false}>
+                      <Link src={foto.url} style={s.fotoBox}>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                        <Image style={s.fotoImg} src={foto.src} />
+                      </Link>
+                      {foto.legenda ? <Text style={s.fotoLegenda}>{foto.legenda}</Text> : null}
+                      <Text style={s.fotoData}>{dia(foto.createdAt)}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-            ))}
-          </View>
+            );
+          })}
 
           <View style={s.footer} fixed>
             <Text style={s.footerText}>HS Oficina Mecânica · (11) 91330-4006</Text>

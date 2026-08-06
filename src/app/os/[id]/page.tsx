@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
+import { FOTO_TIPOS, tipoDaFoto } from "@/lib/constants";
 import OSFotos, { type Foto } from "@/components/OSFotos";
 
 const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
@@ -496,30 +497,44 @@ export default function OSDetailPage() {
           </div>
         </div>
 
-        {/* Fotos no documento — páginas próprias na impressão */}
+        {/* Fotos no documento — páginas próprias na impressão, agrupadas por momento */}
         {os.fotos.length > 0 && (
-          <div className="print-fotos mt-6 rounded-xl border border-zinc-200 bg-white px-5 sm:px-8 py-6 shadow-sm print:border-none print:shadow-none">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          <div className="print-fotos mt-6 space-y-5 rounded-xl border border-zinc-200 bg-white px-5 sm:px-8 py-6 shadow-sm print:border-none print:shadow-none">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
               Fotos do serviço
             </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {os.fotos.map((foto) => (
-                <figure key={foto.id}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={foto.url}
-                    alt={foto.legenda ?? "Foto do serviço"}
-                    className="aspect-[4/3] w-full rounded-lg border border-zinc-200 object-cover"
-                  />
-                  <figcaption className="mt-1 text-[11px] leading-tight text-zinc-500">
-                    {foto.legenda ? (
-                      <span className="block font-medium text-zinc-700">{foto.legenda}</span>
-                    ) : null}
-                    {formatDate(foto.createdAt)}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
+            {FOTO_TIPOS.map((t) => {
+              const doMomento = os.fotos.filter((f) => tipoDaFoto(f.tipo) === t.value);
+              if (doMomento.length === 0) return null;
+              return (
+                <section key={t.value}>
+                  <p className="mb-2 border-b border-zinc-200 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    {t.label}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {doMomento.map((foto) => (
+                      <figure key={foto.id}>
+                        {/* object-contain: a foto aparece inteira e centralizada, sem corte */}
+                        <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={foto.url}
+                            alt={foto.legenda ?? `Foto — ${t.label}`}
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        </div>
+                        <figcaption className="mt-1 text-[11px] leading-tight text-zinc-500">
+                          {foto.legenda ? (
+                            <span className="block font-medium text-zinc-700">{foto.legenda}</span>
+                          ) : null}
+                          {formatDate(foto.createdAt)}
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </div>

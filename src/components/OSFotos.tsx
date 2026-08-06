@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn, formatDate } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compress";
+import { FOTO_TIPOS, FOTO_TIPO_PADRAO, tipoDaFoto, type FotoTipo } from "@/lib/constants";
 
 export type Foto = {
   id: string;
   url: string;
   legenda: string | null;
+  tipo: string;
   createdAt: string;
 };
 
-type Enviando = { tempId: string; preview: string; erro?: string };
+type Enviando = { tempId: string; preview: string; tipo: FotoTipo; erro?: string };
 
 export default function OSFotos({
   osId,
@@ -26,18 +28,29 @@ export default function OSFotos({
   podeEditar: boolean;
 }) {
   const [enviando, setEnviando] = useState<Enviando[]>([]);
-  const [arrastando, setArrastando] = useState(false);
-  const [visor, setVisor] = useState<number | null>(null);
+  // O visor guarda o id, não o índice: mudar o momento reordena a lista e um
+  // índice fixo saltaria para outra foto.
+  const [visor, setVisor] = useState<string | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
+  const tipoAlvo = useRef<FotoTipo>(FOTO_TIPO_PADRAO);
 
-  async function enviarArquivos(files: FileList | File[] | null) {
+  // Ordem de navegação do visor: seções na ordem definida, cronológico dentro de cada uma.
+  const ordenadas = useMemo(
+    () => FOTO_TIPOS.flatMap((t) => fotos.filter((f) => tipoDaFoto(f.tipo) === t.value)),
+    [fotos]
+  );
+  const indice = visor === null ? -1 : ordenadas.findIndex((f) => f.id === visor);
+  const fotoAtual = indice >= 0 ? ordenadas[indice] : null;
+
+  async function enviarArquivos(files: FileList | File[] | null, tipo: FotoTipo) {
     const lista = Array.from(files ?? []).filter((f) => f.type.startsWith("image/"));
     if (lista.length === 0) return;
 
     const pendentes: Enviando[] = lista.map((f) => ({
       tempId: `${Date.now()}-${Math.random()}`,
       preview: URL.createObjectURL(f),
+      tipo,
     }));
     setEnviando((atual) => [...atual, ...pendentes]);
 
@@ -48,6 +61,7 @@ export default function OSFotos({
         const blob = await compressImage(lista[i]);
         const form = new FormData();
         form.append("file", blob, "foto.jpg");
+        form.append("tipo", tipo);
         const res = await fetch(`/api/os/${osId}/fotos`, { method: "POST", body: form });
         if (!res.ok) throw new Error((await res.json()).error ?? "Falha no envio");
         const nova: Foto = await res.json();
@@ -64,6 +78,11 @@ export default function OSFotos({
         );
       }
     }
+  }
+
+  function escolher(origem: "camera" | "galeria", tipo: FotoTipo) {
+    tipoAlvo.current = tipo;
+    (origem === "camera" ? cameraRef : galeriaRef).current?.click();
   }
 
   async function excluir(id: string) {
@@ -84,39 +103,40 @@ export default function OSFotos({
     });
   }
 
+  async function salvarTipo(id: string, tipo: FotoTipo) {
+    onChange((atuais) => atuais.map((f) => (f.id === id ? { ...f, tipo } : f)));
+    await fetch(`/api/os/${osId}/fotos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo }),
+    });
+  }
+
   // Navegação do visor por teclado
   useEffect(() => {
-    if (visor === null) return;
+    if (indice < 0) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setVisor(null);
-      if (e.key === "ArrowRight") setVisor((v) => (v === null ? v : Math.min(fotos.length - 1, v + 1)));
-      if (e.key === "ArrowLeft") setVisor((v) => (v === null ? v : Math.max(0, v - 1)));
+      if (e.key === "ArrowRight" && indice < ordenadas.length - 1) {
+        setVisor(ordenadas[indice + 1].id);
+      }
+      if (e.key === "ArrowLeft" && indice > 0) setVisor(ordenadas[indice - 1].id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visor, fotos.length]);
+  }, [indice, ordenadas]);
 
-  const vazio = fotos.length === 0 && enviando.length === 0;
+  const total = fotos.length;
 
   return (
     <div className="no-print bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-zinc-800">Fotos do serviço</h2>
-          <p className="text-xs text-zinc-500">
-            {fotos.length > 0
-              ? `${fotos.length} foto${fotos.length > 1 ? "s" : ""} — aparecem no fim do PDF do cliente`
-              : "Entrada do veículo, peças trocadas, antes e depois"}
-          </p>
-        </div>
-        {fotos.length > 0 && podeEditar && (
-          <button
-            onClick={() => galeriaRef.current?.click()}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
-          >
-            + Adicionar
-          </button>
-        )}
+      <div>
+        <h2 className="font-semibold text-zinc-800">Fotos</h2>
+        <p className="text-xs text-zinc-500">
+          {total > 0
+            ? `${total} foto${total > 1 ? "s" : ""} — aparecem no fim do PDF do cliente, separadas por momento`
+            : "Registre o veículo na entrada, o serviço e a entrega"}
+        </p>
       </div>
 
       {podeEditar && (
@@ -129,7 +149,7 @@ export default function OSFotos({
             multiple
             className="hidden"
             onChange={(e) => {
-              enviarArquivos(e.target.files);
+              enviarArquivos(e.target.files, tipoAlvo.current);
               e.target.value = "";
             }}
           />
@@ -140,67 +160,140 @@ export default function OSFotos({
             multiple
             className="hidden"
             onChange={(e) => {
-              enviarArquivos(e.target.files);
+              enviarArquivos(e.target.files, tipoAlvo.current);
               e.target.value = "";
             }}
           />
         </>
       )}
 
-      {/* Área de envio — só aparece quando ainda não há fotos, para não empurrar a galeria pra baixo */}
-      {podeEditar && vazio && (
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setArrastando(true);
-          }}
-          onDragLeave={() => setArrastando(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setArrastando(false);
-            enviarArquivos(e.dataTransfer.files);
-          }}
-          className={cn(
-            "rounded-xl border-2 border-dashed p-6 text-center transition-colors",
-            arrastando ? "border-red-400 bg-red-50" : "border-zinc-200"
+      {FOTO_TIPOS.map((t) => (
+        <Secao
+          key={t.value}
+          label={t.label}
+          ajuda={t.ajuda}
+          fotos={fotos.filter((f) => tipoDaFoto(f.tipo) === t.value)}
+          enviando={enviando.filter((e) => e.tipo === t.value)}
+          podeEditar={podeEditar}
+          onSoltar={(files) => enviarArquivos(files, t.value)}
+          onEscolher={(origem) => escolher(origem, t.value)}
+          onAbrir={setVisor}
+        />
+      ))}
+
+      {/* Visor em tela cheia */}
+      {fotoAtual && (
+        <Visor
+          foto={fotoAtual}
+          indice={indice}
+          total={ordenadas.length}
+          podeEditar={podeEditar}
+          onFechar={() => setVisor(null)}
+          onAnterior={() => indice > 0 && setVisor(ordenadas[indice - 1].id)}
+          onProxima={() => indice < ordenadas.length - 1 && setVisor(ordenadas[indice + 1].id)}
+          onExcluir={() => excluir(fotoAtual.id)}
+          onLegenda={(texto) => salvarLegenda(fotoAtual.id, texto)}
+          onTipo={(tipo) => salvarTipo(fotoAtual.id, tipo)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Um momento do serviço (entrada, serviço, saída) — cada um é seu próprio alvo de envio. */
+function Secao({
+  label,
+  ajuda,
+  fotos,
+  enviando,
+  podeEditar,
+  onSoltar,
+  onEscolher,
+  onAbrir,
+}: {
+  label: string;
+  ajuda: string;
+  fotos: Foto[];
+  enviando: Enviando[];
+  podeEditar: boolean;
+  onSoltar: (files: FileList) => void;
+  onEscolher: (origem: "camera" | "galeria") => void;
+  onAbrir: (id: string) => void;
+}) {
+  const [arrastando, setArrastando] = useState(false);
+  const vazio = fotos.length === 0 && enviando.length === 0;
+
+  return (
+    <section
+      onDragOver={
+        podeEditar
+          ? (e) => {
+              e.preventDefault();
+              setArrastando(true);
+            }
+          : undefined
+      }
+      onDragLeave={() => setArrastando(false)}
+      onDrop={
+        podeEditar
+          ? (e) => {
+              e.preventDefault();
+              setArrastando(false);
+              onSoltar(e.dataTransfer.files);
+            }
+          : undefined
+      }
+      className={cn(
+        "rounded-xl border p-3 transition-colors",
+        arrastando ? "border-red-400 bg-red-50" : "border-zinc-200"
+      )}
+    >
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium text-zinc-800">
+          {label}
+          {fotos.length > 0 && (
+            <span className="ml-1.5 text-xs font-normal text-zinc-400">{fotos.length}</span>
           )}
-        >
-          <CameraIcon />
-          <p className="mt-2 text-sm text-zinc-600">
-            <span className="hidden sm:inline">Arraste as fotos aqui ou escolha abaixo</span>
-            <span className="sm:hidden">Registre o serviço com fotos</span>
-          </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-center">
+        </h3>
+        <span className="truncate text-xs text-zinc-400">{ajuda}</span>
+      </div>
+
+      {vazio ? (
+        podeEditar ? (
+          <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-zinc-200 px-3 py-4 sm:flex-row sm:justify-center">
+            <span className="text-xs text-zinc-400">
+              <span className="hidden sm:inline">Arraste as fotos aqui ou</span>
+              <span className="sm:hidden">Nenhuma foto ainda</span>
+            </span>
             <button
-              onClick={() => cameraRef.current?.click()}
-              className="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 sm:hidden"
+              onClick={() => onEscolher("camera")}
+              className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 sm:hidden"
             >
               Tirar foto
             </button>
             <button
-              onClick={() => galeriaRef.current?.click()}
-              className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              onClick={() => onEscolher("galeria")}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
             >
               <span className="sm:hidden">Escolher da galeria</span>
-              <span className="hidden sm:inline">Escolher fotos</span>
+              <span className="hidden sm:inline">escolha os arquivos</span>
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Galeria */}
-      {!vazio && (
+        ) : (
+          <p className="px-1 py-2 text-xs text-zinc-400">Nenhuma foto.</p>
+        )
+      ) : (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-          {fotos.map((foto, i) => (
+          {fotos.map((foto) => (
             <button
               key={foto.id}
-              onClick={() => setVisor(i)}
+              onClick={() => onAbrir(foto.id)}
               className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={foto.url}
-                alt={foto.legenda ?? "Foto do serviço"}
+                alt={foto.legenda ?? `Foto — ${label}`}
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform group-hover:scale-105"
               />
@@ -234,7 +327,7 @@ export default function OSFotos({
 
           {podeEditar && (
             <button
-              onClick={() => (isMobile() ? cameraRef.current : galeriaRef.current)?.click()}
+              onClick={() => onEscolher(isMobile() ? "camera" : "galeria")}
               className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600"
             >
               <span className="text-2xl leading-none">+</span>
@@ -246,22 +339,7 @@ export default function OSFotos({
           )}
         </div>
       )}
-
-      {/* Visor em tela cheia */}
-      {visor !== null && fotos[visor] && (
-        <Visor
-          foto={fotos[visor]}
-          indice={visor}
-          total={fotos.length}
-          podeEditar={podeEditar}
-          onFechar={() => setVisor(null)}
-          onAnterior={() => setVisor(Math.max(0, visor - 1))}
-          onProxima={() => setVisor(Math.min(fotos.length - 1, visor + 1))}
-          onExcluir={() => excluir(fotos[visor].id)}
-          onLegenda={(texto) => salvarLegenda(fotos[visor].id, texto)}
-        />
-      )}
-    </div>
+    </section>
   );
 }
 
@@ -275,6 +353,7 @@ function Visor({
   onProxima,
   onExcluir,
   onLegenda,
+  onTipo,
 }: {
   foto: Foto;
   indice: number;
@@ -285,9 +364,11 @@ function Visor({
   onProxima: () => void;
   onExcluir: () => void;
   onLegenda: (texto: string) => void;
+  onTipo: (tipo: FotoTipo) => void;
 }) {
   const [legenda, setLegenda] = useState(foto.legenda ?? "");
   const toqueX = useRef<number | null>(null);
+  const tipoAtual = tipoDaFoto(foto.tipo);
 
   useEffect(() => setLegenda(foto.legenda ?? ""), [foto.id, foto.legenda]);
 
@@ -356,18 +437,39 @@ function Visor({
         )}
       </div>
 
-      <div className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+      <div className="space-y-3 px-4 py-4" onClick={(e) => e.stopPropagation()}>
         {podeEditar ? (
-          <input
-            value={legenda}
-            onChange={(e) => setLegenda(e.target.value)}
-            onBlur={() => legenda !== (foto.legenda ?? "") && onLegenda(legenda)}
-            placeholder="Legenda (ex: Peça trocada, Entrada do veículo)"
-            maxLength={80}
-            className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
-          />
+          <>
+            <div className="flex items-center justify-center gap-1.5">
+              {FOTO_TIPOS.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => t.value !== tipoAtual && onTipo(t.value)}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    t.value === tipoAtual
+                      ? "border-white bg-white text-zinc-900"
+                      : "border-white/25 text-white/70 hover:bg-white/10"
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <input
+              value={legenda}
+              onChange={(e) => setLegenda(e.target.value)}
+              onBlur={() => legenda !== (foto.legenda ?? "") && onLegenda(legenda)}
+              placeholder="Legenda (ex: Pastilha desgastada, Painel na entrega)"
+              maxLength={80}
+              className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
+            />
+          </>
         ) : (
-          foto.legenda && <p className="text-center text-sm text-white/80">{foto.legenda}</p>
+          <p className="text-center text-sm text-white/80">
+            {FOTO_TIPOS.find((t) => t.value === tipoAtual)?.label}
+            {foto.legenda ? ` · ${foto.legenda}` : ""}
+          </p>
         )}
       </div>
     </div>
@@ -383,26 +485,6 @@ function Spinner() {
     <svg className="h-5 w-5 animate-spin text-zinc-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
-    </svg>
-  );
-}
-
-function CameraIcon() {
-  return (
-    <svg
-      className="mx-auto text-zinc-300"
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-      <circle cx="12" cy="13" r="3.5" />
     </svg>
   );
 }

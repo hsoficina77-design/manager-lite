@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { pdf } from "@react-pdf/renderer";
+import { toThumbDataUrl } from "@/lib/image-compress";
 import { OSPdfDocument, type FotoPdf, type OSForPdf } from "./OSPdfDocument";
 
 async function toDataUrl(url: string): Promise<string | undefined> {
@@ -20,10 +21,39 @@ async function toDataUrl(url: string): Promise<string | undefined> {
   }
 }
 
+/**
+ * Baixa a foto e reduz para miniatura só na memória. O PDF carrega a miniatura e
+ * aponta para a original no Storage — nada de novo é gravado no bucket.
+ */
+async function toFotoPdf(foto: NonNullable<OSForPdf["fotos"]>[number]): Promise<FotoPdf | null> {
+  try {
+    const res = await fetch(foto.url);
+    if (!res.ok) return null;
+    const src = await toThumbDataUrl(await res.blob());
+    return {
+      id: foto.id,
+      src,
+      url: foto.url,
+      legenda: foto.legenda,
+      tipo: foto.tipo,
+      createdAt: foto.createdAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Remove caracteres que o Windows/macOS não aceitam em nome de arquivo. */
+function limpar(texto: string) {
+  return texto.replace(/[\\/:*?"<>|]/g, "").trim();
+}
+
+/** Ex.: "OS 123 - João Silva - Gol ABC1D23.pdf" */
 function nomeArquivo(os: OSForPdf) {
-  const cliente = os.cliente.nome.replace(/[\\/:*?"<>|]/g, "").trim();
-  return `OS ${os.numero} - ${cliente}.pdf`;
+  const { marca, modelo, placa } = os.veiculo;
+  const veiculo = [marca, modelo, placa].filter(Boolean).join(" ");
+  const partes = [`OS ${os.numero}`, limpar(os.cliente.nome), limpar(veiculo)];
+  return `${partes.filter(Boolean).join(" - ")}.pdf`;
 }
 
 export default function OSPdfButton({ os }: { os: OSForPdf }) {
@@ -40,12 +70,7 @@ export default function OSPdfButton({ os }: { os: OSForPdf }) {
     setErro(false);
     try {
       // As imagens precisam virar data URL antes de entrar no PDF.
-      const convertidas = await Promise.all(
-        (os.fotos ?? []).map(async (f) => {
-          const src = await toDataUrl(f.url);
-          return src ? { id: f.id, src, legenda: f.legenda, createdAt: f.createdAt } : null;
-        })
-      );
+      const convertidas = await Promise.all((os.fotos ?? []).map(toFotoPdf));
       const fotos = convertidas.filter((f): f is FotoPdf => f !== null);
 
       const blob = await pdf(<OSPdfDocument os={os} logoSrc={logo} fotos={fotos} />).toBlob();

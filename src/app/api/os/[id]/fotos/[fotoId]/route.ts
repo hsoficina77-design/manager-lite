@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
+import { FOTO_TIPO_VALUES } from "@/lib/constants";
 
 export async function PATCH(
   request: Request,
@@ -8,19 +9,33 @@ export async function PATCH(
 ) {
   const { id, fotoId } = await params;
   try {
-    const { legenda } = await request.json();
+    const body = await request.json();
     const foto = await prisma.fotoOS.findUnique({ where: { id: fotoId } });
     if (!foto || foto.ordemId !== id) {
       return NextResponse.json({ error: "Foto não encontrada" }, { status: 404 });
     }
-    const atualizada = await prisma.fotoOS.update({
-      where: { id: fotoId },
-      data: { legenda: typeof legenda === "string" ? legenda.trim() || null : null },
-    });
+
+    // Atualização parcial: legenda e momento são editados em chamadas separadas,
+    // então só mexe no que veio no corpo.
+    const data: { legenda?: string | null; tipo?: string } = {};
+    if ("legenda" in body) {
+      data.legenda = typeof body.legenda === "string" ? body.legenda.trim() || null : null;
+    }
+    if ("tipo" in body) {
+      if (!FOTO_TIPO_VALUES.includes(body.tipo)) {
+        return NextResponse.json({ error: "Momento da foto inválido" }, { status: 400 });
+      }
+      data.tipo = body.tipo;
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "Nada para atualizar" }, { status: 400 });
+    }
+
+    const atualizada = await prisma.fotoOS.update({ where: { id: fotoId }, data });
     return NextResponse.json(atualizada);
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Erro ao salvar legenda" }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao salvar foto" }, { status: 500 });
   }
 }
 

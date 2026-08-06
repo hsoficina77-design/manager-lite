@@ -1,23 +1,21 @@
-// Comprime imagens no navegador antes do upload (canvas, sem dependências).
-// Fotos de celular (~4MB) viram JPEGs de ~150-300KB, suficientes para tela e PDF.
+// Redimensiona imagens no navegador (canvas, sem dependências).
+// Usado em dois momentos:
+//  - upload: fotos de celular (~4MB) viram JPEGs de ~150-300KB no Storage;
+//  - PDF: miniaturas menores ainda, só em memória, sem gravar nada no bucket.
 
 const MAX_DIM = 1600;
 const QUALITY = 0.8;
 
+// O PDF embute a imagem como data URL: quanto menor, mais leve o arquivo enviado
+// ao cliente. A foto em alta continua acessível pelo link da própria imagem.
+const MAX_DIM_PDF = 640;
+const QUALITY_PDF = 0.72;
+
 export async function compressImage(file: File): Promise<Blob> {
   const dataUrl = await readAsDataUrl(file);
   const img = await loadImage(dataUrl);
-
-  const scale = Math.min(1, MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.round(img.naturalWidth * scale);
-  const h = Math.round(img.naturalHeight * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return file; // fallback: envia original
-  ctx.drawImage(img, 0, 0, w, h);
+  const canvas = desenharEscalado(img, MAX_DIM);
+  if (!canvas) return file; // fallback: envia original
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/jpeg", QUALITY)
@@ -27,7 +25,40 @@ export async function compressImage(file: File): Promise<Blob> {
   return blob;
 }
 
-function readAsDataUrl(file: File): Promise<string> {
+/**
+ * Gera uma miniatura em data URL a partir de um blob de imagem.
+ * Nada é gravado — a miniatura só existe enquanto o PDF é montado.
+ */
+export async function toThumbDataUrl(
+  blob: Blob,
+  maxDim = MAX_DIM_PDF,
+  quality = QUALITY_PDF
+): Promise<string> {
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const img = await loadImage(objectUrl);
+    const canvas = desenharEscalado(img, maxDim);
+    // Sem canvas (navegador antigo), cai para a imagem original.
+    if (!canvas) return await readAsDataUrl(blob);
+    return canvas.toDataURL("image/jpeg", quality);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/** Desenha a imagem reduzida para caber em maxDim, mantendo a proporção. */
+function desenharEscalado(img: HTMLImageElement, maxDim: number): HTMLCanvasElement | null {
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function readAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);

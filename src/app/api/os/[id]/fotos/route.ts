@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { uploadFoto } from "@/lib/supabase-storage";
+import { FOTO_TIPO_PADRAO, FOTO_TIPO_VALUES } from "@/lib/constants";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB (a compressão no cliente deixa bem abaixo disso)
 const TIPOS_OK = ["image/jpeg", "image/png", "image/webp"];
@@ -29,11 +30,16 @@ export async function POST(
     }
 
     const legenda = (form.get("legenda") as string | null)?.trim() || null;
+    const tipo = (form.get("tipo") as string | null) ?? FOTO_TIPO_PADRAO;
+    if (!FOTO_TIPO_VALUES.includes(tipo)) {
+      return NextResponse.json({ error: "Momento da foto inválido" }, { status: 400 });
+    }
+
     const bytes = await file.arrayBuffer();
     const { path, url } = await uploadFoto(id, bytes, file.type);
 
     const foto = await prisma.fotoOS.create({
-      data: { ordemId: id, path, url, legenda },
+      data: { ordemId: id, path, url, legenda, tipo },
     });
 
     return NextResponse.json(foto, { status: 201 });
