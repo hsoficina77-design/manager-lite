@@ -120,6 +120,9 @@ export async function PUT(
 
     if (status === "ENTREGUE" || status === "FECHADA") {
       data.fechamento = new Date();
+    } else if (status !== undefined) {
+      // Voltou para o pátio — deixa de ter data de fechamento.
+      data.fechamento = null;
     }
 
     if (temItens) {

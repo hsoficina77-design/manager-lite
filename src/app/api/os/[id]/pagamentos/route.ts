@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { recalcularPagamento } from "@/lib/pagamentos";
 
 export async function POST(
   request: Request,
@@ -51,6 +52,37 @@ export async function POST(
     console.error(err);
     return NextResponse.json(
       { error: "Erro ao registrar pagamento" },
+      { status: 500 }
+    );
+  }
+}
+
+// Estorna todos os pagamentos da OS — desmarca como recebido de uma vez.
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: ordemId } = await params;
+
+  try {
+    const os = await prisma.ordemServico.findUnique({
+      where: { id: ordemId },
+      select: { id: true },
+    });
+    if (!os) {
+      return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.pagamentoOS.deleteMany({ where: { ordemId } });
+      return recalcularPagamento(tx, ordemId);
+    });
+
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json(
+      { error: "Erro ao estornar pagamentos" },
       { status: 500 }
     );
   }

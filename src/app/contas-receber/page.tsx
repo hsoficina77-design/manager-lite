@@ -51,6 +51,7 @@ export default function ContasReceberPage() {
   const [savingPgto, setSavingPgto] = useState(false);
   const [novaDividaForm, setNovaDividaForm] = useState({ clienteId: "", descricao: "", valor: "" });
   const [savingDivida, setSavingDivida] = useState(false);
+  const [estornandoId, setEstornandoId] = useState<string | number | null>(null);
   const [toastMsg, setToastMsg] = useState("");
 
   const showToast = (msg: string) => {
@@ -195,6 +196,31 @@ export default function ContasReceberPage() {
     setHistoricoModal({ type, id, pagamentos });
   }
 
+  // Estorna um pagamento do histórico — o valor volta para o saldo em aberto.
+  async function estornarPagamento(pagamentoId: string | number) {
+    if (!historicoModal) return;
+    if (!confirm("Estornar este pagamento? O valor volta para o saldo em aberto.")) return;
+    const { type, id } = historicoModal;
+    setEstornandoId(pagamentoId);
+    try {
+      const base = type === "os" ? `/api/os/${id}` : `/api/dividas/${id}`;
+      const res = await fetch(`${base}/pagamentos/${pagamentoId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "Não foi possível estornar.");
+        return;
+      }
+      setHistoricoModal({
+        ...historicoModal,
+        pagamentos: historicoModal.pagamentos.filter((p) => p.id !== pagamentoId),
+      });
+      showToast("Pagamento estornado!");
+      load();
+    } finally {
+      setEstornandoId(null);
+    }
+  }
+
   async function submitNovaDivida(e: React.FormEvent) {
     e.preventDefault();
     setSavingDivida(true);
@@ -269,13 +295,22 @@ export default function ContasReceberPage() {
             ) : (
               <div className="space-y-2">
                 {historicoModal.pagamentos.map((p) => (
-                  <div key={p.id} className="flex justify-between text-sm border-b border-zinc-100 pb-2">
-                    <div>
+                  <div key={p.id} className="flex justify-between gap-2 text-sm border-b border-zinc-100 pb-2">
+                    <div className="min-w-0">
                       <span className="font-medium text-zinc-900">{formatCurrency(p.valor)}</span>
                       <span className="text-zinc-400 ml-2">{FORMAS_LABEL[p.formaPagamento] || p.formaPagamento}</span>
                       {p.obs && <span className="text-zinc-400 ml-1">· {p.obs}</span>}
                     </div>
-                    <span className="text-xs text-zinc-400 shrink-0 ml-2">{formatDatetime(p.data)}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-zinc-400">{formatDatetime(p.data)}</span>
+                      <button
+                        onClick={() => estornarPagamento(p.id)}
+                        disabled={estornandoId === p.id}
+                        className="text-xs text-zinc-400 underline hover:text-red-600 disabled:opacity-50"
+                      >
+                        Estornar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

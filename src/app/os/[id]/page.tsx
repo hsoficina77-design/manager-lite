@@ -87,6 +87,8 @@ export default function OSDetailPage() {
   const [deletingOS, setDeletingOS] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const [revelado, setRevelado] = useState(false);
+  const [estornando, setEstornando] = useState<string | null>(null);
+  const [estornoModal, setEstornoModal] = useState<{ pagamentoId?: string; valor: number } | null>(null);
 
   const load = () =>
     fetch(`/api/os/${id}`)
@@ -192,6 +194,28 @@ export default function OSDetailPage() {
       if (entrega && restante > 0) setDevedor({ saldo: restante });
     } finally {
       setSavingPgto(false);
+    }
+  }
+
+  // Estorna um pagamento (ou todos, quando pagamentoId vem vazio) e devolve a OS para "a receber".
+  async function confirmEstorno() {
+    if (!estornoModal) return;
+    const { pagamentoId } = estornoModal;
+    setEstornando(pagamentoId ?? "TODOS");
+    try {
+      const url = pagamentoId
+        ? `/api/os/${id}/pagamentos/${pagamentoId}`
+        : `/api/os/${id}/pagamentos`;
+      const res = await fetch(url, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "Não foi possível estornar.");
+        return;
+      }
+      setEstornoModal(null);
+      await load();
+    } finally {
+      setEstornando(null);
     }
   }
 
@@ -621,20 +645,40 @@ export default function OSDetailPage() {
             </div>
           </div>
 
-          {os.pago && <p className="text-sm text-green-600 font-medium">✓ Pagamento quitado</p>}
+          {os.pago && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-green-600">✓ Pagamento quitado</p>
+              <button
+                onClick={() => setEstornoModal({ valor: os.valorPago })}
+                className="rounded-lg border border-orange-200 px-3 py-1.5 text-sm text-orange-700 hover:bg-orange-50"
+              >
+                Desmarcar como recebido
+              </button>
+            </div>
+          )}
 
           {os.pagamentos.length > 0 && (
             <div className="border-t border-zinc-100 pt-4">
               <p className="text-xs font-medium text-zinc-500 mb-2">Histórico</p>
               <div className="space-y-1.5">
                 {os.pagamentos.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-sm">
-                    <div>
+                  <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                    <div className="min-w-0">
                       <span className="text-zinc-700 font-medium">{formatCurrency(p.valor)}</span>
                       <span className="text-zinc-400 ml-2">{FORMAS_LABEL[p.formaPagamento] || p.formaPagamento}</span>
                       {p.obs && <span className="text-zinc-400 ml-2">· {p.obs}</span>}
                     </div>
-                    <span className="text-xs text-zinc-400">{formatDatetime(p.data)}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-zinc-400">{formatDatetime(p.data)}</span>
+                      <button
+                        onClick={() => setEstornoModal({ pagamentoId: p.id, valor: p.valor })}
+                        disabled={estornando === p.id}
+                        className="text-xs text-zinc-400 underline hover:text-red-600 disabled:opacity-50"
+                        title="Estornar este pagamento"
+                      >
+                        Estornar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -755,6 +799,50 @@ export default function OSDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de estorno — desfaz o recebimento */}
+      {estornoModal && (
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+          <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+            <div>
+              <h3 className="font-semibold text-zinc-900">
+                {estornoModal.pagamentoId ? "Estornar pagamento" : "Desmarcar como recebido"}
+              </h3>
+              <p className="mt-1 text-sm text-zinc-500">
+                {estornoModal.pagamentoId ? (
+                  <>
+                    O pagamento de{" "}
+                    <span className="font-semibold text-zinc-800">{formatCurrency(estornoModal.valor)}</span>{" "}
+                    será apagado e o saldo volta para Contas a Receber.
+                  </>
+                ) : (
+                  <>
+                    Todos os pagamentos desta OS ({formatCurrency(estornoModal.valor)}) serão apagados e ela
+                    volta para Contas a Receber.
+                  </>
+                )}
+              </p>
+              <p className="mt-2 text-xs text-zinc-400">O status da OS não muda.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={confirmEstorno}
+                disabled={estornando !== null}
+                className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+              >
+                {estornando !== null ? "Estornando..." : "Confirmar estorno"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEstornoModal(null)}
+                className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}
