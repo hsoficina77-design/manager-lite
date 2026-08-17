@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -16,13 +16,22 @@ const STATUS_LABEL: Record<string, string> = {
   PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
 };
 
+type Faixa = "0-15" | "16-30" | "31-60" | "60+";
+
+const FAIXA_STYLE: Record<Faixa, { label: string; active: string; text: string; dot: string }> = {
+  "0-15": { label: "0-15 dias", active: "border-green-300 bg-green-50", text: "text-green-700", dot: "bg-green-500" },
+  "16-30": { label: "16-30 dias", active: "border-yellow-300 bg-yellow-50", text: "text-yellow-700", dot: "bg-yellow-500" },
+  "31-60": { label: "31-60 dias", active: "border-orange-300 bg-orange-50", text: "text-orange-700", dot: "bg-orange-500" },
+  "60+": { label: "60+ dias", active: "border-red-300 bg-red-50", text: "text-red-700", dot: "bg-red-500" },
+};
+const FAIXAS: Faixa[] = ["0-15", "16-30", "31-60", "60+"];
+
 type OSPendente = {
   id: string; numero: number; status: string; total: number; valorPago: number; abertura: string;
   veiculo: { marca: string; modelo: string; placa: string | null };
 };
 type DividaAvulsa = {
   id: number; descricao: string; valor: number; valorPago: number; createdAt: string;
-  pagamentos?: { id: number; valor: number; formaPagamento: string; obs: string | null; data: string }[];
 };
 type VeiculoInfo = { marca: string; modelo: string; placa: string | null };
 type ClienteDevedor = {
@@ -32,18 +41,46 @@ type ClienteDevedor = {
   dividasAvulsas: DividaAvulsa[];
   totalSaldo: number;
   diasEmAberto: number;
+  faixa: Faixa;
+};
+type Resumo = {
+  totalAReceber: number; totalDevedores: number; totalOSPendentes: number; totalDividasAvulsas: number;
+  porFaixa: Record<Faixa, { clientes: number; valor: number }>;
 };
 
 type ModalPgto = { type: "os" | "divida"; id: string | number; saldo: number } | null;
 type HistoricoModal = { type: "os" | "divida"; id: string | number; pagamentos: { id: string | number; valor: number; formaPagamento: string; obs: string | null; data: string }[] } | null;
 type NovaDividaModal = boolean;
+type Ordenacao = "saldo" | "dias";
+
+const RESUMO_VAZIO: Resumo = {
+  totalAReceber: 0, totalDevedores: 0, totalOSPendentes: 0, totalDividasAvulsas: 0,
+  porFaixa: { "0-15": { clientes: 0, valor: 0 }, "16-30": { clientes: 0, valor: 0 }, "31-60": { clientes: 0, valor: 0 }, "60+": { clientes: 0, valor: 0 } },
+};
+
+function csvEscape(v: string) {
+  if (v.includes(";") || v.includes('"') || v.includes("\n")) {
+    return `"${v.replace(/"/g, '""')}"`;
+  }
+  return v;
+}
+
+function whatsappLink(telefone: string, nome: string, saldo: number) {
+  const digits = telefone.replace(/\D/g, "");
+  const numero = digits.startsWith("55") ? digits : `55${digits}`;
+  const primeiroNome = nome.trim().split(/\s+/)[0];
+  const msg = `Olá ${primeiroNome}, tudo bem? Aqui é da oficina. Identificamos um saldo em aberto de ${formatCurrency(saldo)}. Poderia verificar a possibilidade de acerto? Qualquer dúvida, estou à disposição!`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`;
+}
 
 export default function ContasReceberPage() {
   const [clientes, setClientes] = useState<ClienteDevedor[]>([]);
+  const [resumo, setResumo] = useState<Resumo>(RESUMO_VAZIO);
   const [allClientes, setAllClientes] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [mostrarQuitados, setMostrarQuitados] = useState(false);
+  const [faixaFiltro, setFaixaFiltro] = useState<Faixa | null>(null);
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>("saldo");
   const [modalPgto, setModalPgto] = useState<ModalPgto>(null);
   const [historicoModal, setHistoricoModal] = useState<HistoricoModal>(null);
   const [novaDividaModal, setNovaDividaModal] = useState<NovaDividaModal>(false);
@@ -62,70 +99,10 @@ export default function ContasReceberPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [osRes, dividasRes] = await Promise.all([
-        fetch("/api/os?pendente=true"),
-        fetch("/api/dividas"),
-      ]);
-      type OSRaw = OSPendente & { clienteId: string; cliente: { id: string; nome: string; apelido: string | null; telefone: string | null } };
-      type DividaRaw = DividaAvulsa & { clienteId: string; cliente: { id: string; nome: string; apelido: string | null; telefone: string | null } };
-      const ordens: OSRaw[] = await osRes.json();
-      const dividas: DividaRaw[] = await dividasRes.json();
-
-      // Agrupar por cliente
-      const map = new Map<string, ClienteDevedor>();
-
-      for (const os of ordens) {
-        const saldo = os.total - os.valorPago;
-        if (saldo <= 0) continue;
-        const c = os.cliente;
-        if (!map.has(c.id)) {
-          map.set(c.id, {
-            id: c.id, nome: c.nome, apelido: c.apelido, telefone: c.telefone,
-            veiculos: [],
-            ordens: [], dividasAvulsas: [], totalSaldo: 0, diasEmAberto: 0,
-          });
-        }
-        const entry = map.get(c.id)!;
-        entry.ordens.push(os);
-        entry.totalSaldo += saldo;
-        // Acumular veículos únicos a partir das OSs
-        const v = os.veiculo;
-        if (!entry.veiculos.some((x) => x.placa === v.placa && x.marca === v.marca && x.modelo === v.modelo)) {
-          entry.veiculos.push(v);
-        }
-      }
-
-      for (const div of dividas) {
-        const saldo = div.valor - div.valorPago;
-        if (saldo <= 0) continue;
-        const c = div.cliente;
-        if (!map.has(c.id)) {
-          map.set(c.id, {
-            id: c.id, nome: c.nome, apelido: c.apelido, telefone: c.telefone,
-            veiculos: [],
-            ordens: [], dividasAvulsas: [], totalSaldo: 0, diasEmAberto: 0,
-          });
-        }
-        const entry = map.get(c.id)!;
-        entry.dividasAvulsas.push(div);
-        entry.totalSaldo += saldo;
-      }
-
-      // Calcular dias em aberto
-      const now = Date.now();
-      for (const [, entry] of map) {
-        const allDates = [
-          ...entry.ordens.map((o) => new Date(o.abertura).getTime()),
-          ...entry.dividasAvulsas.map((d) => new Date(d.createdAt).getTime()),
-        ];
-        if (allDates.length > 0) {
-          const oldest = Math.min(...allDates);
-          entry.diasEmAberto = Math.floor((now - oldest) / 86400000);
-        }
-      }
-
-      const sorted = [...map.values()].sort((a, b) => b.totalSaldo - a.totalSaldo);
-      setClientes(sorted);
+      const res = await fetch("/api/contas-receber");
+      const data: { clientes: ClienteDevedor[]; resumo: Resumo } = await res.json();
+      setClientes(data.clientes);
+      setResumo(data.resumo);
     } finally {
       setLoading(false);
     }
@@ -136,20 +113,21 @@ export default function ContasReceberPage() {
     fetch("/api/clientes").then((r) => r.json()).then((data: { id: string; nome: string }[]) => setAllClientes(data));
   }, []);
 
-  const filtered = clientes.filter((c) => {
-    if (!q) return true;
-    const t = q.toLowerCase();
-    return (
-      c.nome.toLowerCase().includes(t) ||
-      (c.apelido?.toLowerCase().includes(t)) ||
-      c.ordens.some((o) => o.veiculo.placa?.toLowerCase().includes(t) || String(o.numero).includes(t))
+  const filtered = useMemo(() => {
+    const porFaixaEBusca = clientes.filter((c) => {
+      if (faixaFiltro && c.faixa !== faixaFiltro) return false;
+      if (!q) return true;
+      const t = q.toLowerCase();
+      return (
+        c.nome.toLowerCase().includes(t) ||
+        (c.apelido?.toLowerCase().includes(t)) ||
+        c.ordens.some((o) => o.veiculo.placa?.toLowerCase().includes(t) || String(o.numero).includes(t))
+      );
+    });
+    return [...porFaixaEBusca].sort((a, b) =>
+      ordenacao === "dias" ? b.diasEmAberto - a.diasEmAberto : b.totalSaldo - a.totalSaldo
     );
-  });
-
-  const totalAReceber = clientes.reduce((s, c) => s + c.totalSaldo, 0);
-  const totalDevedores = clientes.length;
-  const totalOSPend = clientes.reduce((s, c) => s + c.ordens.length, 0);
-  const totalDivAvulsas = clientes.reduce((s, c) => s + c.dividasAvulsas.length, 0);
+  }, [clientes, faixaFiltro, q, ordenacao]);
 
   async function openPgto(type: "os" | "divida", id: string | number, saldo: number) {
     setModalPgto({ type, id, saldo });
@@ -242,6 +220,27 @@ export default function ContasReceberPage() {
 
   function copyTelefone(tel: string) {
     navigator.clipboard.writeText(tel).then(() => showToast("Telefone copiado!"));
+  }
+
+  function exportarCSV() {
+    const header = ["Cliente", "Telefone", "Total em aberto", "Dias em aberto", "Faixa", "OS pendentes", "Dívidas avulsas"];
+    const linhas = filtered.map((c) => [
+      c.nome,
+      c.telefone ?? "",
+      c.totalSaldo.toFixed(2).replace(".", ","),
+      String(c.diasEmAberto),
+      c.faixa,
+      String(c.ordens.length),
+      String(c.dividasAvulsas.length),
+    ]);
+    const csv = [header, ...linhas].map((linha) => linha.map(csvEscape).join(";")).join("\r\n");
+    const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `inadimplencia-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -361,20 +360,41 @@ export default function ContasReceberPage() {
           <h1 className="text-2xl font-bold text-zinc-900">Contas a Receber</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Pendências agrupadas por cliente</p>
         </div>
-        <button onClick={() => setNovaDividaModal(true)} className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
-          + Nova dívida avulsa
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportarCSV} disabled={filtered.length === 0} className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
+            Exportar CSV
+          </button>
+          <button onClick={() => setNovaDividaModal(true)} className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+            + Nova dívida avulsa
+          </button>
+        </div>
       </div>
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="Total a receber" value={formatCurrency(totalAReceber)} highlight />
-        <SummaryCard label="Clientes devedores" value={String(totalDevedores)} />
-        <SummaryCard label="OSs pendentes" value={String(totalOSPend)} />
-        <SummaryCard label="Dívidas avulsas" value={String(totalDivAvulsas)} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <SummaryCard label="Total a receber" value={formatCurrency(resumo.totalAReceber)} highlight />
+        <SummaryCard label="Clientes devedores" value={String(resumo.totalDevedores)} />
+        <SummaryCard label="OSs pendentes" value={String(resumo.totalOSPendentes)} />
+        <SummaryCard label="Dívidas avulsas" value={String(resumo.totalDividasAvulsas)} />
       </div>
 
-      {/* Busca e toggles */}
+      {/* Aging de inadimplência */}
+      <div className="mb-6">
+        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">Tempo em aberto</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {FAIXAS.map((f) => (
+            <FaixaCard
+              key={f}
+              faixa={f}
+              dados={resumo.porFaixa[f]}
+              ativo={faixaFiltro === f}
+              onClick={() => setFaixaFiltro(faixaFiltro === f ? null : f)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Busca e ordenação */}
       <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center">
         <input
           value={q}
@@ -382,17 +402,26 @@ export default function ContasReceberPage() {
           placeholder="Buscar por nome, apelido, placa, #OS..."
           className="w-full sm:flex-1 sm:max-w-sm rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         />
-        <label className="flex items-center gap-2 text-sm text-zinc-600 cursor-pointer">
-          <input type="checkbox" checked={mostrarQuitados} onChange={(e) => setMostrarQuitados(e.target.checked)} className="rounded" />
-          Mostrar quitados recentemente
-        </label>
+        <select
+          value={ordenacao}
+          onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="saldo">Ordenar: maior saldo</option>
+          <option value="dias">Ordenar: mais atrasado</option>
+        </select>
+        {faixaFiltro && (
+          <button onClick={() => setFaixaFiltro(null)} className="text-xs text-zinc-500 hover:text-zinc-700 underline">
+            Limpar filtro de faixa
+          </button>
+        )}
       </div>
 
       {loading ? (
         <div className="text-sm text-zinc-400 text-center py-12">Carregando...</div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white py-12 text-center text-sm text-zinc-400">
-          Nenhuma conta a receber. Tudo quitado!
+          {clientes.length === 0 ? "Nenhuma conta a receber. Tudo quitado!" : "Nenhum devedor encontrado para este filtro."}
         </div>
       ) : (
         <div className="space-y-4">
@@ -415,9 +444,10 @@ export default function ContasReceberPage() {
                       <div className="flex items-center gap-2">
                         <Link href={`/clientes/${c.id}`} className="font-semibold text-zinc-900 hover:underline">{c.nome}</Link>
                         {c.apelido && <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600">{c.apelido}</span>}
-                        {c.diasEmAberto > 30 && (
-                          <span className="text-xs text-red-600 font-medium">{c.diasEmAberto}d em aberto</span>
-                        )}
+                        <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", FAIXA_STYLE[c.faixa].active, FAIXA_STYLE[c.faixa].text)}>
+                          <span className={cn("h-1.5 w-1.5 rounded-full", FAIXA_STYLE[c.faixa].dot)} />
+                          {c.diasEmAberto}d
+                        </span>
                       </div>
                       <p className="text-xs text-zinc-400">
                         {veicolosDesc}{extrasVeiculos}
@@ -435,9 +465,21 @@ export default function ContasReceberPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-zinc-400">Total</p>
-                    <p className="font-bold text-red-600">{formatCurrency(c.totalSaldo)}</p>
+                  <div className="flex items-center gap-3">
+                    {c.telefone && (
+                      <a
+                        href={whatsappLink(c.telefone, c.nome, c.totalSaldo)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                      >
+                        Cobrar via WhatsApp
+                      </a>
+                    )}
+                    <div className="text-right">
+                      <p className="text-xs text-zinc-400">Total</p>
+                      <p className="font-bold text-red-600">{formatCurrency(c.totalSaldo)}</p>
+                    </div>
                   </div>
                 </div>
 
@@ -539,5 +581,29 @@ function SummaryCard({ label, value, highlight }: { label: string; value: string
       <p className="text-sm text-zinc-500">{label}</p>
       <p className={cn("text-2xl font-bold mt-1", highlight ? "text-red-600" : "text-zinc-900")}>{value}</p>
     </div>
+  );
+}
+
+function FaixaCard({
+  faixa, dados, ativo, onClick,
+}: {
+  faixa: Faixa; dados: { clientes: number; valor: number }; ativo: boolean; onClick: () => void;
+}) {
+  const s = FAIXA_STYLE[faixa];
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "rounded-xl border p-4 text-left transition-colors",
+        ativo ? s.active : "border-zinc-200 bg-white hover:bg-zinc-50"
+      )}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className={cn("h-2 w-2 rounded-full", s.dot)} />
+        <p className="text-xs text-zinc-500">{s.label}</p>
+      </div>
+      <p className={cn("text-lg font-bold mt-1", ativo ? s.text : "text-zinc-900")}>{formatCurrency(dados.valor)}</p>
+      <p className="text-xs text-zinc-400">{dados.clientes} cliente{dados.clientes !== 1 ? "s" : ""}</p>
+    </button>
   );
 }

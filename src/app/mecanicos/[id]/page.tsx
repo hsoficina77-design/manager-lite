@@ -12,9 +12,16 @@ type Mecanico = {
 };
 type OS = {
   id: string; numero: number; status: string; descricao: string; total: number;
-  totalMO: number; pago: boolean; abertura: string;
+  totalMO: number; pago: boolean; abertura: string; lucroReal: number; nps: number | null;
   cliente: { nome: string }; veiculo: { marca: string; modelo: string; placa: string | null };
 };
+
+function fmtPct(v: number | null): string {
+  return v === null ? "—" : `${v.toFixed(0)}%`;
+}
+function fmtNps(v: number | null): string {
+  return v === null ? "—" : v.toFixed(1);
+}
 
 const STATUS_LABEL: Record<string, string> = {
   ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
@@ -73,6 +80,10 @@ export default function MecanicoDetailPage() {
   const nOS = ordensDoMes.length;
   const faturamento = ordensDoMes.reduce((s, o) => s + o.total, 0);
   const maoDeObra = ordensDoMes.reduce((s, o) => s + o.totalMO, 0);
+  const lucroReal = ordensDoMes.reduce((s, o) => s + o.lucroReal, 0);
+  const margem = faturamento > 0 ? (lucroReal / faturamento) * 100 : null;
+  const npsValores = ordensDoMes.map((o) => o.nps).filter((n): n is number => n != null);
+  const npsMedio = npsValores.length > 0 ? npsValores.reduce((s, n) => s + n, 0) / npsValores.length : null;
   const ticketMedio = nOS > 0 ? faturamento / nOS : 0;
 
   const metaAtual = mecanico?.metas.find((m) => m.ano === ano && m.mes === mes);
@@ -190,9 +201,12 @@ export default function MecanicoDetailPage() {
       {/* Métricas de produtividade */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Metric label="Faturamento" value={formatCurrency(faturamento)} />
+        <Metric label="Lucro real" value={formatCurrency(lucroReal)} highlight />
+        <Metric label="Margem" value={fmtPct(margem)} />
         <Metric label="Mão de obra" value={formatCurrency(maoDeObra)} />
         <Metric label="Ticket médio" value={formatCurrency(ticketMedio)} />
         <Metric label="OS no mês" value={String(nOS)} />
+        <Metric label="NPS médio" value={fmtNps(npsMedio)} />
       </div>
 
       {/* Meta do mês */}
@@ -261,11 +275,11 @@ export default function MecanicoDetailPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="text-lg font-bold text-zinc-900 mt-1">{value}</p>
+    <div className={cn("rounded-xl border p-4", highlight ? "border-green-200 bg-green-50" : "border-zinc-200 bg-white")}>
+      <p className={cn("text-xs", highlight ? "text-green-700" : "text-zinc-500")}>{label}</p>
+      <p className={cn("text-lg font-bold mt-1", highlight ? "text-green-700" : "text-zinc-900")}>{value}</p>
     </div>
   );
 }

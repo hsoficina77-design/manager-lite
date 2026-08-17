@@ -86,6 +86,8 @@ export default async function Dashboard({
     osAtivas,
     devedoresData,
     dividasAvulsasRaw,
+    ordensDRE,
+    despesasDRE,
   ] = await Promise.all([
     prisma.ordemServico.count({
       where: { status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"] } },
@@ -120,7 +122,24 @@ export default async function Dashboard({
       where: { pago: false },
       _sum: { valor: true, valorPago: true },
     }) as Promise<{ clienteId: string; _sum: { valor: number; valorPago: number } }[]>,
+    prisma.ordemServico.findMany({
+      where: { status: { not: "CANCELADA" }, abertura: { gte: periodoStart } },
+      select: { total: true, custoTotalPecas: true, lucroReal: true },
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma as any).despesa.findMany({
+      where: { vencimento: { gte: periodoStart, lte: new Date() } },
+      select: { valor: true },
+    }) as Promise<{ valor: number }[]>,
   ]);
+
+  const dre = {
+    receita: ordensDRE.reduce((s: number, o: { total: number }) => s + o.total, 0),
+    custoPecas: ordensDRE.reduce((s: number, o: { custoTotalPecas: number }) => s + o.custoTotalPecas, 0),
+    lucroBruto: ordensDRE.reduce((s: number, o: { lucroReal: number }) => s + o.lucroReal, 0),
+    despesas: despesasDRE.reduce((s, d) => s + d.valor, 0),
+  };
+  const lucroLiquido = dre.lucroBruto - dre.despesas;
 
   const totalAReceber = osPendentes.reduce(
     (sum: number, os: { total: number; valorPago: number }) => sum + (os.total - os.valorPago),
@@ -201,6 +220,34 @@ export default async function Dashboard({
           href="/contas-receber"
           highlight={devedoresCount > 0}
         />
+      </div>
+
+      {/* DRE simplificado */}
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-zinc-800">DRE Simplificado</h2>
+          <Link href="/despesas" className="text-xs text-red-600 hover:underline">Contas a pagar →</Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-xs text-zinc-400">Receita</p>
+            <p className="font-semibold text-zinc-900">{formatCurrency(dre.receita)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400">Custo de peças</p>
+            <p className="font-semibold text-zinc-900">- {formatCurrency(dre.custoPecas)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400">Despesas fixas</p>
+            <p className="font-semibold text-zinc-900">- {formatCurrency(dre.despesas)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400">Lucro líquido</p>
+            <p className={cn("font-bold", lucroLiquido >= 0 ? "text-green-600" : "text-red-600")}>
+              {formatCurrency(lucroLiquido)}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

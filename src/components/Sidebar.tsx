@@ -47,6 +47,8 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
       children: [{ href: "/produtividade", label: "Produtividade" }],
     },
     { href: "/contas-receber", label: "Contas a Receber", badge: pendingCount },
+    { href: "/despesas", label: "Contas a Pagar" },
+    { href: "/caixa", label: "Caixa" },
   ];
 
   const isLinkActive = (link: LinkDef) =>
