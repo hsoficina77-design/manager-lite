@@ -7,23 +7,63 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const cliente = await prisma.cliente.findUnique({
-    where: { id },
-    include: {
-      veiculos: { orderBy: { createdAt: "asc" } },
-      ordens: {
-        include: { veiculo: true },
-        orderBy: { abertura: "desc" },
-        take: 20,
+  const [cliente, agg, primeiraOS, ultimaOS, osAbertas] = await Promise.all([
+    prisma.cliente.findUnique({
+      where: { id },
+      include: {
+        veiculos: { orderBy: { createdAt: "asc" } },
+        ordens: {
+          include: { veiculo: true },
+          orderBy: { abertura: "desc" },
+          take: 20,
+        },
       },
-    },
-  });
+    }),
+    prisma.ordemServico.aggregate({
+      where: { clienteId: id, status: { not: "CANCELADA" } },
+      _count: { _all: true },
+      _avg: { nps: true },
+      _sum: { total: true, totalMO: true, totalPecas: true, lucroReal: true, valorPago: true },
+    }),
+    prisma.ordemServico.findFirst({
+      where: { clienteId: id, status: { not: "CANCELADA" } },
+      orderBy: { abertura: "asc" },
+      select: { abertura: true },
+    }),
+    prisma.ordemServico.findFirst({
+      where: { clienteId: id, status: { not: "CANCELADA" } },
+      orderBy: { abertura: "desc" },
+      select: { abertura: true },
+    }),
+    prisma.ordemServico.count({
+      where: { clienteId: id, status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] } },
+    }),
+  ]);
 
   if (!cliente) {
     return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(cliente);
+  const totalOS = agg._count._all;
+  const totalFaturado = agg._sum.total ?? 0;
+  const totalRecebido = agg._sum.valorPago ?? 0;
+
+  const stats = {
+    totalOS,
+    osAbertas,
+    totalFaturado,
+    totalMO: agg._sum.totalMO ?? 0,
+    totalPecas: agg._sum.totalPecas ?? 0,
+    lucroTotal: agg._sum.lucroReal ?? 0,
+    totalRecebido,
+    totalPendente: totalFaturado - totalRecebido,
+    ticketMedio: totalOS > 0 ? totalFaturado / totalOS : 0,
+    npsMedio: agg._avg.nps,
+    primeiraOS: primeiraOS?.abertura ?? null,
+    ultimaOS: ultimaOS?.abertura ?? null,
+  };
+
+  return NextResponse.json({ ...cliente, stats });
 }
 
 export async function PUT(

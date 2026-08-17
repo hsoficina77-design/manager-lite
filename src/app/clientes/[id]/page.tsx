@@ -54,13 +54,35 @@ type OS = {
   pago: boolean; abertura: string;
   veiculo: { marca: string; modelo: string; placa: string | null };
 };
+type ClienteStats = {
+  totalOS: number; osAbertas: number; totalFaturado: number; totalMO: number;
+  totalPecas: number; lucroTotal: number; totalRecebido: number; totalPendente: number;
+  ticketMedio: number; npsMedio: number | null; primeiraOS: string | null; ultimaOS: string | null;
+};
 type Cliente = {
   id: string; nome: string; telefone: string | null; cpfCnpj: string | null;
   email: string | null; obs: string | null; apelido: string | null; origem: string | null;
   profissao: string | null; telefones: string[]; cep: string | null; endereco: string | null;
-  cidade: string | null; estado: string | null;
-  veiculos: Veiculo[]; ordens: OS[];
+  cidade: string | null; estado: string | null; createdAt: string;
+  veiculos: Veiculo[]; ordens: OS[]; stats: ClienteStats;
 };
+
+function tempoDesde(dateStr: string): string {
+  const dias = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (dias < 30) return `${dias} dia${dias !== 1 ? "s" : ""}`;
+  const meses = Math.floor(dias / 30);
+  if (meses < 12) return `${meses} ${meses !== 1 ? "meses" : "mês"}`;
+  const anos = Math.floor(meses / 12);
+  const restoMeses = meses % 12;
+  return `${anos} ano${anos !== 1 ? "s" : ""}${restoMeses > 0 ? ` e ${restoMeses} ${restoMeses !== 1 ? "meses" : "mês"}` : ""}`;
+}
+
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/);
+  const primeira = partes[0]?.[0] || "";
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
 
@@ -182,26 +204,83 @@ export default function ClienteDetailPage() {
 
   const showCombUso = ["FLEX","HIBRIDO"].includes(veiculoForm.combustivel);
 
+  const stats = cliente.stats;
+
   return (
-    <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link href="/clientes" className="text-sm text-zinc-500 hover:text-zinc-700">← Clientes</Link>
-          <div className="flex items-center gap-2 mt-1">
-            <h1 className="text-2xl font-bold text-zinc-900">{cliente.nome}</h1>
-            {cliente.apelido && (
-              <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm text-zinc-500">{cliente.apelido}</span>
-            )}
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
+      <div>
+        <Link href="/clientes" className="text-sm text-zinc-500 hover:text-zinc-700">← Clientes</Link>
+      </div>
+
+      {/* Hero */}
+      <div className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-white to-zinc-50 p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-600 text-lg font-bold text-white">
+              {iniciais(cliente.nome)}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-zinc-900 truncate">{cliente.nome}</h1>
+                {cliente.apelido && (
+                  <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm text-zinc-500">{cliente.apelido}</span>
+                )}
+              </div>
+              <p className="text-sm text-zinc-500 mt-0.5">
+                Cliente há {tempoDesde(cliente.createdAt)}
+                {stats.ultimaOS && ` · última visita em ${formatDate(stats.ultimaOS)}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setEditing(!editing)} className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              {editing ? "Cancelar" : "Editar"}
+            </button>
+            <button onClick={deleteCliente} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">
+              Excluir
+            </button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setEditing(!editing)} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
-            {editing ? "Cancelar" : "Editar"}
-          </button>
-          <button onClick={deleteCliente} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">
-            Excluir
-          </button>
-        </div>
+      </div>
+
+      {/* Scorecard: quão bom é este cliente */}
+      <div>
+        <h2 className="font-semibold text-zinc-800 mb-3">Histórico com o cliente</h2>
+        {stats.totalOS === 0 ? (
+          <div className="rounded-xl border border-zinc-200 bg-white py-8 text-center text-sm text-zinc-400">
+            Ainda sem ordens de serviço registradas.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MetricCard label="Total faturado" value={formatCurrency(stats.totalFaturado)} />
+              <MetricCard
+                label="Lucro bruto"
+                value={formatCurrency(stats.lucroTotal)}
+                highlight={stats.lucroTotal > 0 ? "green" : stats.lucroTotal < 0 ? "red" : undefined}
+              />
+              <MetricCard label="Ticket médio" value={formatCurrency(stats.ticketMedio)} />
+              <MetricCard label="Ordens de serviço" value={String(stats.totalOS)} sub={stats.osAbertas > 0 ? `${stats.osAbertas} em aberto` : "nenhuma em aberto"} />
+              <MetricCard label="Mão de obra" value={formatCurrency(stats.totalMO)} />
+              <MetricCard label="Peças" value={formatCurrency(stats.totalPecas)} />
+              <MetricCard
+                label="Recebido"
+                value={formatCurrency(stats.totalRecebido)}
+                highlight={stats.totalRecebido > 0 ? "green" : undefined}
+              />
+              <MetricCard
+                label="Pendente"
+                value={formatCurrency(stats.totalPendente)}
+                highlight={stats.totalPendente > 0 ? "red" : undefined}
+              />
+            </div>
+            {stats.npsMedio != null && (
+              <p className="text-xs text-zinc-400 mt-3">
+                NPS médio das ordens avaliadas: <span className="font-medium text-zinc-600">{stats.npsMedio.toFixed(1)}</span>
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* Info / Edit */}
@@ -490,6 +569,28 @@ export default function ClienteDetailPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  sub,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  highlight?: "green" | "red";
+}) {
+  const valueColor =
+    highlight === "green" ? "text-green-600" : highlight === "red" ? "text-red-600" : "text-zinc-900";
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4">
+      <p className="text-xs text-zinc-500">{label}</p>
+      <p className={`text-lg font-bold mt-1 ${valueColor}`}>{value}</p>
+      {sub && <p className="text-xs text-zinc-400 mt-1">{sub}</p>}
     </div>
   );
 }
