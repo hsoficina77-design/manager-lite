@@ -18,6 +18,9 @@ export default function EditarOrcamentoPage() {
         setInitial({
           clienteId: o.clienteId ?? o.cliente?.id ?? "",
           veiculoId: o.veiculoId ?? o.veiculo?.id ?? "",
+          clienteNome: o.clienteNome ?? "",
+          clienteTelefone: o.clienteTelefone ?? "",
+          veiculoDesc: o.veiculoDesc ?? "",
           descricao: o.descricao ?? "",
           validade: o.validade ? String(o.validade).slice(0, 10) : "",
           obs: o.obs ?? "",

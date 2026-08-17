@@ -3,25 +3,29 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
 
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
   valorUnit: number; valorTotal: number; custoUnit: number | null;
 };
 type Orcamento = {
-  id: string; numero: number; status: string; descricao: string;
+  id: string; numero: number; status: string; descricao: string | null;
   totalPecas: number; totalMO: number; desconto: number; total: number;
   validade: string | null; obs: string | null; createdAt: string;
   ordemId: string | null;
+  clienteId: string | null;
   cliente: {
     id: string; nome: string; telefone: string | null; cpfCnpj: string | null;
     email: string | null; endereco: string | null; cidade: string | null; estado: string | null;
-  };
+  } | null;
+  clienteNome: string | null;
+  clienteTelefone: string | null;
   veiculo: {
     id: string; marca: string; modelo: string; placa: string | null; ano: number | null;
     cor: string | null; motorizacao: string | null;
   } | null;
+  veiculoDesc: string | null;
   ordem: { id: string; numero: number } | null;
   itens: Item[];
 };
@@ -148,7 +152,7 @@ export default function OrcamentoDetailPage() {
               onClick={converter}
               disabled={converting}
               className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-              title={orc.veiculo ? "Gerar uma OS a partir deste orçamento" : "Selecione um veículo no orçamento para converter"}
+              title={!ehRascunho(orc) && orc.veiculo ? "Gerar uma OS a partir deste orçamento" : "Complete o cadastro de cliente e veículo para converter"}
             >
               {converting ? "Convertendo..." : "Converter em OS"}
             </button>
@@ -164,6 +168,22 @@ export default function OrcamentoDetailPage() {
       {erro && (
         <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 pt-4">
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>
+        </div>
+      )}
+
+      {/* Rascunho: o que ainda falta para virar OS. */}
+      {!convertido && (ehRascunho(orc) || !orc.veiculo) && (
+        <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 pt-4">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {ehRascunho(orc) && !orc.veiculo
+              ? "Rascunho — falta cadastrar o cliente e o veículo para converter em OS."
+              : ehRascunho(orc)
+                ? "Rascunho — falta cadastrar o cliente para converter em OS."
+                : "Falta selecionar o veículo para converter em OS."}{" "}
+            <Link href={`/orcamentos/${orc.id}/editar`} className="font-medium underline">
+              Completar cadastro
+            </Link>
+          </p>
         </div>
       )}
 
@@ -209,34 +229,40 @@ export default function OrcamentoDetailPage() {
               <div className="space-y-2">
                 <Row label="Data" value={formatDate(orc.createdAt)} />
                 {orc.validade && <Row label="Validade" value={formatDate(orc.validade)} />}
-                <Row label="Cliente" value={orc.cliente.nome} bold />
-                {orc.cliente.telefone && <Row label="Tel" value={orc.cliente.telefone} />}
-                {orc.cliente.cpfCnpj && <Row label="CPF/CNPJ" value={orc.cliente.cpfCnpj} />}
-                {orc.cliente.endereco && (
+                <Row label="Cliente" value={nomeCliente(orc)} bold />
+                {telefoneCliente(orc) && <Row label="Tel" value={telefoneCliente(orc)!} />}
+                {orc.cliente?.cpfCnpj && <Row label="CPF/CNPJ" value={orc.cliente.cpfCnpj} />}
+                {orc.cliente?.endereco && (
                   <Row
                     label="Endereço"
                     value={`${orc.cliente.endereco}${orc.cliente.cidade ? `, ${orc.cliente.cidade}` : ""}${orc.cliente.estado ? ` - ${orc.cliente.estado}` : ""}`}
                   />
                 )}
               </div>
-              {orc.veiculo && (
+              {descricaoVeiculo(orc) && (
                 <div className="space-y-2">
                   <Row
                     label="Veículo"
-                    value={`${orc.veiculo.marca} ${orc.veiculo.modelo}${orc.veiculo.ano ? ` (${orc.veiculo.ano})` : ""}`}
+                    value={
+                      orc.veiculo
+                        ? `${orc.veiculo.marca} ${orc.veiculo.modelo}${orc.veiculo.ano ? ` (${orc.veiculo.ano})` : ""}`
+                        : orc.veiculoDesc!
+                    }
                     bold
                   />
-                  {orc.veiculo.placa && <Row label="Placa" value={orc.veiculo.placa} />}
+                  {orc.veiculo?.placa && <Row label="Placa" value={orc.veiculo.placa} />}
                   {veicLinha.length > 0 && <Row label="Detalhes" value={veicLinha.join("  ·  ")} />}
                 </div>
               )}
             </div>
 
             {/* Descrição do serviço */}
-            <div className="mb-6">
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Descrição do serviço</p>
-              <p className="text-sm leading-relaxed text-zinc-900 whitespace-pre-wrap">{orc.descricao}</p>
-            </div>
+            {orc.descricao && (
+              <div className="mb-6">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Descrição do serviço</p>
+                <p className="text-sm leading-relaxed text-zinc-900 whitespace-pre-wrap">{orc.descricao}</p>
+              </div>
+            )}
 
             {/* Itens e serviços */}
             {orc.itens.length > 0 && (

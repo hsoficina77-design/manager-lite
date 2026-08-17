@@ -18,6 +18,9 @@ export type ItemForm = {
 export type OrcamentoFormInitial = {
   clienteId: string;
   veiculoId: string;
+  clienteNome: string;
+  clienteTelefone: string;
+  veiculoDesc: string;
   descricao: string;
   validade: string;
   obs: string;
@@ -42,6 +45,10 @@ export default function OrcamentoForm({
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [clienteId, setClienteId] = useState(preClienteId);
   const [veiculoId, setVeiculoId] = useState(preVeiculoId);
+  // Identificação livre do rascunho — só usada enquanto não há cliente cadastrado.
+  const [clienteNome, setClienteNome] = useState(initial?.clienteNome ?? "");
+  const [clienteTelefone, setClienteTelefone] = useState(initial?.clienteTelefone ?? "");
+  const [veiculoDesc, setVeiculoDesc] = useState(initial?.veiculoDesc ?? "");
   const [descricao, setDescricao] = useState(initial?.descricao ?? "");
   const [validade, setValidade] = useState(initial?.validade ?? "");
   const [obs, setObs] = useState(initial?.obs ?? "");
@@ -68,7 +75,8 @@ export default function OrcamentoForm({
   }, []);
 
   function abrirNovoCliente() {
-    setNovoCliente({ nome: "", telefone: "", apelido: "" });
+    // Aproveita o que já foi anotado no rascunho para não redigitar.
+    setNovoCliente({ nome: clienteNome.trim(), telefone: clienteTelefone.trim(), apelido: "" });
     setNovoVeiculo({ marca: "", modelo: "", placa: "", cor: "", ano: "", cilindrada: "", combustivel: "", combustivelEmUso: "" });
     setClienteErro("");
     setShowNovoCliente(true);
@@ -146,8 +154,12 @@ export default function OrcamentoForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!clienteId || !descricao.trim()) {
-      setError("Cliente e descrição são obrigatórios.");
+    if (!clienteId && !clienteNome.trim()) {
+      setError("Selecione um cliente cadastrado ou escreva um nome de referência.");
+      return;
+    }
+    if (!descricao.trim() && itens.length === 0) {
+      setError("Descreva o serviço ou adicione ao menos um item.");
       return;
     }
     setError("");
@@ -167,7 +179,8 @@ export default function OrcamentoForm({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            clienteId, veiculoId: veiculoId || null, descricao,
+            clienteId: clienteId || null, veiculoId: veiculoId || null, descricao,
+            clienteNome, clienteTelefone, veiculoDesc,
             validade: validade || null,
             obs,
             itens: itensPayload,
@@ -183,7 +196,8 @@ export default function OrcamentoForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clienteId, veiculoId: veiculoId || undefined, descricao,
+          clienteId: clienteId || undefined, veiculoId: veiculoId || undefined, descricao,
+          clienteNome, clienteTelefone, veiculoDesc,
           validade: validade || undefined,
           obs: obs || undefined,
           itens: itensPayload,
@@ -213,7 +227,7 @@ export default function OrcamentoForm({
           <h2 className="font-semibold text-zinc-800">Cliente e Veículo</h2>
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-zinc-700">Cliente *</label>
+              <label className="block text-sm font-medium text-zinc-700">Cliente</label>
               <button
                 type="button"
                 onClick={abrirNovoCliente}
@@ -222,26 +236,64 @@ export default function OrcamentoForm({
                 + Novo cliente
               </button>
             </div>
-            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} required className={inputCls}>
-              <option value="">Selecionar cliente...</option>
+            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className={inputCls}>
+              <option value="">Sem cadastro — anotar só o nome</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}{c.telefone ? ` · ${c.telefone}` : ""}</option>
               ))}
             </select>
           </div>
 
+          {/* Rascunho: identificação livre enquanto o cliente não está cadastrado. */}
+          {!clienteId && (
+            <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-3 space-y-3">
+              <p className="text-xs text-zinc-500">
+                Orçamento em rascunho — anote o que souber. O cadastro completo só é
+                exigido na hora de converter em OS.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Nome ou referência *</label>
+                  <input
+                    value={clienteNome}
+                    onChange={(e) => setClienteNome(e.target.value)}
+                    placeholder="Ex: Nilcio do Fusca azul"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Telefone</label>
+                  <input
+                    value={clienteTelefone}
+                    onChange={(e) => setClienteTelefone(e.target.value)}
+                    placeholder="(11) 90000-0000"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">Veículo</label>
             <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} disabled={!clienteId || veiculos.length === 0} className={inputCls + " disabled:bg-zinc-50 disabled:text-zinc-400"}>
-              <option value="">{!clienteId ? "Selecione um cliente primeiro" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Sem veículo / a definir"}</option>
+              <option value="">{!clienteId ? "Sem cadastro — descrever abaixo" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Sem veículo / a definir"}</option>
               {veiculos.map((v) => (
                 <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{v.ano ? ` (${v.ano})` : ""}</option>
               ))}
             </select>
+            {!veiculoId && (
+              <input
+                value={veiculoDesc}
+                onChange={(e) => setVeiculoDesc(e.target.value)}
+                placeholder="Descrição livre do veículo — ex: Gol G5 prata, a confirmar"
+                className={inputCls + " mt-2"}
+              />
+            )}
             <p className="text-xs text-zinc-400 mt-1">Opcional — mas necessário para converter o orçamento em OS.</p>
             {clienteId && veiculos.length === 0 && (
-              <p className="text-xs text-red-500 mt-1">
-                Cliente sem veículo.{" "}
+              <p className="text-xs text-zinc-500 mt-1">
+                Cliente sem veículo cadastrado.{" "}
                 <Link href={`/clientes/${clienteId}`} className="underline">Adicionar veículo</Link>
               </p>
             )}
@@ -249,8 +301,9 @@ export default function OrcamentoForm({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição do serviço *</label>
-              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+              <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição do serviço</label>
+              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+              <p className="text-xs text-zinc-400 mt-1">Opcional se você já adicionar os itens abaixo.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">Validade</label>
@@ -390,6 +443,9 @@ export default function OrcamentoForm({
 
               <div className="rounded-lg bg-zinc-50 p-3 space-y-3">
                 <p className="text-xs font-medium text-zinc-500">Veículo (opcional — necessário para converter em OS)</p>
+                {veiculoDesc.trim() && (
+                  <p className="text-xs text-zinc-400">Anotado no rascunho: “{veiculoDesc.trim()}”</p>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs text-zinc-500 mb-1">Marca</label>

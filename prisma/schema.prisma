@@ -130,13 +130,21 @@ model Meta {
 }
 
 // status: PENDENTE | APROVADO | RECUSADO | CONVERTIDO
+//
+// Um orçamento pode ser rascunho: quando o cliente ainda não está cadastrado,
+// clienteId fica nulo e a identificação vive nos campos livres abaixo. O cadastro
+// de verdade só é exigido na conversão em OS.
 model Orcamento {
   id         String    @id @default(cuid())
   numero     Int       @unique
-  clienteId  String
+  clienteId  String?
   veiculoId  String?
+  // Dados soltos do rascunho — usados só enquanto não há cliente/veículo cadastrado.
+  clienteNome     String?
+  clienteTelefone String?
+  veiculoDesc     String?
   status     String    @default("PENDENTE")
-  descricao  String
+  descricao  String?
   totalPecas Float     @default(0)
   totalMO    Float     @default(0)
   desconto   Float     @default(0)
@@ -147,7 +155,7 @@ model Orcamento {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  cliente Cliente         @relation(fields: [clienteId], references: [id])
+  cliente Cliente?        @relation(fields: [clienteId], references: [id])
   veiculo Veiculo?        @relation(fields: [veiculoId], references: [id])
   ordem   OrdemServico?   @relation(fields: [ordemId], references: [id])
   itens   ItemOrcamento[]
@@ -246,4 +254,24 @@ model FotoOS {
 model Sequencia {
   id     String @id
   ultimo Int    @default(0)
+}
+
+// categoria: ALUGUEL | SALARIO | FORNECEDOR | ENERGIA | AGUA | INTERNET | IMPOSTO | MANUTENCAO | OUTROS
+//
+// Despesa recorrente (aluguel, salário...): ao marcar como paga, gera automaticamente
+// a próxima ocorrência (mesmo valor, vencimento um mês depois).
+model Despesa {
+  id         String    @id @default(cuid())
+  categoria  String
+  descricao  String
+  valor      Float
+  vencimento DateTime
+  pago       Boolean   @default(false)
+  pagoEm     DateTime?
+  recorrente Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([pago])
+  @@index([vencimento])
 }

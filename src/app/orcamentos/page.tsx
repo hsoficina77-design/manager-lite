@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, cn, nomeCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
   PENDENTE: "Pendente", APROVADO: "Aprovado", RECUSADO: "Recusado", CONVERTIDO: "Convertido",
@@ -24,10 +24,14 @@ const TABS = [
 ];
 
 type Orcamento = {
-  id: string; numero: number; status: string; descricao: string;
+  id: string; numero: number; status: string; descricao: string | null;
   total: number; validade: string | null; createdAt: string;
-  cliente: { id: string; nome: string; apelido: string | null };
+  clienteId: string | null;
+  cliente: { id: string; nome: string; apelido: string | null } | null;
+  clienteNome: string | null;
+  clienteTelefone: string | null;
   veiculo: { marca: string; modelo: string; placa: string | null } | null;
+  veiculoDesc: string | null;
   ordem: { id: string; numero: number } | null;
 };
 
@@ -52,12 +56,16 @@ function OrcamentosContent() {
     if (statusParam && o.status !== statusParam) return false;
     if (q) {
       const text = q.toLowerCase();
-      if (
-        !o.cliente.nome.toLowerCase().includes(text) &&
-        !(o.cliente.apelido?.toLowerCase().includes(text)) &&
-        !(o.veiculo?.placa?.toLowerCase().includes(text)) &&
-        !String(o.numero).includes(text)
-      ) return false;
+      // Rascunhos não têm cadastro: a busca também precisa varrer os campos livres.
+      const alvo = [
+        nomeCliente(o),
+        o.cliente?.apelido ?? "",
+        o.clienteTelefone ?? "",
+        o.veiculo?.placa ?? "",
+        o.veiculoDesc ?? "",
+        String(o.numero),
+      ].join(" ").toLowerCase();
+      if (!alvo.includes(text)) return false;
     }
     return true;
   });
@@ -110,14 +118,16 @@ function OrcamentosContent() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium text-zinc-900 truncate">{o.cliente.nome}</p>
-                  {o.cliente.apelido && (
+                  <p className="font-medium text-zinc-900 truncate">{nomeCliente(o)}</p>
+                  {o.cliente?.apelido && (
                     <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{o.cliente.apelido}</span>
+                  )}
+                  {ehRascunho(o) && (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Rascunho</span>
                   )}
                 </div>
                 <p className="text-sm text-zinc-500 truncate">
-                  {o.veiculo ? `${o.veiculo.marca} ${o.veiculo.modelo}${o.veiculo.placa ? ` · ${o.veiculo.placa}` : ""} · ` : ""}
-                  {o.descricao}
+                  {[descricaoVeiculo(o), o.descricao].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0">

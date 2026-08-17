@@ -23,6 +23,14 @@ export async function POST(
         { status: 409 }
       );
     }
+    // A OS é o documento que gera cobrança e histórico — aqui o cadastro real é
+    // obrigatório, mesmo que o orçamento tenha nascido como rascunho.
+    if (!orcamento.clienteId) {
+      return NextResponse.json(
+        { error: "Cadastre o cliente deste orçamento antes de convertê-lo em OS" },
+        { status: 400 }
+      );
+    }
     if (!orcamento.veiculoId) {
       return NextResponse.json(
         { error: "Selecione um veículo no orçamento antes de convertê-lo em OS" },
@@ -54,9 +62,11 @@ export async function POST(
       const novaOS = await tx.ordemServico.create({
         data: {
           numero: seq.ultimo,
-          clienteId: orcamento.clienteId,
+          clienteId: orcamento.clienteId!,
           veiculoId: orcamento.veiculoId!,
-          descricao: orcamento.descricao,
+          // Orçamento pode não ter descrição (os itens já descrevem o trabalho),
+          // mas a OS exige uma.
+          descricao: orcamento.descricao?.trim() || `Serviços conforme orçamento #${orcamento.numero}`,
           obs: orcamento.obs,
           desconto: orcamento.desconto,
           totalPecas,

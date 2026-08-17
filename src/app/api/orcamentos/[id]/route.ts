@@ -35,6 +35,9 @@ export async function PUT(
       status,
       clienteId,
       veiculoId,
+      clienteNome,
+      clienteTelefone,
+      veiculoDesc,
       descricao,
       validade,
       desconto,
@@ -44,11 +47,24 @@ export async function PUT(
 
     const current = await prisma.orcamento.findUnique({
       where: { id },
-      select: { totalPecas: true, totalMO: true, desconto: true },
+      select: {
+        totalPecas: true, totalMO: true, desconto: true,
+        clienteId: true, clienteNome: true,
+      },
     });
 
     if (!current) {
       return NextResponse.json({ error: "Orçamento não encontrado" }, { status: 404 });
+    }
+
+    // O orçamento nunca pode ficar sem nenhuma identificação — cadastro ou texto livre.
+    const efetivoClienteId = clienteId !== undefined ? clienteId : current.clienteId;
+    const efetivoNome = clienteNome !== undefined ? clienteNome : current.clienteNome;
+    if (!efetivoClienteId && !efetivoNome?.trim()) {
+      return NextResponse.json(
+        { error: "Informe o cliente cadastrado ou ao menos um nome de referência" },
+        { status: 400 }
+      );
     }
 
     const temItens = Array.isArray(itens);
@@ -79,9 +95,20 @@ export async function PUT(
     }
 
     if (status !== undefined) data.status = status;
-    if (clienteId !== undefined) data.clienteId = clienteId;
+    if (clienteId !== undefined) data.clienteId = clienteId || null;
     if (veiculoId !== undefined) data.veiculoId = veiculoId || null;
-    if (descricao !== undefined) data.descricao = descricao.trim();
+    if (descricao !== undefined) data.descricao = descricao?.trim() || null;
+
+    // Dados livres só existem enquanto não há cadastro: vincular o real limpa o rascunho.
+    if (clienteId) {
+      data.clienteNome = null;
+      data.clienteTelefone = null;
+    } else {
+      if (clienteNome !== undefined) data.clienteNome = clienteNome?.trim() || null;
+      if (clienteTelefone !== undefined) data.clienteTelefone = clienteTelefone?.trim() || null;
+    }
+    if (veiculoId) data.veiculoDesc = null;
+    else if (veiculoDesc !== undefined) data.veiculoDesc = veiculoDesc?.trim() || null;
     if (validade !== undefined) data.validade = validade ? new Date(validade) : null;
     if (obs !== undefined) data.obs = obs?.trim() || null;
 

@@ -35,15 +35,26 @@ export async function POST(request: Request) {
     const {
       clienteId,
       veiculoId,
+      clienteNome,
+      clienteTelefone,
+      veiculoDesc,
       descricao,
       validade,
       obs,
       itens = [],
     } = body;
 
-    if (!clienteId || !descricao?.trim()) {
+    // Rascunho: sem cliente cadastrado, basta uma identificação livre — mas alguma
+    // identificação é obrigatória, senão o orçamento fica impossível de reconhecer.
+    if (!clienteId && !clienteNome?.trim()) {
       return NextResponse.json(
-        { error: "Cliente e descrição são obrigatórios" },
+        { error: "Informe o cliente cadastrado ou ao menos um nome de referência" },
+        { status: 400 }
+      );
+    }
+    if (!descricao?.trim() && (!Array.isArray(itens) || itens.length === 0)) {
+      return NextResponse.json(
+        { error: "Descreva o serviço ou adicione ao menos um item" },
         { status: 400 }
       );
     }
@@ -68,9 +79,14 @@ export async function POST(request: Request) {
       return tx.orcamento.create({
         data: {
           numero: seq.ultimo,
-          clienteId,
+          clienteId: clienteId || null,
           veiculoId: veiculoId || null,
-          descricao: descricao.trim(),
+          // Só guarda os dados livres quando não há cadastro — evita duas versões
+          // do mesmo dado divergindo depois.
+          clienteNome: clienteId ? null : clienteNome?.trim() || null,
+          clienteTelefone: clienteId ? null : clienteTelefone?.trim() || null,
+          veiculoDesc: veiculoId ? null : veiculoDesc?.trim() || null,
+          descricao: descricao?.trim() || null,
           validade: validade ? new Date(validade) : null,
           obs: obs?.trim() || null,
           totalPecas,
