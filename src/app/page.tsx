@@ -97,7 +97,7 @@ export default async function Dashboard({
     prisma.ordemServico.findMany({
       where: {
         pago: false,
-        status: { notIn: ["CANCELADA"] },
+        status: "ENTREGUE",
         abertura: { gte: periodoStart },
       },
       select: { total: true, valorPago: true },
@@ -113,7 +113,7 @@ export default async function Dashboard({
     }) as Promise<OSAtiva[]>,
     prisma.ordemServico.groupBy({
       by: ["clienteId"],
-      where: { pago: false, status: { notIn: ["CANCELADA"] } },
+      where: { pago: false, status: "ENTREGUE" },
       _sum: { total: true, valorPago: true },
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -25,7 +25,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const [osPendentes, dividasPendentes] = await Promise.all([
-    prisma.ordemServico.count({ where: { pago: false, status: { notIn: ["CANCELADA"] } } }),
+    prisma.ordemServico.count({ where: { pago: false, status: "ENTREGUE" } }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma as any).dividaAvulsa.count({ where: { pago: false } }) as Promise<number>,
   ]);

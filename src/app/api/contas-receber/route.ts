@@ -14,7 +14,7 @@ function calcFaixa(dias: number): Faixa {
 export async function GET() {
   const [ordens, dividas] = await Promise.all([
     prisma.ordemServico.findMany({
-      where: { pago: false, status: { not: "CANCELADA" } },
+      where: { pago: false, status: "ENTREGUE" },
       select: {
         id: true, numero: true, status: true, total: true, valorPago: true, abertura: true,
         veiculo: { select: { marca: true, modelo: true, placa: true } },
