@@ -261,8 +261,14 @@ export default function OSDetailPage() {
   return (
     <div className="pb-12">
       {/* Barra de ações — oculta na impressão */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-2 sm:gap-3 border-b border-zinc-200 bg-white px-4 sm:px-6 py-3">
-        <Link href="/os" className="text-sm text-zinc-500 hover:text-zinc-700">← OS</Link>
+      <div className="no-print sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 sm:gap-3 border-b border-zinc-200 bg-white/95 px-4 sm:px-6 py-3 backdrop-blur">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/os" className="shrink-0 text-sm text-zinc-500 hover:text-zinc-700">← OS</Link>
+          <div className="hidden min-w-0 items-baseline gap-2 border-l border-zinc-200 pl-3 sm:flex">
+            <span className="text-sm font-semibold text-zinc-900">#{os.numero}</span>
+            <span className="truncate text-sm text-zinc-500">{os.cliente.nome} · {os.veiculo.marca} {os.veiculo.modelo}</span>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {saldo > 0 && (os.status === "FECHADA" || os.status === "ENTREGUE") && (
             <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-800">
@@ -298,53 +304,10 @@ export default function OSDetailPage() {
         </div>
       </div>
 
-      {/* Visão interna — lucros (não aparece na impressão do cliente) */}
-      {(os.custoTotalPecas > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
-        <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 pt-6">
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                Visão interna — não aparece para o cliente
-              </p>
-              <button
-                type="button"
-                onClick={() => setRevelado((v) => !v)}
-                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 transition-colors"
-                title={revelado ? "Ocultar valores" : "Revelar valores"}
-              >
-                <EyeIcon off={revelado} />
-                {revelado ? "Ocultar" : "Revelar"}
-              </button>
-            </div>
-            <div className={cn("grid grid-cols-2 gap-4 sm:grid-cols-4 transition-all duration-300", !revelado && "blur-sm select-none pointer-events-none")}>
-              <div>
-                <p className="text-xs text-zinc-400">Custo das peças</p>
-                <p className="text-lg font-semibold text-zinc-900">{formatCurrency(os.custoTotalPecas)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-zinc-400">Margem em peças</p>
-                <p className={cn("text-lg font-semibold", margemValor >= 0 ? "text-green-600" : "text-red-500")}>
-                  {formatCurrency(margemValor)}
-                  {os.totalPecas > 0 && (
-                    <span className="ml-1 text-xs font-normal text-zinc-400">({os.margemPecas.toFixed(0)}%)</span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-zinc-400">Mão de obra / Serviços</p>
-                <p className="text-lg font-semibold text-zinc-900">{formatCurrency(os.totalMO)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-zinc-400">Lucro real da OS</p>
-                <p className="text-lg font-bold text-green-700">{formatCurrency(os.lucroReal)}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Corpo: documento (esquerda) + ferramentas internas (direita, sticky em telas largas) */}
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
       {/* Documento da OS — preview de como sai para o cliente (imprimível) */}
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 sm:py-8">
+      <div className="min-w-0">
         <div className="print-doc rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm">
           {/* Cabeçalho da oficina */}
           <div className="flex items-center gap-3 sm:gap-5 border-b border-zinc-200 px-5 sm:px-8 py-5 sm:py-6">
@@ -564,54 +527,46 @@ export default function OSDetailPage() {
       </div>
 
       {/* Ferramentas de gestão — não aparecem na impressão */}
-      <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 space-y-6">
-        {/* Fotos */}
-        <OSFotos
-          osId={os.id}
-          fotos={os.fotos}
-          podeEditar={os.status !== "CANCELADA"}
-          onChange={(atualizar) =>
-            setOs((atual) => (atual ? { ...atual, fotos: atualizar(atual.fotos) } : atual))
-          }
-        />
-
-        {/* Desconto */}
-        {podeEditar && (
-          <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-            <h2 className="font-semibold text-zinc-800">Desconto</h2>
-            <form onSubmit={saveDesconto} className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[140px]">
-                <label className="block text-xs text-zinc-500 mb-1">Valor do desconto (R$)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={descontoInput}
-                  onChange={(e) => setDescontoInput(e.target.value)}
-                  placeholder="0,00"
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
+      <div className="no-print mt-6 space-y-5 lg:sticky lg:top-20 lg:mt-0 lg:self-start">
+        {/* Visão interna — lucros */}
+        {(os.custoTotalPecas > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                Visão interna
+              </p>
               <button
-                type="submit"
-                disabled={savingDesconto}
-                className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                type="button"
+                onClick={() => setRevelado((v) => !v)}
+                className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 transition-colors"
+                title={revelado ? "Ocultar valores" : "Revelar valores"}
               >
-                {savingDesconto ? "Aplicando..." : "Aplicar"}
+                <EyeIcon off={revelado} />
+                {revelado ? "Ocultar" : "Revelar"}
               </button>
-            </form>
-            <div className="space-y-1 border-t border-zinc-100 pt-3 text-sm">
-              <div className="flex justify-between text-zinc-500">
-                <span>Subtotal (peças + M.O.)</span>
-                <span>{formatCurrency(os.totalPecas + os.totalMO)}</span>
+            </div>
+            <p className="mb-3 text-[11px] text-zinc-400">Não aparece para o cliente</p>
+            <div className={cn("grid grid-cols-2 gap-x-3 gap-y-3 transition-all duration-300", !revelado && "blur-sm select-none pointer-events-none")}>
+              <div>
+                <p className="text-xs text-zinc-400">Custo das peças</p>
+                <p className="text-base font-semibold text-zinc-900">{formatCurrency(os.custoTotalPecas)}</p>
               </div>
-              <div className="flex justify-between text-green-700">
-                <span>Desconto</span>
-                <span>- {formatCurrency(descontoInput ? Number(descontoInput) : 0)}</span>
+              <div>
+                <p className="text-xs text-zinc-400">Margem em peças</p>
+                <p className={cn("text-base font-semibold", margemValor >= 0 ? "text-green-600" : "text-red-500")}>
+                  {formatCurrency(margemValor)}
+                  {os.totalPecas > 0 && (
+                    <span className="ml-1 text-xs font-normal text-zinc-400">({os.margemPecas.toFixed(0)}%)</span>
+                  )}
+                </p>
               </div>
-              <div className="flex justify-between border-t border-zinc-100 pt-1 font-bold text-zinc-900">
-                <span>Total com desconto</span>
-                <span>{formatCurrency(os.totalPecas + os.totalMO - (descontoInput ? Number(descontoInput) : 0))}</span>
+              <div>
+                <p className="text-xs text-zinc-400">Mão de obra</p>
+                <p className="text-base font-semibold text-zinc-900">{formatCurrency(os.totalMO)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Lucro real</p>
+                <p className="text-base font-bold text-green-700">{formatCurrency(os.lucroReal)}</p>
               </div>
             </div>
           </div>
@@ -619,27 +574,27 @@ export default function OSDetailPage() {
 
         {/* Pagamento */}
         <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="font-semibold text-zinc-800">Pagamento</h2>
             {saldo > 0 && (
-              <button onClick={() => openPay(false)} className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700">
-                Registrar Pagamento
+              <button onClick={() => openPay(false)} className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700">
+                Registrar
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <p className="text-xs text-zinc-400">Total</p>
-              <p className="text-lg font-bold text-zinc-900">{formatCurrency(os.total)}</p>
+              <p className="text-base font-bold text-zinc-900">{formatCurrency(os.total)}</p>
             </div>
             <div>
               <p className="text-xs text-zinc-400">Pago</p>
-              <p className="text-lg font-bold text-green-600">{formatCurrency(os.valorPago)}</p>
+              <p className="text-base font-bold text-green-600">{formatCurrency(os.valorPago)}</p>
             </div>
             <div>
               <p className="text-xs text-zinc-400">Saldo</p>
-              <p className={cn("text-lg font-bold", saldo > 0 ? "text-red-600" : "text-green-600")}>
+              <p className={cn("text-base font-bold", saldo > 0 ? "text-red-600" : "text-green-600")}>
                 {formatCurrency(saldo)}
               </p>
             </div>
@@ -685,6 +640,59 @@ export default function OSDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Desconto */}
+        {podeEditar && (
+          <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+            <h2 className="font-semibold text-zinc-800">Desconto</h2>
+            <form onSubmit={saveDesconto} className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[140px]">
+                <label className="block text-xs text-zinc-500 mb-1">Valor do desconto (R$)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={descontoInput}
+                  onChange={(e) => setDescontoInput(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={savingDesconto}
+                className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {savingDesconto ? "Aplicando..." : "Aplicar"}
+              </button>
+            </form>
+            <div className="space-y-1 border-t border-zinc-100 pt-3 text-sm">
+              <div className="flex justify-between text-zinc-500">
+                <span>Subtotal (peças + M.O.)</span>
+                <span>{formatCurrency(os.totalPecas + os.totalMO)}</span>
+              </div>
+              <div className="flex justify-between text-green-700">
+                <span>Desconto</span>
+                <span>- {formatCurrency(descontoInput ? Number(descontoInput) : 0)}</span>
+              </div>
+              <div className="flex justify-between border-t border-zinc-100 pt-1 font-bold text-zinc-900">
+                <span>Total com desconto</span>
+                <span>{formatCurrency(os.totalPecas + os.totalMO - (descontoInput ? Number(descontoInput) : 0))}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fotos */}
+        <OSFotos
+          osId={os.id}
+          fotos={os.fotos}
+          podeEditar={os.status !== "CANCELADA"}
+          onChange={(atualizar) =>
+            setOs((atual) => (atual ? { ...atual, fotos: atualizar(atual.fotos) } : atual))
+          }
+        />
+      </div>
       </div>
 
       {/* Modal de pagamento (popup) */}
