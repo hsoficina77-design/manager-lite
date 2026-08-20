@@ -10,6 +10,7 @@ type OSAtiva = {
   total: number;
   pago: boolean;
   mecanico: string | null;
+  abertura: Date;
   cliente: { id: string; nome: string; apelido: string | null };
   veiculo: { marca: string; modelo: string; placa: string | null };
 };
@@ -99,17 +100,10 @@ export default async function Dashboard({
     despesasDRE,
   ] = await Promise.all([
     prisma.ordemServico.count({
-      where: {
-        status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"] },
-        abertura: { gte: periodoStart },
-      },
+      where: { status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"] } },
     }),
-    prisma.ordemServico.count({
-      where: { status: "PRONTA", abertura: { gte: periodoStart } },
-    }),
-    prisma.ordemServico.count({
-      where: { status: "FECHADA", abertura: { gte: periodoStart } },
-    }),
+    prisma.ordemServico.count({ where: { status: "PRONTA" } }),
+    prisma.ordemServico.count({ where: { status: "FECHADA" } }),
     prisma.ordemServico.findMany({
       where: {
         pago: false,
@@ -120,8 +114,13 @@ export default async function Dashboard({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma as any).ordemServico.findMany({
       where: {
-        status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] },
-        abertura: { gte: periodoStart },
+        status: { not: "CANCELADA" },
+        OR: [
+          // Sempre visíveis: o que ainda está no pátio, independente de quando entrou.
+          { status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] } },
+          // Mais o que foi movimentado dentro do período selecionado.
+          { abertura: { gte: periodoStart } },
+        ],
       },
       include: {
         cliente: { select: { id: true, nome: true, apelido: true } },
@@ -150,6 +149,14 @@ export default async function Dashboard({
       select: { valor: true },
     }) as Promise<{ valor: number }[]>,
   ]);
+
+  // O que ainda está no pátio vem primeiro; depois o que já saiu, mais recente no topo.
+  const EM_ABERTO = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"];
+  const osLista = [...osAtivas].sort((a, b) => {
+    const aberta = Number(EM_ABERTO.includes(b.status)) - Number(EM_ABERTO.includes(a.status));
+    if (aberta !== 0) return aberta;
+    return b.abertura.getTime() - a.abertura.getTime();
+  });
 
   const dre = {
     receita: ordensDRE.reduce((s: number, o: { total: number }) => s + o.total, 0),
@@ -270,14 +277,17 @@ export default async function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Lista de OSs pendentes */}
         <div className="lg:col-span-2 space-y-3">
-          <h2 className="font-semibold text-zinc-800">OSs em aberto</h2>
-          {osAtivas.length === 0 ? (
+          <div>
+            <h2 className="font-semibold text-zinc-800">Ordens de Serviço</h2>
+            <p className="text-xs text-zinc-500">Em aberto + movimentadas no período</p>
+          </div>
+          {osLista.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white py-8 text-center text-sm text-zinc-400">
-              Nenhuma OS em aberto.
+              Nenhuma OS no período.
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
-              {osAtivas.map((os) => (
+              {osLista.map((os) => (
                 <Link
                   key={os.id}
                   href={`/os/${os.id}`}

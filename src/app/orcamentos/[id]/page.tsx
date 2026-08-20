@@ -118,7 +118,9 @@ export default function OrcamentoDetailPage() {
   return (
     <div className="pb-12">
       {/* Barra de ações — oculta na impressão */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-2 sm:gap-3 border-b border-zinc-200 bg-white px-4 sm:px-6 py-3">
+      <div className="no-print border-b border-zinc-200 bg-white">
+        {/* Mesmo max-w e padding do documento abaixo, para as bordas coincidirem. */}
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3">
         <Link href="/orcamentos" className="text-sm text-zinc-500 hover:text-zinc-700">← Orçamentos</Link>
         <div className="flex flex-wrap items-center gap-2">
           {!convertido && (
@@ -172,6 +174,7 @@ export default function OrcamentoDetailPage() {
             </button>
           )}
         </div>
+        </div>
       </div>
 
       {erro && (
@@ -212,11 +215,13 @@ export default function OrcamentoDetailPage() {
           <div className="flex items-center gap-3 sm:gap-5 border-b border-zinc-200 px-5 sm:px-8 py-5 sm:py-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-hs.png" alt="HS Oficina Mecânica" width={80} height={80} className="h-14 w-14 sm:h-20 sm:w-20 shrink-0 object-contain" />
-            <div className="flex-1 text-center">
+            <div className="min-w-0 flex-1 text-center">
               <h1 className="text-lg sm:text-2xl font-black uppercase tracking-wider">HS Oficina Mecânica</h1>
               <p className="mt-0.5 text-xs text-zinc-500">CNPJ: 67.090.409/0001-17</p>
               <p className="mt-0.5 text-xs text-zinc-500">Telefone: (11) 91330-4006</p>
             </div>
+            {/* Espelha a largura da logo para o título centralizar no card, e não no espaço restante. */}
+            <div aria-hidden className="h-14 w-14 sm:h-20 sm:w-20 shrink-0" />
           </div>
 
           <div className="px-5 sm:px-8 py-6">
