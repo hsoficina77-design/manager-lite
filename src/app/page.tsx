@@ -28,10 +28,13 @@ function getPeriodoStart(periodo: string): Date {
     case "hoje":
       return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     case "semana": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 7);
-      return d;
+      // Semana de calendário (segunda a domingo), não janela móvel de 7 dias.
+      const dia = now.getDay(); // 0 = domingo ... 6 = sábado
+      const diffParaSegunda = dia === 0 ? -6 : 1 - dia;
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffParaSegunda);
     }
+    case "mes":
+      return new Date(now.getFullYear(), now.getMonth(), 1);
     case "trimestre": {
       const d = new Date(now);
       d.setMonth(d.getMonth() - 3);
@@ -42,11 +45,8 @@ function getPeriodoStart(periodo: string): Date {
       d.setFullYear(d.getFullYear() - 1);
       return d;
     }
-    default: {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 1);
-      return d;
-    }
+    default:
+      return new Date(now.getFullYear(), now.getMonth(), 1);
   }
 }
 

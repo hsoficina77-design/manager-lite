@@ -39,9 +39,39 @@ const TABS = [
 type OS = {
   id: string; numero: number; status: string; descricao: string;
   total: number; pago: boolean; abertura: string; mecanico: string | null;
+  lucroReal: number;
   cliente: { id: string; nome: string; apelido: string | null };
   veiculo: { marca: string; modelo: string; placa: string | null };
 };
+
+const ORDENACOES = [
+  { value: "recentes", label: "Mais recentes" },
+  { value: "lucro_desc", label: "Maior lucro" },
+  { value: "lucro_asc", label: "Menor lucro" },
+  { value: "valor_desc", label: "Maior valor" },
+] as const;
+type Ordenacao = (typeof ORDENACOES)[number]["value"];
+
+function margemDe(os: OS): number | null {
+  return os.total > 0 ? (os.lucroReal / os.total) * 100 : null;
+}
+
+function corMargem(margem: number | null): string {
+  if (margem === null) return "text-zinc-400";
+  if (margem >= 40) return "text-green-600";
+  if (margem >= 20) return "text-amber-600";
+  return "text-red-500";
+}
+
+function ordenar(lista: OS[], por: Ordenacao): OS[] {
+  const arr = [...lista];
+  switch (por) {
+    case "lucro_desc": return arr.sort((a, b) => b.lucroReal - a.lucroReal);
+    case "lucro_asc": return arr.sort((a, b) => a.lucroReal - b.lucroReal);
+    case "valor_desc": return arr.sort((a, b) => b.total - a.total);
+    default: return arr.sort((a, b) => new Date(b.abertura).getTime() - new Date(a.abertura).getTime());
+  }
+}
 
 function OSListContent() {
   const searchParams = useSearchParams();
@@ -56,6 +86,7 @@ function OSListContent() {
   const [mecanicos, setMecanicos] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFiltros, setShowFiltros] = useState(false);
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>("recentes");
   const [localQ, setLocalQ] = useState(q);
   const [localMecanico, setLocalMecanico] = useState(mecanico);
   const [localDe, setLocalDe] = useState(de);
@@ -120,12 +151,18 @@ function OSListContent() {
 
   const gruposComOS = renderGrupos.map((g) => ({
     ...g,
-    items: filtered.filter((os) => g.statuses.includes(os.status)),
+    items: ordenar(filtered.filter((os) => g.statuses.includes(os.status)), ordenacao),
   }));
 
   const canceladas = filtered.filter((os) => os.status === "CANCELADA");
 
   const hasFilters = q || mecanico || de || ate;
+
+  // Resumo de lucro do que está visível agora (reage a abas, busca e filtros).
+  const consideradas = filtered.filter((os) => os.status !== "CANCELADA");
+  const faturamento = consideradas.reduce((s, os) => s + os.total, 0);
+  const lucroTotal = consideradas.reduce((s, os) => s + os.lucroReal, 0);
+  const margemMedia = faturamento > 0 ? (lucroTotal / faturamento) * 100 : null;
 
   return (
     <div className="p-4 sm:p-6">
@@ -152,11 +189,22 @@ function OSListContent() {
         ))}
       </div>
 
-      {/* Filtros avançados */}
+      {/* Filtros avançados + ordenação */}
       <div className="mb-4">
-        <button onClick={() => setShowFiltros(!showFiltros)} className="text-sm text-zinc-500 hover:text-zinc-700 mb-2 flex items-center gap-1">
-          {showFiltros ? "▲" : "▼"} Filtros avançados {hasFilters && <span className="bg-red-100 text-red-700 rounded-full px-2 text-xs">ativo</span>}
-        </button>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <button onClick={() => setShowFiltros(!showFiltros)} className="text-sm text-zinc-500 hover:text-zinc-700 flex items-center gap-1">
+            {showFiltros ? "▲" : "▼"} Filtros avançados {hasFilters && <span className="bg-red-100 text-red-700 rounded-full px-2 text-xs">ativo</span>}
+          </button>
+          <select
+            value={ordenacao}
+            onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+            className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            {ORDENACOES.map((o) => (
+              <option key={o.value} value={o.value}>Ordenar: {o.label}</option>
+            ))}
+          </select>
+        </div>
         {showFiltros && (
           <div className="flex flex-wrap gap-2 bg-zinc-50 rounded-xl border border-zinc-200 p-3">
             <input
@@ -180,6 +228,25 @@ function OSListContent() {
           </div>
         )}
       </div>
+
+      {!loading && consideradas.length > 0 && (
+        <div className="mb-4 grid grid-cols-3 gap-3 rounded-xl border border-zinc-200 bg-white p-4">
+          <div>
+            <p className="text-xs text-zinc-400">Faturamento{tabParam ? "" : " (exceto canceladas)"}</p>
+            <p className="font-semibold text-zinc-900">{formatCurrency(faturamento)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400">Lucro real</p>
+            <p className={cn("font-semibold", corMargem(margemMedia))}>{formatCurrency(lucroTotal)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400">Margem média</p>
+            <p className={cn("font-semibold", corMargem(margemMedia))}>
+              {margemMedia === null ? "—" : `${margemMedia.toFixed(0)}%`}
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-zinc-400 text-center py-12">Carregando...</div>
@@ -226,6 +293,8 @@ function OSListContent() {
 }
 
 function OSRow({ os }: { os: OS }) {
+  const margem = margemDe(os);
+  const mostrarLucro = os.status !== "CANCELADA" && os.total > 0;
   return (
     <Link href={`/os/${os.id}`} className="flex items-center gap-4 px-4 py-3 hover:bg-zinc-50 transition-colors">
       <div className="shrink-0 text-center w-12">
@@ -248,6 +317,12 @@ function OSRow({ os }: { os: OS }) {
       <div className="shrink-0 text-sm text-zinc-500 hidden md:block">
         {os.mecanico || <span className="text-zinc-300">—</span>}
       </div>
+      {mostrarLucro && (
+        <div className="shrink-0 text-right text-xs w-20 hidden lg:block" title="Lucro real (após custo de peças)">
+          <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
+          <p className={corMargem(margem)}>{margem === null ? "—" : `${margem.toFixed(0)}%`}</p>
+        </div>
+      )}
       <div className="flex items-center gap-3 shrink-0">
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600")}>
           {STATUS_LABEL[os.status] || os.status}
