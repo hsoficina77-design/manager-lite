@@ -53,7 +53,7 @@ export async function PUT(
 
     const current = await prisma.ordemServico.findUnique({
       where: { id },
-      select: { totalPecas: true, totalMO: true, desconto: true, custoTotalPecas: true, valorPago: true },
+      select: { totalPecas: true, totalMO: true, desconto: true, custoTotalPecas: true, valorPago: true, status: true },
     });
 
     if (!current) {
@@ -118,11 +118,19 @@ export async function PUT(
     if (combustivelEmUso !== undefined) data.combustivelEmUso = combustivelEmUso || null;
     if (nps !== undefined) data.nps = nps ? Number(nps) : null;
 
-    if (status === "ENTREGUE" || status === "FECHADA") {
-      data.fechamento = new Date();
-    } else if (status !== undefined) {
-      // Voltou para o pátio — deixa de ter data de fechamento.
-      data.fechamento = null;
+    // `fechamento` é a data em que a OS foi concluída, então só muda na transição.
+    // Reescrevê-la a cada PATCH faria uma OS entregue semana passada migrar para o
+    // período atual do dashboard só por ter recebido uma correção de valor hoje.
+    if (status !== undefined) {
+      const CONCLUIDA = ["ENTREGUE", "FECHADA"];
+      const eraConcluida = CONCLUIDA.includes(current.status);
+      const viraConcluida = CONCLUIDA.includes(status);
+      if (viraConcluida && !eraConcluida) {
+        data.fechamento = new Date();
+      } else if (!viraConcluida && eraConcluida) {
+        // Voltou para o pátio — deixa de ter data de fechamento.
+        data.fechamento = null;
+      }
     }
 
     if (temItens) {

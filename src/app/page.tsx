@@ -72,17 +72,16 @@ const STATUS_COLOR: Record<string, string> = {
 
 const EM_ABERTO = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"];
 
-// Uma OS entra no período quando ainda está no pátio (independente de quando entrou),
-// quando foi concluída dentro do período, ou quando foi aberta dentro do período.
-// O terceiro caso cobre OS antigas finalizadas sem `fechamento` gravado; os três são
-// avaliados numa só query, então uma OS que casa com mais de um ramo não é contada duas vezes.
+// Cada OS pertence a um período só: o da sua data de produção.
+// Concluída (entregue/fechada) conta no período da entrega; ainda no pátio, no da abertura.
+// O segundo ramo também cobre OS antigas finalizadas sem `fechamento` gravado.
+// Nada de arrastar o pátio para todo período — OS parada há dois meses não é receita de hoje.
 function periodoOSWhere(periodoStart: Date) {
   return {
     status: { not: "CANCELADA" },
     OR: [
-      { status: { in: EM_ABERTO } },
       { fechamento: { gte: periodoStart } },
-      { abertura: { gte: periodoStart } },
+      { AND: [{ fechamento: null }, { abertura: { gte: periodoStart } }] },
     ],
   };
 }
@@ -293,7 +292,7 @@ export default async function Dashboard({
         <div className="lg:col-span-2 space-y-3">
           <div>
             <h2 className="font-semibold text-zinc-800">Ordens de Serviço</h2>
-            <p className="text-xs text-zinc-500">Em aberto + concluídas no período</p>
+            <p className="text-xs text-zinc-500">Entregues e abertas no período</p>
           </div>
           {osLista.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white py-8 text-center text-sm text-zinc-400">
