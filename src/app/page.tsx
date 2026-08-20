@@ -70,6 +70,23 @@ const STATUS_COLOR: Record<string, string> = {
   CANCELADA: "bg-red-100 text-red-700",
 };
 
+const EM_ABERTO = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"];
+
+// Uma OS entra no período quando ainda está no pátio (independente de quando entrou),
+// quando foi concluída dentro do período, ou quando foi aberta dentro do período.
+// O terceiro caso cobre OS antigas finalizadas sem `fechamento` gravado; os três são
+// avaliados numa só query, então uma OS que casa com mais de um ramo não é contada duas vezes.
+function periodoOSWhere(periodoStart: Date) {
+  return {
+    status: { not: "CANCELADA" },
+    OR: [
+      { status: { in: EM_ABERTO } },
+      { fechamento: { gte: periodoStart } },
+      { abertura: { gte: periodoStart } },
+    ],
+  };
+}
+
 const STATUS_LABEL: Record<string, string> = {
   ABERTA: "Aberta",
   EM_ANDAMENTO: "Em Andamento",
@@ -87,6 +104,9 @@ export default async function Dashboard({
 }) {
   const { periodo = "mes" } = await searchParams;
   const periodoStart = getPeriodoStart(periodo);
+  // Mesmo recorte para a lista e para o DRE — os dois precisam contar as mesmas OS,
+  // senão o lucro exibido não fecha com o que está logo abaixo na tela.
+  const osWhere = periodoOSWhere(periodoStart);
 
   const [
     patioCount,
@@ -113,15 +133,7 @@ export default async function Dashboard({
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma as any).ordemServico.findMany({
-      where: {
-        status: { not: "CANCELADA" },
-        OR: [
-          // Sempre visíveis: o que ainda está no pátio, independente de quando entrou.
-          { status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] } },
-          // Mais o que foi movimentado dentro do período selecionado.
-          { abertura: { gte: periodoStart } },
-        ],
-      },
+      where: osWhere,
       include: {
         cliente: { select: { id: true, nome: true, apelido: true } },
         veiculo: { select: { marca: true, modelo: true, placa: true } },
@@ -140,7 +152,7 @@ export default async function Dashboard({
       _sum: { valor: true, valorPago: true },
     }) as Promise<{ clienteId: string; _sum: { valor: number; valorPago: number } }[]>,
     prisma.ordemServico.findMany({
-      where: { status: { not: "CANCELADA" }, abertura: { gte: periodoStart } },
+      where: osWhere,
       select: { total: true, custoTotalPecas: true, lucroReal: true },
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,7 +163,6 @@ export default async function Dashboard({
   ]);
 
   // O que ainda está no pátio vem primeiro; depois o que já saiu, mais recente no topo.
-  const EM_ABERTO = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"];
   const osLista = [...osAtivas].sort((a, b) => {
     const aberta = Number(EM_ABERTO.includes(b.status)) - Number(EM_ABERTO.includes(a.status));
     if (aberta !== 0) return aberta;
@@ -248,9 +259,12 @@ export default async function Dashboard({
 
       {/* DRE simplificado */}
       <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-zinc-800">DRE Simplificado</h2>
-          <Link href="/despesas" className="text-xs text-red-600 hover:underline">Contas a pagar →</Link>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h2 className="font-semibold text-zinc-800">DRE Simplificado</h2>
+            <p className="text-xs text-zinc-500">Mesmas OS listadas abaixo</p>
+          </div>
+          <Link href="/despesas" className="shrink-0 text-xs text-red-600 hover:underline">Contas a pagar →</Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
           <div>
@@ -279,7 +293,7 @@ export default async function Dashboard({
         <div className="lg:col-span-2 space-y-3">
           <div>
             <h2 className="font-semibold text-zinc-800">Ordens de Serviço</h2>
-            <p className="text-xs text-zinc-500">Em aberto + movimentadas no período</p>
+            <p className="text-xs text-zinc-500">Em aberto + concluídas no período</p>
           </div>
           {osLista.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white py-8 text-center text-sm text-zinc-400">
