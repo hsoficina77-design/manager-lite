@@ -22,31 +22,40 @@ const PERIODO_OPTIONS = [
   { label: "Ano", value: "ano" },
 ];
 
+// Brasília é UTC-3 o ano todo (sem horário de verão desde 2019). O servidor roda em UTC
+// (Railway), então os limites de período precisam ser calculados no fuso do negócio,
+// não no fuso do processo — senão "hoje" corta às 21h de Brasília em vez da meia-noite.
+const BR_OFFSET_HOURS = 3;
+
+function brMidnightUTC(year: number, month: number, day: number): Date {
+  // Meia-noite em Brasília equivale a 03:00 UTC do mesmo dia.
+  return new Date(Date.UTC(year, month, day, BR_OFFSET_HOURS, 0, 0, 0));
+}
+
 function getPeriodoStart(periodo: string): Date {
-  const now = new Date();
+  const nowUtc = new Date();
+  const brNow = new Date(nowUtc.getTime() - BR_OFFSET_HOURS * 60 * 60 * 1000);
+  const y = brNow.getUTCFullYear();
+  const m = brNow.getUTCMonth();
+  const d = brNow.getUTCDate();
+
   switch (periodo) {
     case "hoje":
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return brMidnightUTC(y, m, d);
     case "semana": {
       // Semana de calendário (segunda a domingo), não janela móvel de 7 dias.
-      const dia = now.getDay(); // 0 = domingo ... 6 = sábado
+      const dia = brNow.getUTCDay(); // 0 = domingo ... 6 = sábado
       const diffParaSegunda = dia === 0 ? -6 : 1 - dia;
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffParaSegunda);
+      return brMidnightUTC(y, m, d + diffParaSegunda);
     }
     case "mes":
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    case "trimestre": {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 3);
-      return d;
-    }
-    case "ano": {
-      const d = new Date(now);
-      d.setFullYear(d.getFullYear() - 1);
-      return d;
-    }
+      return brMidnightUTC(y, m, 1);
+    case "trimestre":
+      return brMidnightUTC(y, m - 3, d);
+    case "ano":
+      return brMidnightUTC(y - 1, m, d);
     default:
-      return new Date(now.getFullYear(), now.getMonth(), 1);
+      return brMidnightUTC(y, m, 1);
   }
 }
 
@@ -90,21 +99,30 @@ export default async function Dashboard({
     despesasDRE,
   ] = await Promise.all([
     prisma.ordemServico.count({
-      where: { status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"] } },
+      where: {
+        status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"] },
+        abertura: { gte: periodoStart },
+      },
     }),
-    prisma.ordemServico.count({ where: { status: "PRONTA" } }),
-    prisma.ordemServico.count({ where: { status: "FECHADA" } }),
+    prisma.ordemServico.count({
+      where: { status: "PRONTA", abertura: { gte: periodoStart } },
+    }),
+    prisma.ordemServico.count({
+      where: { status: "FECHADA", abertura: { gte: periodoStart } },
+    }),
     prisma.ordemServico.findMany({
       where: {
         pago: false,
         status: "ENTREGUE",
-        abertura: { gte: periodoStart },
       },
       select: { total: true, valorPago: true },
     }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma as any).ordemServico.findMany({
-      where: { status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] } },
+      where: {
+        status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] },
+        abertura: { gte: periodoStart },
+      },
       include: {
         cliente: { select: { id: true, nome: true, apelido: true } },
         veiculo: { select: { marca: true, modelo: true, placa: true } },
@@ -141,11 +159,6 @@ export default async function Dashboard({
   };
   const lucroLiquido = dre.lucroBruto - dre.despesas;
 
-  const totalAReceber = osPendentes.reduce(
-    (sum: number, os: { total: number; valorPago: number }) => sum + (os.total - os.valorPago),
-    0
-  );
-
   // Calcular top 5 devedores (OS + dívidas avulsas)
   const devedorMap = new Map<string, number>();
   for (const row of devedoresData) {
@@ -156,6 +169,10 @@ export default async function Dashboard({
     const saldo = (row._sum.valor ?? 0) - (row._sum.valorPago ?? 0);
     if (saldo > 0) devedorMap.set(row.clienteId, (devedorMap.get(row.clienteId) ?? 0) + saldo);
   }
+
+  // Total a receber = saldo devedor completo (OS + dívidas avulsas), sem filtro de período,
+  // pois uma dívida não deixa de existir por ter sido aberta fora do período selecionado.
+  const totalAReceber = [...devedorMap.values()].reduce((sum, saldo) => sum + saldo, 0);
 
   const devedoresIds = [...devedorMap.entries()]
     .sort((a, b) => b[1] - a[1])

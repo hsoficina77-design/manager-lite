@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
+
+const OrcamentoPdfButton = dynamic(() => import("@/components/OrcamentoPdfButton"), {
+  ssr: false,
+  loading: () => (
+    <span className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Baixar</span>
+  ),
+});
 
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
@@ -140,6 +148,7 @@ export default function OrcamentoDetailPage() {
           <button onClick={() => window.print()} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
             Imprimir
           </button>
+          <OrcamentoPdfButton orc={orc} />
           {convertido && orc.ordem ? (
             <Link
               href={`/os/${orc.ordem.id}`}

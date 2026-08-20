@@ -453,7 +453,7 @@ export default function OSDetailPage() {
                 )}
                 <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-bold">
                   <span>TOTAL</span>
-                  <span className="text-red-600">{formatCurrency(os.total)}</span>
+                  <span className={saldo > 0 ? "text-red-600" : "text-green-600"}>{formatCurrency(os.total)}</span>
                 </div>
                 {os.valorPago > 0 && (
                   <>

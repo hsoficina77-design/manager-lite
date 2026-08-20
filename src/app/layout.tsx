@@ -38,7 +38,7 @@ export default async function RootLayout({
         <div className="flex h-screen overflow-hidden">
           <Sidebar pendingCount={pendingCount} />
           <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
-            <div className="max-w-6xl mx-auto">{children}</div>
+            <div className="max-w-6xl">{children}</div>
           </main>
         </div>
       </body>
