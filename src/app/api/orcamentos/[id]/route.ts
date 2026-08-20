@@ -126,7 +126,7 @@ export async function PUT(
               quantidade: Number(i.quantidade),
               valorUnit: Number(i.valorUnit),
               valorTotal: Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit)),
-              custoUnit: i.custoUnit ? Number(i.custoUnit) : null,
+              custoUnit: i.custoUnit != null && i.custoUnit !== "" ? Number(i.custoUnit) : null,
               fornecedor: i.fornecedor?.trim() || null,
             })),
           });

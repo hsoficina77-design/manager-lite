@@ -264,29 +264,34 @@ export default async function Dashboard({
                 <Link
                   key={os.id}
                   href={`/os/${os.id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 transition-colors"
+                  className="flex flex-col gap-1.5 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-3"
                 >
-                  <div className="shrink-0 text-center w-10">
-                    <p className="text-xs text-zinc-400">OS</p>
-                    <p className="font-bold text-zinc-900 text-sm">#{os.numero}</p>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-zinc-900 text-sm truncate">{os.cliente.nome}</p>
-                      {os.cliente.apelido && (
-                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
-                          {os.cliente.apelido}
-                        </span>
-                      )}
+                  <div className="flex items-center gap-3 sm:contents">
+                    <div className="shrink-0 text-center w-10">
+                      <p className="text-xs text-zinc-400">OS</p>
+                      <p className="font-bold text-zinc-900 text-sm">#{os.numero}</p>
                     </div>
-                    <p className="text-xs text-zinc-500 truncate">
-                      {os.veiculo.marca} {os.veiculo.modelo}
-                      {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
-                      {os.mecanico ? ` · ${os.mecanico}` : ""}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-zinc-900 text-sm truncate">{os.cliente.nome}</p>
+                        {os.cliente.apelido && (
+                          <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                            {os.cliente.apelido}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-500 truncate">
+                        {os.veiculo.marca} {os.veiculo.modelo}
+                        {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
+                        {os.mecanico ? ` · ${os.mecanico}` : ""}
+                      </p>
+                    </div>
+                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:hidden", STATUS_COLOR[os.status])}>
+                      {STATUS_LABEL[os.status] || os.status}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", STATUS_COLOR[os.status])}>
+                    <span className={cn("hidden rounded-full px-2 py-0.5 text-xs font-medium sm:inline-block", STATUS_COLOR[os.status])}>
                       {STATUS_LABEL[os.status] || os.status}
                     </span>
                     <div className="text-right text-xs">

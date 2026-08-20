@@ -13,7 +13,12 @@ export type Foto = {
   createdAt: string;
 };
 
-type Enviando = { tempId: string; preview: string; tipo: FotoTipo; erro?: string };
+type Enviando = { tempId: string; preview: string; tipo: FotoTipo; file: File; erro?: string };
+
+/** Espera com backoff simples entre tentativas. */
+function esperar(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default function OSFotos({
   osId,
@@ -51,24 +56,48 @@ export default function OSFotos({
       tempId: `${Date.now()}-${Math.random()}`,
       preview: URL.createObjectURL(f),
       tipo,
+      file: f,
     }));
     setEnviando((atual) => [...atual, ...pendentes]);
 
-    // Sequencial: evita estourar memória do celular comprimindo várias fotos grandes de uma vez.
-    for (let i = 0; i < lista.length; i++) {
-      const pendente = pendentes[i];
+    // Sequencial: evita estourar memória do celular comprimindo várias fotos grandes de uma vez
+    // e evita sobrecarregar a rede (wifi de oficina costuma ser instável) com várias em paralelo.
+    for (const pendente of pendentes) {
+      await enviarPendente(pendente);
+    }
+  }
+
+  /** Envia uma foto pendente, com novas tentativas em caso de falha de rede/servidor. */
+  async function enviarPendente(pendente: Enviando) {
+    setEnviando((atual) =>
+      atual.map((e) => (e.tempId === pendente.tempId ? { ...e, erro: undefined } : e))
+    );
+
+    const TENTATIVAS = 3;
+    for (let tentativa = 1; tentativa <= TENTATIVAS; tentativa++) {
       try {
-        const blob = await compressImage(lista[i]);
+        const blob = await compressImage(pendente.file);
         const form = new FormData();
         form.append("file", blob, "foto.jpg");
-        form.append("tipo", tipo);
+        form.append("tipo", pendente.tipo);
         const res = await fetch(`/api/os/${osId}/fotos`, { method: "POST", body: form });
-        if (!res.ok) throw new Error((await res.json()).error ?? "Falha no envio");
+        if (!res.ok) {
+          const msg = (await res.json().catch(() => null))?.error ?? "Falha no envio";
+          // Erros de validação (formato/tamanho) não se resolvem tentando de novo.
+          const definitivo = res.status >= 400 && res.status < 500 && res.status !== 429;
+          throw Object.assign(new Error(msg), { definitivo });
+        }
         const nova: Foto = await res.json();
         onChange((atuais) => [...atuais, nova]);
         setEnviando((atual) => atual.filter((e) => e.tempId !== pendente.tempId));
         URL.revokeObjectURL(pendente.preview);
+        return;
       } catch (err) {
+        const definitivo = err instanceof Error && (err as Error & { definitivo?: boolean }).definitivo;
+        if (!definitivo && tentativa < TENTATIVAS) {
+          await esperar(800 * tentativa);
+          continue;
+        }
         setEnviando((atual) =>
           atual.map((e) =>
             e.tempId === pendente.tempId
@@ -76,8 +105,17 @@ export default function OSFotos({
               : e
           )
         );
+        return;
       }
     }
+  }
+
+  function removerPendente(tempId: string) {
+    setEnviando((atual) => {
+      const alvo = atual.find((e) => e.tempId === tempId);
+      if (alvo) URL.revokeObjectURL(alvo.preview);
+      return atual.filter((e) => e.tempId !== tempId);
+    });
   }
 
   function escolher(origem: "camera" | "galeria", tipo: FotoTipo) {
@@ -178,6 +216,8 @@ export default function OSFotos({
           onSoltar={(files) => enviarArquivos(files, t.value)}
           onEscolher={(origem) => escolher(origem, t.value)}
           onAbrir={setVisor}
+          onTentarNovamente={(e) => enviarPendente(e)}
+          onRemoverPendente={removerPendente}
         />
       ))}
 
@@ -210,6 +250,8 @@ function Secao({
   onSoltar,
   onEscolher,
   onAbrir,
+  onTentarNovamente,
+  onRemoverPendente,
 }: {
   label: string;
   ajuda: string;
@@ -219,6 +261,8 @@ function Secao({
   onSoltar: (files: FileList) => void;
   onEscolher: (origem: "camera" | "galeria") => void;
   onAbrir: (id: string) => void;
+  onTentarNovamente: (item: Enviando) => void;
+  onRemoverPendente: (tempId: string) => void;
 }) {
   const [arrastando, setArrastando] = useState(false);
   const vazio = fotos.length === 0 && enviando.length === 0;
@@ -305,37 +349,68 @@ function Secao({
             </button>
           ))}
 
-          {enviando.map((e) => (
-            <div
-              key={e.tempId}
-              className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={e.preview} alt="" className="h-full w-full object-cover opacity-40" />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-1 text-center">
-                {e.erro ? (
+          {enviando.map((e) =>
+            e.erro ? (
+              <button
+                key={e.tempId}
+                onClick={() => onTentarNovamente(e)}
+                className="group relative aspect-square overflow-hidden rounded-lg border border-red-200 bg-zinc-100"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={e.preview} alt="" className="h-full w-full object-cover opacity-40" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-1 text-center">
                   <span className="text-[10px] font-medium text-red-600">{e.erro}</span>
-                ) : (
-                  <>
-                    <Spinner />
-                    <span className="text-[10px] text-zinc-600">Enviando</span>
-                  </>
-                )}
+                  <span className="text-[10px] font-semibold text-zinc-700 underline">
+                    Tentar novamente
+                  </span>
+                </div>
+                <span
+                  role="button"
+                  aria-label="Remover"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onRemoverPendente(e.tempId);
+                  }}
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-black/80"
+                >
+                  ×
+                </span>
+              </button>
+            ) : (
+              <div
+                key={e.tempId}
+                className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={e.preview} alt="" className="h-full w-full object-cover opacity-40" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-1 text-center">
+                  <Spinner />
+                  <span className="text-[10px] text-zinc-600">Enviando</span>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
 
           {podeEditar && (
-            <button
-              onClick={() => onEscolher(isMobile() ? "camera" : "galeria")}
-              className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600"
-            >
-              <span className="text-2xl leading-none">+</span>
-              <span className="text-[10px]">
-                <span className="sm:hidden">Tirar foto</span>
-                <span className="hidden sm:inline">Adicionar</span>
-              </span>
-            </button>
+            <>
+              <button
+                onClick={() => onEscolher("camera")}
+                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600 sm:hidden"
+              >
+                <span className="text-2xl leading-none">+</span>
+                <span className="text-[10px]">Tirar foto</span>
+              </button>
+              <button
+                onClick={() => onEscolher("galeria")}
+                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600"
+              >
+                <span className="text-2xl leading-none">+</span>
+                <span className="text-[10px]">
+                  <span className="sm:hidden">Galeria</span>
+                  <span className="hidden sm:inline">Adicionar</span>
+                </span>
+              </button>
+            </>
           )}
         </div>
       )}
@@ -474,10 +549,6 @@ function Visor({
       </div>
     </div>
   );
-}
-
-function isMobile() {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
 }
 
 function Spinner() {

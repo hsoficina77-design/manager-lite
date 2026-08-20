@@ -99,7 +99,7 @@ export async function POST(request: Request) {
               quantidade: Number(item.quantidade),
               valorUnit: Number(item.valorUnit),
               valorTotal: Number(item.valorTotal),
-              custoUnit: item.custoUnit ? Number(item.custoUnit) : null,
+              custoUnit: item.custoUnit != null && item.custoUnit !== "" ? Number(item.custoUnit) : null,
               fornecedor: item.fornecedor?.trim() || null,
             })),
           },

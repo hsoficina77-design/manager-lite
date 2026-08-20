@@ -191,7 +191,7 @@ function OSListContent() {
 
       {/* Filtros avançados + ordenação */}
       <div className="mb-4">
-        <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <button onClick={() => setShowFiltros(!showFiltros)} className="text-sm text-zinc-500 hover:text-zinc-700 flex items-center gap-1">
             {showFiltros ? "▲" : "▼"} Filtros avançados {hasFilters && <span className="bg-red-100 text-red-700 rounded-full px-2 text-xs">ativo</span>}
           </button>
@@ -296,23 +296,28 @@ function OSRow({ os }: { os: OS }) {
   const margem = margemDe(os);
   const mostrarLucro = os.status !== "CANCELADA" && os.total > 0;
   return (
-    <Link href={`/os/${os.id}`} className="flex items-center gap-4 px-4 py-3 hover:bg-zinc-50 transition-colors">
-      <div className="shrink-0 text-center w-12">
-        <p className="text-xs text-zinc-400">OS</p>
-        <p className="font-bold text-zinc-900">#{os.numero}</p>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-zinc-900 truncate">{os.cliente.nome}</p>
-          {os.cliente.apelido && (
-            <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{os.cliente.apelido}</span>
-          )}
+    <Link href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex items-center gap-3 sm:contents">
+        <div className="shrink-0 text-center w-10 sm:w-12">
+          <p className="text-xs text-zinc-400">OS</p>
+          <p className="font-bold text-zinc-900">#{os.numero}</p>
         </div>
-        <p className="text-sm text-zinc-500 truncate">
-          {os.veiculo.marca} {os.veiculo.modelo}
-          {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
-          {" · "}{os.descricao}
-        </p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-zinc-900 truncate">{os.cliente.nome}</p>
+            {os.cliente.apelido && (
+              <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{os.cliente.apelido}</span>
+            )}
+          </div>
+          <p className="text-sm text-zinc-500 truncate">
+            {os.veiculo.marca} {os.veiculo.modelo}
+            {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
+            {" · "}{os.descricao}
+          </p>
+        </div>
+        <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:hidden", STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600")}>
+          {STATUS_LABEL[os.status] || os.status}
+        </span>
       </div>
       <div className="shrink-0 text-sm text-zinc-500 hidden md:block">
         {os.mecanico || <span className="text-zinc-300">—</span>}
@@ -324,7 +329,7 @@ function OSRow({ os }: { os: OS }) {
         </div>
       )}
       <div className="flex items-center gap-3 shrink-0">
-        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600")}>
+        <span className={cn("hidden rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-block", STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600")}>
           {STATUS_LABEL[os.status] || os.status}
         </span>
         <div className="text-right text-xs w-24">

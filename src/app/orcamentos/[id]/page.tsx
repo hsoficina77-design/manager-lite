@@ -268,7 +268,8 @@ export default function OrcamentoDetailPage() {
             {orc.itens.length > 0 && (
               <div className="mb-6">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Itens e serviços</p>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[24rem] text-sm">
                   <thead>
                     <tr className="border-b border-zinc-300 text-left text-xs text-zinc-400">
                       <th className="pb-1.5 font-medium">Tipo</th>
@@ -290,6 +291,7 @@ export default function OrcamentoDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 

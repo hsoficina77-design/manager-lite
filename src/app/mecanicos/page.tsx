@@ -61,13 +61,13 @@ export default function MecanicosPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-6 gap-3">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Mecânicos</h1>
         <div className="flex gap-2">
-          <Link href="/produtividade" className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+          <Link href="/produtividade" className="flex-1 rounded-lg border border-zinc-300 px-4 py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors sm:flex-none">
             Produtividade
           </Link>
-          <button onClick={() => setShowForm((v) => !v)} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
+          <button onClick={() => setShowForm((v) => !v)} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors sm:flex-none">
             {showForm ? "Cancelar" : "+ Novo mecânico"}
           </button>
         </div>

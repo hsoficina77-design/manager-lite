@@ -87,7 +87,7 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
             >
               <Link
                 href={link.href}
-                className="flex flex-1 items-center justify-between px-3 py-2.5 text-sm font-medium"
+                className="flex min-h-11 flex-1 items-center justify-between px-3 py-2.5 text-sm font-medium"
               >
                 <span>{link.label}</span>
                 {link.badge != null && link.badge > 0 && (
@@ -158,7 +158,7 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"
-          className="-ml-1 rounded-md p-1.5 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-300 hover:bg-zinc-800 hover:text-white active:bg-zinc-800"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <line x1="3" y1="6" x2="21" y2="6" />
@@ -189,7 +189,7 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Fechar menu"
-                className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-white active:bg-zinc-800"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                   <line x1="18" y1="6" x2="6" y2="18" />

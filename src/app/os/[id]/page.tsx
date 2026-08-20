@@ -70,7 +70,7 @@ const TIPO_LABEL: Record<string, string> = { PECA: "Peça", MAO_DE_OBRA: "Mão d
 const A4_HEIGHT_PX = 1122;
 const A4_WIDTH_PX = 793;
 
-type PayMode = "TOTAL" | "PARCIAL";
+type PayMode = "TOTAL" | "PARCIAL" | "SEM_PAGAMENTO";
 
 export default function OSDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -169,26 +169,31 @@ export default function OSDetailPage() {
     e.preventDefault();
     if (!os || !payModal) return;
     const saldoAtual = os.total - os.valorPago;
+    const semPagamento = payModal.entrega && payMode === "SEM_PAGAMENTO";
     const valor = payModal.entrega && payMode === "TOTAL" ? saldoAtual : Number(pgtoForm.valor);
-    if (!valor || valor <= 0) return;
-    if (payModal.entrega && valor > saldoAtual + 0.001) return;
+    if (!semPagamento && (!valor || valor <= 0)) return;
+    if (payModal.entrega && !semPagamento && valor > saldoAtual + 0.001) return;
 
     const entrega = payModal.entrega;
     setSavingPgto(true);
     try {
-      await fetch(`/api/os/${id}/pagamentos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ valor, formaPagamento: pgtoForm.formaPagamento, obs: pgtoForm.obs }),
-      });
+      if (!semPagamento) {
+        await fetch(`/api/os/${id}/pagamentos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ valor, formaPagamento: pgtoForm.formaPagamento, obs: pgtoForm.obs }),
+        });
+      }
       if (entrega) {
         await fetch(`/api/os/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "ENTREGUE", formaPagamento: pgtoForm.formaPagamento }),
+          body: JSON.stringify(
+            semPagamento ? { status: "ENTREGUE" } : { status: "ENTREGUE", formaPagamento: pgtoForm.formaPagamento },
+          ),
         });
       }
-      const restante = Math.max(0, saldoAtual - valor);
+      const restante = semPagamento ? saldoAtual : Math.max(0, saldoAtual - valor);
       setPayModal(null);
       await load();
       if (entrega && restante > 0) setDevedor({ saldo: restante });
@@ -398,7 +403,8 @@ export default function OSDetailPage() {
             {os.itens.length > 0 && (
               <div className="mb-6">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Itens e serviços</p>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[26rem] text-sm">
                   <thead>
                     <tr className="border-b border-zinc-300 text-left text-xs text-zinc-400">
                       <th className="pb-1.5 font-medium">Tipo</th>
@@ -420,6 +426,7 @@ export default function OSDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 
@@ -650,6 +657,7 @@ export default function OSDetailPage() {
                 <label className="block text-xs text-zinc-500 mb-1">Valor do desconto (R$)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
                   value={descontoInput}
@@ -697,8 +705,8 @@ export default function OSDetailPage() {
 
       {/* Modal de pagamento (popup) */}
       {payModal && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+        <div className="no-print fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-40 p-4 sm:items-center">
+          <div className="my-auto w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="font-semibold text-zinc-900">
@@ -720,7 +728,7 @@ export default function OSDetailPage() {
 
             <form onSubmit={confirmPay} className="space-y-3">
               {payModal.entrega && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setPayMode("TOTAL")}
@@ -741,7 +749,24 @@ export default function OSDetailPage() {
                   >
                     Parcial
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayMode("SEM_PAGAMENTO")}
+                    className={cn(
+                      "rounded-lg border px-2 py-2 text-sm font-medium transition-colors",
+                      payMode === "SEM_PAGAMENTO" ? "border-red-500 bg-red-50 text-red-700" : "border-zinc-300 text-zinc-500 hover:bg-zinc-50",
+                    )}
+                  >
+                    Não recebi
+                  </button>
                 </div>
+              )}
+
+              {payModal.entrega && payMode === "SEM_PAGAMENTO" && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                  Nenhum pagamento será registrado agora. O saldo total de{" "}
+                  <span className="font-semibold">{formatCurrency(saldo)}</span> vai para Contas a Receber.
+                </p>
               )}
 
               {(!payModal.entrega || payMode === "PARCIAL") && (
@@ -749,6 +774,7 @@ export default function OSDetailPage() {
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Valor (R$) *</label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0.01"
                     step="0.01"
                     max={payModal.entrega ? saldo : undefined}
@@ -772,16 +798,18 @@ export default function OSDetailPage() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Forma de pagamento</label>
-                <select
-                  value={pgtoForm.formaPagamento}
-                  onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  {FORMAS_PGTO.map((f) => <option key={f} value={f}>{FORMAS_LABEL[f]}</option>)}
-                </select>
-              </div>
+              {!(payModal.entrega && payMode === "SEM_PAGAMENTO") && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Forma de pagamento</label>
+                  <select
+                    value={pgtoForm.formaPagamento}
+                    onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    {FORMAS_PGTO.map((f) => <option key={f} value={f}>{FORMAS_LABEL[f]}</option>)}
+                  </select>
+                </div>
+              )}
 
               {!payModal.entrega && (
                 <div>
@@ -798,9 +826,18 @@ export default function OSDetailPage() {
                 <button
                   type="submit"
                   disabled={savingPgto || parcialInvalido}
-                  className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                  className={cn(
+                    "flex-1 rounded-lg py-2 text-sm font-medium text-white disabled:opacity-50",
+                    payModal.entrega && payMode === "SEM_PAGAMENTO" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700",
+                  )}
                 >
-                  {savingPgto ? "Salvando..." : payModal.entrega ? "Confirmar e Entregar" : "Confirmar"}
+                  {savingPgto
+                    ? "Salvando..."
+                    : payModal.entrega && payMode === "SEM_PAGAMENTO"
+                      ? "Entregar sem receber"
+                      : payModal.entrega
+                        ? "Confirmar e Entregar"
+                        : "Confirmar"}
                 </button>
                 <button type="button" onClick={() => setPayModal(null)} className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
                   Cancelar
@@ -813,8 +850,8 @@ export default function OSDetailPage() {
 
       {/* Modal de estorno — desfaz o recebimento */}
       {estornoModal && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+        <div className="no-print fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-40 p-4 sm:items-center">
+          <div className="my-auto w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl">
             <div>
               <h3 className="font-semibold text-zinc-900">
                 {estornoModal.pagamentoId ? "Estornar pagamento" : "Desmarcar como recebido"}
@@ -857,8 +894,8 @@ export default function OSDetailPage() {
 
       {/* Follow-up — entrega com saldo pendente */}
       {devedor && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-2xl border border-orange-200 bg-white p-6 shadow-xl">
+        <div className="no-print fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-40 p-4 sm:items-center">
+          <div className="my-auto w-full max-w-sm space-y-4 rounded-2xl border border-orange-200 bg-white p-6 shadow-xl">
             <div>
               <h3 className="font-semibold text-zinc-900">OS entregue com saldo pendente</h3>
               <p className="mt-0.5 text-sm text-zinc-500">

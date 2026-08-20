@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { COMBUSTIVEIS, COMBUSTIVEIS_BICOMBUSTIVEL, COMBUSTIVEL_EM_USO } from "@/lib/constants";
+import { useDraft, formatDraftAge } from "@/lib/useDraft";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Veiculo = {
@@ -73,6 +74,34 @@ export default function OrcamentoForm({
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then(setClientes);
   }, []);
+
+  // Autosave local: sobrevive a troca de app/aba reiniciando no celular sem depender do servidor.
+  const draftKey = mode === "edit" ? `orcamento-draft:edit:${orcamentoId}` : "orcamento-draft:create";
+  const draftData = {
+    clienteId, veiculoId, clienteNome, clienteTelefone, veiculoDesc,
+    descricao, validade, obs, itens,
+  };
+  const { pendingDraft, pendingSavedAt, discardPending, clear: clearDraft } = useDraft(
+    draftKey,
+    draftData,
+    (d) =>
+      !d.clienteId && !d.clienteNome.trim() && !d.veiculoDesc.trim() &&
+      !d.descricao.trim() && !d.obs.trim() && d.itens.length === 0
+  );
+
+  function restoreDraft() {
+    if (!pendingDraft) return;
+    setClienteId(pendingDraft.clienteId);
+    setVeiculoId(pendingDraft.veiculoId);
+    setClienteNome(pendingDraft.clienteNome);
+    setClienteTelefone(pendingDraft.clienteTelefone);
+    setVeiculoDesc(pendingDraft.veiculoDesc);
+    setDescricao(pendingDraft.descricao);
+    setValidade(pendingDraft.validade);
+    setObs(pendingDraft.obs);
+    setItens(pendingDraft.itens);
+    discardPending();
+  }
 
   function abrirNovoCliente() {
     // Aproveita o que já foi anotado no rascunho para não redigitar.
@@ -148,7 +177,7 @@ export default function OrcamentoForm({
   const total = totalPecas + totalMO;
 
   const itemMargem =
-    itemForm.tipo === "PECA" && Number(itemForm.valorUnit) > 0 && Number(itemForm.custoUnit) > 0
+    itemForm.tipo === "PECA" && Number(itemForm.valorUnit) > 0 && itemForm.custoUnit !== ""
       ? ((Number(itemForm.valorUnit) - Number(itemForm.custoUnit)) / Number(itemForm.valorUnit)) * 100
       : null;
 
@@ -188,6 +217,7 @@ export default function OrcamentoForm({
         });
         const data = await res.json();
         if (!res.ok) { setError(data.error || "Erro ao salvar orçamento"); return; }
+        clearDraft();
         router.push(`/orcamentos/${orcamentoId}`);
         return;
       }
@@ -205,6 +235,7 @@ export default function OrcamentoForm({
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Erro ao criar orçamento"); return; }
+      clearDraft();
       router.push(`/orcamentos/${data.id}`);
     } finally {
       setSaving(false);
@@ -220,6 +251,18 @@ export default function OrcamentoForm({
         <Link href={isEdit && orcamentoId ? `/orcamentos/${orcamentoId}` : "/orcamentos"} className="text-sm text-zinc-500 hover:text-zinc-700">← Voltar</Link>
         <h1 className="text-2xl font-bold text-zinc-900 mt-2">{isEdit ? "Editar Orçamento" : "Novo Orçamento"}</h1>
       </div>
+
+      {pendingDraft && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-800">
+            Você tinha um rascunho não salvo{pendingSavedAt ? ` de ${formatDraftAge(pendingSavedAt)}` : ""}.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={discardPending} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">Descartar</button>
+            <button type="button" onClick={restoreDraft} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">Restaurar rascunho</button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={submit} className="space-y-5">
         {/* Cliente e Veículo */}
@@ -335,11 +378,11 @@ export default function OrcamentoForm({
             </div>
             <div className="col-span-1 sm:col-span-1">
               <label className="block text-xs text-zinc-500 mb-1">Qtd</label>
-              <input type="number" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
             </div>
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs text-zinc-500 mb-1">V. Unit (R$)</label>
-              <input type="number" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addItem())} />
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addItem())} />
             </div>
             {itemForm.tipo === "PECA" && (
               <div className="col-span-2 sm:col-span-2">
@@ -351,7 +394,7 @@ export default function OrcamentoForm({
                     </span>
                   )}
                 </label>
-                <input type="number" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
               </div>
             )}
             <div className="col-span-2 sm:col-span-2">
@@ -412,8 +455,8 @@ export default function OrcamentoForm({
 
       {/* Modal de cadastro rápido de cliente */}
       {showNovoCliente && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-40 p-4 sm:items-center">
+          <div className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-start justify-between">
               <h3 className="font-semibold text-zinc-900">Novo cliente</h3>
               <button type="button" onClick={() => setShowNovoCliente(false)} className="rounded-md px-2 text-lg leading-none text-zinc-400 hover:text-zinc-700">×</button>

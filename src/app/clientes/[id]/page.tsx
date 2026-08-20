@@ -447,12 +447,12 @@ export default function ClienteDetailPage() {
               {/* 5. Ano Fabricação */}
               <div>
                 <label className="block text-xs font-medium text-zinc-600 mb-1">Ano Fabricação</label>
-                <input type="number" value={veiculoForm.anoFabricacao} onChange={(e) => setVeiculoForm({ ...veiculoForm, anoFabricacao: e.target.value })} placeholder="2019" className={inputCls} />
+                <input type="number" inputMode="numeric" value={veiculoForm.anoFabricacao} onChange={(e) => setVeiculoForm({ ...veiculoForm, anoFabricacao: e.target.value })} placeholder="2019" className={inputCls} />
               </div>
               {/* 6. Ano Modelo */}
               <div>
                 <label className="block text-xs font-medium text-zinc-600 mb-1">Ano Modelo</label>
-                <input type="number" value={veiculoForm.anoModelo} onChange={(e) => setVeiculoForm({ ...veiculoForm, anoModelo: e.target.value })} placeholder="2020" className={inputCls} />
+                <input type="number" inputMode="numeric" value={veiculoForm.anoModelo} onChange={(e) => setVeiculoForm({ ...veiculoForm, anoModelo: e.target.value })} placeholder="2020" className={inputCls} />
               </div>
               {/* 7. Cilindrada */}
               <div>
@@ -490,7 +490,7 @@ export default function ClienteDetailPage() {
               {/* KM */}
               <div>
                 <label className="block text-xs font-medium text-zinc-600 mb-1">KM</label>
-                <input type="number" value={veiculoForm.km} onChange={(e) => setVeiculoForm({ ...veiculoForm, km: e.target.value })} className={inputCls} />
+                <input type="number" inputMode="numeric" value={veiculoForm.km} onChange={(e) => setVeiculoForm({ ...veiculoForm, km: e.target.value })} className={inputCls} />
               </div>
             </div>
             <div className="flex gap-2">
@@ -509,8 +509,8 @@ export default function ClienteDetailPage() {
         ) : (
           <div className="space-y-2">
             {cliente.veiculos.map((v) => (
-              <div key={v.id} className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                <div>
+              <div key={v.id} className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-medium text-zinc-900">
                     {v.marca} {v.modelo}
                     {v.motorizacao ? ` ${v.motorizacao}` : ""}
@@ -524,9 +524,9 @@ export default function ClienteDetailPage() {
                     {v.combustivel ? ` · ${v.combustivel}` : ""}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-xs text-red-600 hover:underline">Nova OS</Link>
-                  <button onClick={() => deleteVeiculo(v.id)} className="text-xs text-red-500 hover:underline">Excluir</button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-red-600 hover:underline">Nova OS</Link>
+                  <button onClick={() => deleteVeiculo(v.id)} className="text-sm text-red-500 hover:underline">Excluir</button>
                 </div>
               </div>
             ))}
@@ -546,15 +546,15 @@ export default function ClienteDetailPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
             {cliente.ordens.map((os) => (
-              <Link key={os.id} href={`/os/${os.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50">
-                <div>
-                  <p className="font-medium text-zinc-900">
+              <Link key={os.id} href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-50 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="font-medium text-zinc-900 truncate">
                     OS #{os.numero} · {os.veiculo.marca} {os.veiculo.modelo}
                     {os.veiculo.placa ? ` (${os.veiculo.placa})` : ""}
                   </p>
-                  <p className="text-sm text-zinc-500 truncate max-w-xs">{os.descricao}</p>
+                  <p className="text-sm text-zinc-500 truncate">{os.descricao}</p>
                 </div>
-                <div className="flex items-center gap-3 shrink-0 ml-3">
+                <div className="flex items-center gap-3 shrink-0 sm:ml-3">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600"}`}>
                     {STATUS_LABEL[os.status] || os.status}
                   </span>

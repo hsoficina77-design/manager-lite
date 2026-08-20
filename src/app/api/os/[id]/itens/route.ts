@@ -41,7 +41,7 @@ export async function POST(
           quantidade: Number(quantidade),
           valorUnit: Number(valorUnit),
           valorTotal,
-          custoUnit: custoUnit ? Number(custoUnit) : null,
+          custoUnit: custoUnit != null && custoUnit !== "" ? Number(custoUnit) : null,
           fornecedor: fornecedor?.trim() || null,
         },
       });

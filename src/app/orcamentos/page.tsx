@@ -111,30 +111,35 @@ function OrcamentosContent() {
       ) : (
         <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100 overflow-hidden">
           {filtered.map((o) => (
-            <Link key={o.id} href={`/orcamentos/${o.id}`} className="flex items-center gap-4 px-4 py-3 hover:bg-zinc-50 transition-colors">
-              <div className="shrink-0 text-center w-12">
-                <p className="text-xs text-zinc-400">Orç</p>
-                <p className="font-bold text-zinc-900">#{o.numero}</p>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-zinc-900 truncate">{nomeCliente(o)}</p>
-                  {o.cliente?.apelido && (
-                    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{o.cliente.apelido}</span>
-                  )}
-                  {ehRascunho(o) && (
-                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Rascunho</span>
-                  )}
+            <Link key={o.id} href={`/orcamentos/${o.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex items-center gap-3 sm:contents">
+                <div className="shrink-0 text-center w-12">
+                  <p className="text-xs text-zinc-400">Orç</p>
+                  <p className="font-bold text-zinc-900">#{o.numero}</p>
                 </div>
-                <p className="text-sm text-zinc-500 truncate">
-                  {[descricaoVeiculo(o), o.descricao].filter(Boolean).join(" · ")}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-zinc-900 truncate">{nomeCliente(o)}</p>
+                    {o.cliente?.apelido && (
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{o.cliente.apelido}</span>
+                    )}
+                    {ehRascunho(o) && (
+                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Rascunho</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-500 truncate">
+                    {[descricaoVeiculo(o), o.descricao].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:hidden", STATUS_COLOR[o.status] || "bg-zinc-100 text-zinc-600")}>
+                  {STATUS_LABEL[o.status] || o.status}
+                </span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 {o.ordem && (
                   <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">OS #{o.ordem.numero}</span>
                 )}
-                <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLOR[o.status] || "bg-zinc-100 text-zinc-600")}>
+                <span className={cn("hidden rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-block", STATUS_COLOR[o.status] || "bg-zinc-100 text-zinc-600")}>
                   {STATUS_LABEL[o.status] || o.status}
                 </span>
                 <div className="text-right text-xs w-24">

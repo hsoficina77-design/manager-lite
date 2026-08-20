@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { useDraft, formatDraftAge } from "@/lib/useDraft";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Mecanico = { id: string; nome: string; especialidade: string | null };
@@ -88,6 +89,35 @@ export default function OSForm({
   const selectedVeiculo = veiculos.find((v) => v.id === veiculoId);
   const showCombUso = ["FLEX", "HIBRIDO"].includes(selectedVeiculo?.combustivel || "");
 
+  // Autosave local: sobrevive a troca de app/aba reiniciando no celular sem depender do servidor.
+  const draftKey = mode === "edit" ? `os-draft:edit:${osId}` : "os-draft:create";
+  const draftData = {
+    clienteId, veiculoId, descricao, defeitoRelatado, kmEntrada, obs,
+    mecanicoId, nivelCombustivel, combustivelEmUso, itens,
+  };
+  const { pendingDraft, pendingSavedAt, discardPending, clear: clearDraft } = useDraft(
+    draftKey,
+    draftData,
+    (d) =>
+      !d.clienteId && !d.veiculoId && !d.descricao.trim() && !d.defeitoRelatado.trim() &&
+      !d.kmEntrada.trim() && !d.obs.trim() && !d.mecanicoId && d.itens.length === 0
+  );
+
+  function restoreDraft() {
+    if (!pendingDraft) return;
+    setClienteId(pendingDraft.clienteId);
+    setVeiculoId(pendingDraft.veiculoId);
+    setDescricao(pendingDraft.descricao);
+    setDefeitoRelatado(pendingDraft.defeitoRelatado);
+    setKmEntrada(pendingDraft.kmEntrada);
+    setObs(pendingDraft.obs);
+    setMecanicoId(pendingDraft.mecanicoId);
+    setNivelCombustivel(pendingDraft.nivelCombustivel);
+    setCombustivelEmUso(pendingDraft.combustivelEmUso);
+    setItens(pendingDraft.itens);
+    discardPending();
+  }
+
   function resetItemForm() {
     setItemForm({ tipo: "PECA", descricao: "", quantidade: "1", valorUnit: "", custoUnit: "" });
     setEditingIdx(null);
@@ -131,7 +161,7 @@ export default function OSForm({
 
   const itemGanho = ganhoItem(itemForm);
   const itemMargem =
-    itemForm.tipo === "PECA" && Number(itemForm.valorUnit) > 0 && Number(itemForm.custoUnit) > 0
+    itemForm.tipo === "PECA" && Number(itemForm.valorUnit) > 0 && itemForm.custoUnit !== ""
       ? ((Number(itemForm.valorUnit) - Number(itemForm.custoUnit)) / Number(itemForm.valorUnit)) * 100
       : null;
 
@@ -170,6 +200,7 @@ export default function OSForm({
         });
         const data = await res.json();
         if (!res.ok) { setError(data.error || "Erro ao salvar OS"); return; }
+        clearDraft();
         router.push(`/os/${osId}`);
         return;
       }
@@ -190,6 +221,7 @@ export default function OSForm({
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Erro ao criar OS"); return; }
+      clearDraft();
       router.push(`/os/${data.id}`);
     } finally {
       setSaving(false);
@@ -215,6 +247,18 @@ export default function OSForm({
           <p className="text-xs text-zinc-500">Preencha os dados do serviço</p>
         </div>
       </div>
+
+      {pendingDraft && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-800">
+            Você tinha um rascunho não salvo{pendingSavedAt ? ` de ${formatDraftAge(pendingSavedAt)}` : ""}.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={discardPending} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">Descartar</button>
+            <button type="button" onClick={restoreDraft} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">Restaurar rascunho</button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={submit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
@@ -307,7 +351,7 @@ export default function OSForm({
                 )}
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">KM de Entrada</label>
-                  <input type="number" value={kmEntrada} onChange={(e) => setKmEntrada(e.target.value)} placeholder="Ex: 52000" className={inputCls} />
+                  <input type="number" inputMode="numeric" value={kmEntrada} onChange={(e) => setKmEntrada(e.target.value)} placeholder="Ex: 52000" className={inputCls} />
                 </div>
                 <div className="col-span-2 sm:col-span-3">
                   <label className="block text-sm font-medium text-zinc-700 mb-1">Observação de entrada</label>
@@ -342,12 +386,12 @@ export default function OSForm({
             </div>
             <div className="col-span-1 sm:col-span-1">
               <label className="block text-xs text-zinc-500 mb-1">Qtd</label>
-              <input type="number" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
             </div>
             {itemForm.tipo === "PECA" && (
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs text-zinc-500 mb-1">Custo unit. (R$)</label>
-                <input type="number" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+                <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
               </div>
             )}
             <div className="col-span-1 sm:col-span-2">
@@ -359,7 +403,7 @@ export default function OSForm({
                   </span>
                 )}
               </label>
-              <input type="number" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
             </div>
             <div className="col-span-2 sm:col-span-2">
               {editingIdx !== null ? (

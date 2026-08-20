@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ORIGENS, COMBUSTIVEIS, COMBUSTIVEIS_BICOMBUSTIVEL } from "@/lib/constants";
+import { useDraft, formatDraftAge } from "@/lib/useDraft";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -43,6 +44,23 @@ export default function NovoClientePage() {
     setTelefones(telefones.filter((_, i) => i !== idx));
   }
 
+  // Autosave local: sobrevive a troca de app/aba reiniciando no celular sem depender do servidor.
+  const draftData = { form, telefones, addVeiculo, veiculo };
+  const { pendingDraft, pendingSavedAt, discardPending, clear: clearDraft } = useDraft(
+    "cliente-draft:novo",
+    draftData,
+    (d) => Object.values(d.form).every((v) => !v.trim()) && d.telefones.every((t) => !t.trim()) && !d.addVeiculo
+  );
+
+  function restoreDraft() {
+    if (!pendingDraft) return;
+    setForm(pendingDraft.form);
+    setTelefones(pendingDraft.telefones);
+    setAddVeiculo(pendingDraft.addVeiculo);
+    setVeiculo(pendingDraft.veiculo);
+    discardPending();
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -62,6 +80,7 @@ export default function NovoClientePage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Erro ao salvar"); return; }
+      clearDraft();
       router.push(`/clientes/${data.id}`);
     } finally {
       setSaving(false);
@@ -77,6 +96,18 @@ export default function NovoClientePage() {
         <Link href="/clientes" className="text-sm text-zinc-500 hover:text-zinc-700">← Voltar</Link>
         <h1 className="text-2xl font-bold text-zinc-900 mt-2">Novo Cliente</h1>
       </div>
+
+      {pendingDraft && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-800">
+            Você tinha um rascunho não salvo{pendingSavedAt ? ` de ${formatDraftAge(pendingSavedAt)}` : ""}.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={discardPending} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">Descartar</button>
+            <button type="button" onClick={restoreDraft} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">Restaurar rascunho</button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Dados do cliente */}

@@ -217,7 +217,7 @@ export default function MecanicoDetailPage() {
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex-1 min-w-40">
             <label className="block text-sm font-medium text-zinc-700 mb-1">Valor da meta (R$)</label>
-            <input type="number" min="0" step="0.01" value={metaInput} onChange={(e) => setMetaInput(e.target.value)} placeholder="0,00" className={inputCls} />
+            <input type="number" inputMode="decimal" min="0" step="0.01" value={metaInput} onChange={(e) => setMetaInput(e.target.value)} placeholder="0,00" className={inputCls} />
           </div>
           <button onClick={salvarMeta} disabled={savingMeta} className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
             {savingMeta ? "Salvando..." : "Salvar meta"}
@@ -250,16 +250,18 @@ export default function MecanicoDetailPage() {
         ) : (
           <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100 overflow-hidden">
             {ordensDoMes.map((os) => (
-              <Link key={os.id} href={`/os/${os.id}`} className="flex items-center gap-4 px-4 py-3 hover:bg-zinc-50 transition-colors">
-                <div className="shrink-0 text-center w-12">
-                  <p className="text-xs text-zinc-400">OS</p>
-                  <p className="font-bold text-zinc-900">#{os.numero}</p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-zinc-900 truncate">{os.cliente.nome}</p>
-                  <p className="text-sm text-zinc-500 truncate">
-                    {os.veiculo.marca} {os.veiculo.modelo}{os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""} · {os.descricao}
-                  </p>
+              <Link key={os.id} href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex items-center gap-3 sm:contents">
+                  <div className="shrink-0 text-center w-10 sm:w-12">
+                    <p className="text-xs text-zinc-400">OS</p>
+                    <p className="font-bold text-zinc-900">#{os.numero}</p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-zinc-900 truncate">{os.cliente.nome}</p>
+                    <p className="text-sm text-zinc-500 truncate">
+                      {os.veiculo.marca} {os.veiculo.modelo}{os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""} · {os.descricao}
+                    </p>
+                  </div>
                 </div>
                 <div className="shrink-0 text-xs text-zinc-400 hidden sm:block">{STATUS_LABEL[os.status] || os.status}</div>
                 <div className="text-right text-sm w-24 shrink-0">
