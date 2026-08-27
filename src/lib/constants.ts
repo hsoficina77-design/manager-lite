@@ -41,6 +41,20 @@ export function corStatus(status: string): string {
   return OS_STATUS.find((s) => s.value === status)?.cor ?? "bg-zinc-600 text-white";
 }
 
+/** Margem de lucro da OS, ou null quando não há faturamento para comparar. */
+export function margemOS(os: { total: number; lucroReal: number }): number | null {
+  return os.total > 0 ? (os.lucroReal / os.total) * 100 : null;
+}
+
+/** Faixas de margem das listas: verde saudável, âmbar apertada, vermelha no vermelho.
+ *  Mesma escala em todas as telas para o olho aprender uma cor só. */
+export function corMargem(margem: number | null): string {
+  if (margem === null) return "text-zinc-400";
+  if (margem >= 40) return "text-green-600";
+  if (margem >= 20) return "text-amber-600";
+  return "text-red-500";
+}
+
 export const ORIGENS = [
   { value: "INDICACAO", label: "Indicação" },
   { value: "GOOGLE", label: "Google" },

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, cn } from "@/lib/utils";
-import { labelStatus, corStatus } from "@/lib/constants";
+import { labelStatus, corStatus, margemOS, corMargem } from "@/lib/constants";
 import {
   janela,
   janelaAnterior,
@@ -204,12 +204,7 @@ async function Operacao() {
             <h2 className="font-semibold text-zinc-800">Pátio</h2>
             <p className="text-xs text-zinc-500">Parada há mais tempo primeiro</p>
           </div>
-          <ListaOS
-            ordens={patio}
-            vazio="Nenhuma OS em aberto."
-            aging
-            agora={agora}
-          />
+          <ListaOS ordens={patio} vazio="Nenhuma OS em aberto." patio agora={agora} />
         </div>
 
         <div className="space-y-4">
@@ -500,15 +495,17 @@ function NavegacaoPeriodo({
   );
 }
 
+// Serve as duas abas. `patio` marca a lista de OS em aberto, onde o tempo parado importa
+// e o lucro ainda é previsão; na lista de entregues ele já é resultado.
 function ListaOS({
   ordens,
   vazio,
-  aging,
+  patio,
   agora,
 }: {
   ordens: OSLista[];
   vazio: string;
-  aging?: boolean;
+  patio?: boolean;
   agora: Date;
 }) {
   if (ordens.length === 0) {
@@ -523,6 +520,10 @@ function ListaOS({
     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
       {ordens.map((os) => {
         const dias = diasParado(os.abertura, agora);
+        const margem = margemOS(os);
+        const lucroTitulo = patio
+          ? "Lucro previsto se a OS fechar com os valores atuais"
+          : "Lucro real (após custo de peças)";
         return (
           <Link
             key={os.id}
@@ -550,7 +551,7 @@ function ListaOS({
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
-                {aging && (
+                {patio && (
                   <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", corAging(dias))}>
                     {dias}d
                   </span>
@@ -560,8 +561,14 @@ function ListaOS({
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {aging && (
+            <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-start">
+              <div className="text-right text-xs sm:w-24" title={lucroTitulo}>
+                <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
+                <p className={cn("text-[11px]", corMargem(margem))}>
+                  {margem === null ? "—" : `${margem.toFixed(0)}% margem`}
+                </p>
+              </div>
+              {patio && (
                 <span
                   className={cn("hidden rounded-full px-2 py-0.5 text-xs font-medium sm:inline-block", corAging(dias))}
                   title={`No pátio há ${dias} dia${dias === 1 ? "" : "s"}`}

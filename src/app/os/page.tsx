@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { labelStatus, corStatus, OS_EM_ABERTO, OS_CONCLUIDA } from "@/lib/constants";
+import { labelStatus, corStatus, margemOS, corMargem, OS_EM_ABERTO, OS_CONCLUIDA } from "@/lib/constants";
 import { Suspense } from "react";
 
 const GRUPOS = [
@@ -34,17 +34,6 @@ const ORDENACOES = [
   { value: "valor_desc", label: "Maior valor" },
 ] as const;
 type Ordenacao = (typeof ORDENACOES)[number]["value"];
-
-function margemDe(os: OS): number | null {
-  return os.total > 0 ? (os.lucroReal / os.total) * 100 : null;
-}
-
-function corMargem(margem: number | null): string {
-  if (margem === null) return "text-zinc-400";
-  if (margem >= 40) return "text-green-600";
-  if (margem >= 20) return "text-amber-600";
-  return "text-red-500";
-}
 
 function ordenar(lista: OS[], por: Ordenacao): OS[] {
   const arr = [...lista];
@@ -276,7 +265,7 @@ function OSListContent() {
 }
 
 function OSRow({ os }: { os: OS }) {
-  const margem = margemDe(os);
+  const margem = margemOS(os);
   const mostrarLucro = os.status !== "CANCELADA" && os.total > 0;
   return (
     <Link href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-4">
