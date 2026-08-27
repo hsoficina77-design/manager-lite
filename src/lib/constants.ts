@@ -1,6 +1,46 @@
 // Constantes de domínio compartilhadas entre formulários (clientes, orçamentos, OS).
 // Centralizar aqui evita listas duplicadas que divergem com o tempo.
 
+// Ciclo de vida da OS. `ENTREGUE` é o único marco de conclusão que existe: é a data
+// de entrega que decide em que semana/mês o serviço conta como produção.
+//
+// `PRONTA` e `FECHADA` foram removidas do fluxo: as duas tentavam codificar
+// "terminei mas ainda não recebi" num campo que não é sobre dinheiro. Recebimento
+// já é um eixo separado (`pago` / `valorPago`), então OS entregue e não paga é
+// representável sem precisar de status próprio.
+export const OS_STATUS = [
+  { value: "ABERTA", label: "Aberta", cor: "bg-zinc-200 text-zinc-700" },
+  { value: "EM_ANDAMENTO", label: "Em Andamento", cor: "bg-zinc-800 text-zinc-100" },
+  { value: "AGUARDANDO_PECA", label: "Ag. Peça", cor: "bg-zinc-300 text-zinc-800" },
+  { value: "ENTREGUE", label: "Entregue", cor: "bg-zinc-100 text-zinc-500" },
+  { value: "CANCELADA", label: "Cancelada", cor: "bg-red-100 text-red-700" },
+] as const;
+
+export type OSStatus = (typeof OS_STATUS)[number]["value"];
+
+export const OS_STATUS_VALUES: string[] = OS_STATUS.map((s) => s.value);
+
+/** No pátio: serviço em andamento, ainda não entregue. */
+export const OS_EM_ABERTO: string[] = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"];
+
+/** Concluída: conta como produção, na data de entrega. */
+export const OS_CONCLUIDA: string[] = ["ENTREGUE"];
+
+// Rótulos dos status aposentados. A migração converte as linhas existentes, mas se
+// alguma escapar (backup antigo, escrita concorrente no deploy) ela ainda aparece
+// com nome na tela em vez de exibir o enum cru.
+const OS_STATUS_LEGADO: Record<string, string> = { PRONTA: "Pronta", FECHADA: "Fechada" };
+
+export function labelStatus(status: string): string {
+  return (
+    OS_STATUS.find((s) => s.value === status)?.label ?? OS_STATUS_LEGADO[status] ?? status
+  );
+}
+
+export function corStatus(status: string): string {
+  return OS_STATUS.find((s) => s.value === status)?.cor ?? "bg-zinc-600 text-white";
+}
+
 export const ORIGENS = [
   { value: "INDICACAO", label: "Indicação" },
   { value: "GOOGLE", label: "Google" },

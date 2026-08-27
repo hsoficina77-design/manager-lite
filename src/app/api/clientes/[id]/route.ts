@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { OS_EM_ABERTO } from "@/lib/constants";
 
 export async function GET(
   _req: Request,
@@ -36,7 +37,7 @@ export async function GET(
       select: { abertura: true },
     }),
     prisma.ordemServico.count({
-      where: { clienteId: id, status: { in: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA"] } },
+      where: { clienteId: id, status: { in: OS_EM_ABERTO } },
     }),
   ]);
 

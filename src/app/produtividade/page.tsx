@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { labelStatus, OS_EM_ABERTO } from "@/lib/constants";
 
 type Linha = {
   mecanicoId: string;
@@ -22,16 +23,14 @@ type Linha = {
 type Oficina = {
   nOS: number; faturamento: number; maoDeObra: number; lucroReal: number;
   margem: number | null; npsMedio: number | null; tempoMedioDias: number | null;
-  funil: Record<string, number>;
+  patio: Record<string, number>;
 };
 type EvolucaoItem = { ano: number; mes: number; faturamento: number; lucroReal: number };
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-const FUNIL_STATUS = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA", "FECHADA", "ENTREGUE"];
-const STATUS_LABEL: Record<string, string> = {
-  ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
-};
+// O pátio é sempre o de agora, não o do mês selecionado: OS em aberto não tem data de
+// entrega, então não pertence a mês nenhum.
+const PATIO_STATUS = OS_EM_ABERTO;
 
 function fmtPct(v: number | null): string {
   return v === null ? "—" : `${v.toFixed(0)}%`;
@@ -93,15 +92,15 @@ export default function ProdutividadePage() {
             <Metric label="Lucro real" value={formatCurrency(oficina.lucroReal)} highlight />
             <Metric label="Margem" value={fmtPct(oficina.margem)} />
             <Metric label="Mão de obra" value={formatCurrency(oficina.maoDeObra)} />
-            <Metric label="OS no mês" value={String(oficina.nOS)} />
+            <Metric label="OS entregues no mês" value={String(oficina.nOS)} />
             <Metric label="NPS médio" value={fmtNps(oficina.npsMedio)} />
             <Metric label="Tempo médio de execução" value={fmtDias(oficina.tempoMedioDias)} />
           </div>
 
-          {/* Evolução e funil */}
+          {/* Evolução e pátio */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <EvolucaoChart dados={evolucaoMensal} />
-            <Funil funil={oficina.funil} />
+            <Patio patio={oficina.patio} />
           </div>
 
           {/* Ranking de mecânicos */}
@@ -217,17 +216,20 @@ function EvolucaoChart({ dados }: { dados: EvolucaoItem[] }) {
   );
 }
 
-function Funil({ funil }: { funil: Record<string, number> }) {
-  const max = Math.max(1, ...FUNIL_STATUS.map((s) => funil[s] ?? 0));
-  const canceladas = funil.CANCELADA ?? 0;
+function Patio({ patio }: { patio: Record<string, number> }) {
+  const max = Math.max(1, ...PATIO_STATUS.map((s) => patio[s] ?? 0));
+  const total = PATIO_STATUS.reduce((s, k) => s + (patio[k] ?? 0), 0);
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 space-y-2.5">
-      <h2 className="font-semibold text-zinc-800 mb-1">Funil de OS do mês</h2>
-      {FUNIL_STATUS.map((s) => {
-        const n = funil[s] ?? 0;
+      <div className="mb-1">
+        <h2 className="font-semibold text-zinc-800">Pátio agora</h2>
+        <p className="text-xs text-zinc-500">Estado atual, independente do mês selecionado</p>
+      </div>
+      {PATIO_STATUS.map((s) => {
+        const n = patio[s] ?? 0;
         return (
           <div key={s} className="flex items-center gap-3 text-sm">
-            <span className="w-24 shrink-0 text-xs text-zinc-500">{STATUS_LABEL[s]}</span>
+            <span className="w-24 shrink-0 text-xs text-zinc-500">{labelStatus(s)}</span>
             <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
               <div className="h-full rounded-full bg-zinc-700" style={{ width: `${(n / max) * 100}%` }} />
             </div>
@@ -235,9 +237,9 @@ function Funil({ funil }: { funil: Record<string, number> }) {
           </div>
         );
       })}
-      {canceladas > 0 && (
-        <p className="pt-1 text-xs text-zinc-400">+ {canceladas} cancelada{canceladas !== 1 ? "s" : ""} (fora do funil)</p>
-      )}
+      <p className="pt-1 text-xs text-zinc-400">
+        {total} OS em aberto · <Link href="/" className="hover:underline">ver no dashboard →</Link>
+      </p>
     </div>
   );
 }

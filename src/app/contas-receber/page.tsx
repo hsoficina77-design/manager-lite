@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { labelStatus } from "@/lib/constants";
 
 const FORMAS_PGTO = ["DINHEIRO", "PIX", "CARTAO_CREDITO", "CARTAO_DEBITO", "TRANSFERENCIA"];
 const FORMAS_LABEL: Record<string, string> = {
@@ -11,10 +12,6 @@ const FORMAS_LABEL: Record<string, string> = {
   CARTAO_CREDITO: "Cartão Crédito", CARTAO_DEBITO: "Cartão Débito", TRANSFERENCIA: "Transferência",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
-};
 
 type Faixa = "0-15" | "16-30" | "31-60" | "60+";
 
@@ -501,7 +498,7 @@ export default function ContasReceberPage() {
                                 {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
                               </span>
                               <span className="text-zinc-400 shrink-0 text-xs">
-                                {STATUS_LABEL[os.status] || os.status} · {diasOS}d
+                                {labelStatus(os.status)} · {diasOS}d
                                 {atrasada && <span className="text-red-600 ml-1">⚠</span>}
                               </span>
                             </div>

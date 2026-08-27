@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
-import { FOTO_TIPOS, tipoDaFoto } from "@/lib/constants";
+import { FOTO_TIPOS, tipoDaFoto, labelStatus } from "@/lib/constants";
 
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
@@ -43,9 +43,11 @@ export type FotoPdf = {
   createdAt: string;
 };
 
+// Rótulos próprios do impresso: no papel cabe o nome por extenso, enquanto o badge
+// da tela usa a forma curta de `labelStatus`.
 const STATUS_LABEL: Record<string, string> = {
   ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Aguardando Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
+  ENTREGUE: "Entregue", CANCELADA: "Cancelada",
 };
 const NIVEL_LABEL: Record<string, string> = { CHEIO: "Cheio", MEIO: "Meio", VAZIO: "Vazio" };
 const TIPO_LABEL: Record<string, string> = { PECA: "Peça", MAO_DE_OBRA: "Mão de obra", SERVICO: "Serviço" };
@@ -191,7 +193,7 @@ export function OSPdfDocument({
             <Text style={s.osNum}>Nº {os.numero}</Text>
             <Text style={s.osDate}>Abertura: {dia(os.abertura)}</Text>
             {os.fechamento ? <Text style={s.osDate}>Fechamento: {dia(os.fechamento)}</Text> : null}
-            <Text style={s.osStatus}>Status: {STATUS_LABEL[os.status] ?? os.status}</Text>
+            <Text style={s.osStatus}>Status: {STATUS_LABEL[os.status] ?? labelStatus(os.status)}</Text>
           </View>
         </View>
 

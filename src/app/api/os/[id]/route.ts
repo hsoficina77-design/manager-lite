@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
+import { OS_CONCLUIDA } from "@/lib/constants";
 
 export async function GET(
   _req: Request,
@@ -118,13 +119,13 @@ export async function PUT(
     if (combustivelEmUso !== undefined) data.combustivelEmUso = combustivelEmUso || null;
     if (nps !== undefined) data.nps = nps ? Number(nps) : null;
 
-    // `fechamento` é a data em que a OS foi concluída, então só muda na transição.
-    // Reescrevê-la a cada PATCH faria uma OS entregue semana passada migrar para o
-    // período atual do dashboard só por ter recebido uma correção de valor hoje.
+    // `fechamento` é a data de entrega, e é ela que decide em que semana/mês a OS conta
+    // como produção. Por isso só muda na transição: reescrevê-la a cada PATCH faria uma
+    // OS entregue semana passada migrar para o período atual do dashboard só por ter
+    // recebido uma correção de valor hoje.
     if (status !== undefined) {
-      const CONCLUIDA = ["ENTREGUE", "FECHADA"];
-      const eraConcluida = CONCLUIDA.includes(current.status);
-      const viraConcluida = CONCLUIDA.includes(status);
+      const eraConcluida = OS_CONCLUIDA.includes(current.status);
+      const viraConcluida = OS_CONCLUIDA.includes(status);
       if (viraConcluida && !eraConcluida) {
         data.fechamento = new Date();
       } else if (!viraConcluida && eraConcluida) {

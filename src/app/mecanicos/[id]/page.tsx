@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { labelStatus } from "@/lib/constants";
 
 type Meta = { id: string; ano: number; mes: number; valorAlvo: number };
 type Mecanico = {
@@ -23,10 +24,6 @@ function fmtNps(v: number | null): string {
   return v === null ? "—" : v.toFixed(1);
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
-};
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -263,7 +260,7 @@ export default function MecanicoDetailPage() {
                     </p>
                   </div>
                 </div>
-                <div className="shrink-0 text-xs text-zinc-400 hidden sm:block">{STATUS_LABEL[os.status] || os.status}</div>
+                <div className="shrink-0 text-xs text-zinc-400 hidden sm:block">{labelStatus(os.status)}</div>
                 <div className="text-right text-sm w-24 shrink-0">
                   <p className="font-semibold text-zinc-900">{formatCurrency(os.total)}</p>
                   <p className="text-xs text-zinc-400">{formatDate(os.abertura)}</p>

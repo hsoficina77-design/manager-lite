@@ -55,7 +55,12 @@ model Veiculo {
   orcamentos Orcamento[]
 }
 
-// status: ABERTA | EM_ANDAMENTO | AGUARDANDO_PECA | PRONTA | FECHADA | ENTREGUE | CANCELADA
+// status: ABERTA | EM_ANDAMENTO | AGUARDANDO_PECA | ENTREGUE | CANCELADA
+// A lista canônica (rótulo e cor) vive em src/lib/constants.ts — `OS_STATUS`.
+//
+// `fechamento` é a data de entrega e só é carimbada na transição para ENTREGUE. É ela
+// que define em que semana/mês a OS conta como produção: a abertura não serve, senão um
+// carro aberto há 30 dias e entregue hoje contaria no mês errado.
 model OrdemServico {
   id               String    @id @default(cuid())
   numero           Int       @unique

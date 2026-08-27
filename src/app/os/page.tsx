@@ -5,34 +5,17 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { labelStatus, corStatus, OS_EM_ABERTO, OS_CONCLUIDA } from "@/lib/constants";
 import { Suspense } from "react";
 
-const STATUS_LABEL: Record<string, string> = {
-  ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
-};
-const STATUS_COLOR: Record<string, string> = {
-  ABERTA: "bg-zinc-200 text-zinc-700",
-  EM_ANDAMENTO: "bg-zinc-800 text-zinc-100",
-  AGUARDANDO_PECA: "bg-zinc-300 text-zinc-800",
-  PRONTA: "bg-zinc-900 text-white",
-  FECHADA: "bg-zinc-600 text-white",
-  ENTREGUE: "bg-zinc-100 text-zinc-500",
-  CANCELADA: "bg-red-100 text-red-700",
-};
-
 const GRUPOS = [
-  { key: "patio", label: "Pátio", statuses: ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA"], bg: "bg-zinc-50" },
-  { key: "afechar", label: "A Fechar", statuses: ["PRONTA"], bg: "bg-zinc-100" },
-  { key: "fechadas", label: "Fechadas", statuses: ["FECHADA"], bg: "bg-zinc-200" },
-  { key: "entregues", label: "Entregues", statuses: ["ENTREGUE"], bg: "bg-zinc-100" },
+  { key: "patio", label: "Pátio", statuses: OS_EM_ABERTO, bg: "bg-zinc-50" },
+  { key: "entregues", label: "Entregues", statuses: OS_CONCLUIDA, bg: "bg-zinc-100" },
 ];
 
 const TABS = [
   { label: "Todas", value: "" },
   { label: "Pátio", value: "patio" },
-  { label: "A Fechar", value: "afechar" },
-  { label: "Fechadas", value: "fechadas" },
   { label: "Entregues", value: "entregues" },
 ];
 
@@ -315,8 +298,8 @@ function OSRow({ os }: { os: OS }) {
             {" · "}{os.descricao}
           </p>
         </div>
-        <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:hidden", STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600")}>
-          {STATUS_LABEL[os.status] || os.status}
+        <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:hidden", corStatus(os.status))}>
+          {labelStatus(os.status)}
         </span>
       </div>
       <div className="shrink-0 text-sm text-zinc-500 hidden md:block">
@@ -329,8 +312,8 @@ function OSRow({ os }: { os: OS }) {
         </div>
       )}
       <div className="flex items-center gap-3 shrink-0">
-        <span className={cn("hidden rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-block", STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600")}>
-          {STATUS_LABEL[os.status] || os.status}
+        <span className={cn("hidden rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-block", corStatus(os.status))}>
+          {labelStatus(os.status)}
         </span>
         <div className="text-right text-xs w-24">
           <p className="font-semibold text-zinc-900">{formatCurrency(os.total)}</p>

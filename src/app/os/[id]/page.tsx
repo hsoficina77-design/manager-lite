@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
-import { FOTO_TIPOS, tipoDaFoto } from "@/lib/constants";
+import { FOTO_TIPOS, tipoDaFoto, labelStatus, corStatus, OS_STATUS_VALUES, OS_CONCLUIDA } from "@/lib/constants";
 import OSFotos, { type Foto } from "@/components/OSFotos";
 
 const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
@@ -44,20 +44,7 @@ type OS = {
   fotos: Foto[];
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
-};
-const STATUS_COLOR: Record<string, string> = {
-  ABERTA: "bg-zinc-200 text-zinc-700",
-  EM_ANDAMENTO: "bg-zinc-800 text-zinc-100",
-  AGUARDANDO_PECA: "bg-zinc-300 text-zinc-800",
-  PRONTA: "bg-zinc-900 text-white",
-  FECHADA: "bg-zinc-600 text-white",
-  ENTREGUE: "bg-zinc-100 text-zinc-500",
-  CANCELADA: "bg-red-100 text-red-700",
-};
-const STATUS_OPTIONS = ["ABERTA", "EM_ANDAMENTO", "AGUARDANDO_PECA", "PRONTA", "FECHADA", "ENTREGUE", "CANCELADA"];
+const STATUS_OPTIONS = OS_STATUS_VALUES;
 
 const FORMAS_PGTO = ["DINHEIRO", "PIX", "CARTAO_CREDITO", "CARTAO_DEBITO", "TRANSFERENCIA"];
 const FORMAS_LABEL: Record<string, string> = {
@@ -277,7 +264,7 @@ export default function OSDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {saldo > 0 && (os.status === "FECHADA" || os.status === "ENTREGUE") && (
+          {saldo > 0 && OS_CONCLUIDA.includes(os.status) && (
             <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-800">
               A receber — {formatCurrency(saldo)}
             </span>
@@ -296,12 +283,12 @@ export default function OSDetailPage() {
             disabled={changingStatus}
             className={cn(
               "cursor-pointer appearance-none rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60",
-              STATUS_COLOR[os.status],
+              corStatus(os.status),
             )}
             title="Alterar status da OS"
           >
             {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              <option key={s} value={s}>{labelStatus(s)}</option>
             ))}
           </select>
           <OSPdfButton os={os} />
@@ -338,8 +325,8 @@ export default function OSDetailPage() {
                 <p className="text-3xl font-black text-red-600">#{os.numero}</p>
               </div>
               <div className="text-right">
-                <span className={cn("rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap", STATUS_COLOR[os.status])}>
-                  {STATUS_LABEL[os.status]}
+                <span className={cn("rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap", corStatus(os.status))}>
+                  {labelStatus(os.status)}
                 </span>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { labelStatus, corStatus } from "@/lib/constants";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS",
@@ -29,19 +30,6 @@ const COMBUSTIVEIS = [
 ];
 const VALVULAS = ["8V","12V","16V","20V","24V"];
 
-const STATUS_LABEL: Record<string, string> = {
-  ABERTA: "Aberta", EM_ANDAMENTO: "Em Andamento", AGUARDANDO_PECA: "Ag. Peça",
-  PRONTA: "Pronta", FECHADA: "Fechada", ENTREGUE: "Entregue", CANCELADA: "Cancelada",
-};
-const STATUS_COLOR: Record<string, string> = {
-  ABERTA: "bg-zinc-200 text-zinc-700",
-  EM_ANDAMENTO: "bg-zinc-800 text-zinc-100",
-  AGUARDANDO_PECA: "bg-zinc-300 text-zinc-800",
-  PRONTA: "bg-zinc-900 text-white",
-  FECHADA: "bg-zinc-600 text-white",
-  ENTREGUE: "bg-zinc-100 text-zinc-500",
-  CANCELADA: "bg-red-100 text-red-700",
-};
 
 type Veiculo = {
   id: string; marca: string; modelo: string; ano: number | null; placa: string | null;
@@ -555,8 +543,8 @@ export default function ClienteDetailPage() {
                   <p className="text-sm text-zinc-500 truncate">{os.descricao}</p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 sm:ml-3">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[os.status] || "bg-zinc-100 text-zinc-600"}`}>
-                    {STATUS_LABEL[os.status] || os.status}
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${corStatus(os.status)}`}>
+                    {labelStatus(os.status)}
                   </span>
                   <div className="text-right text-xs">
                     <p className="font-medium text-zinc-900">{formatCurrency(os.total)}</p>
