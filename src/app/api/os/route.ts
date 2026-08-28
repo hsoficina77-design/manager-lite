@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { osCriarSchema, valorDoItem } from "@/lib/schemas";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -39,7 +41,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
     const {
       clienteId,
       veiculoId,
@@ -50,15 +51,8 @@ export async function POST(request: Request) {
       mecanicoId,
       nivelCombustivel,
       combustivelEmUso,
-      itens = [],
-    } = body;
-
-    if (!clienteId || !veiculoId || !descricao?.trim()) {
-      return NextResponse.json(
-        { error: "Cliente, veículo e descrição são obrigatórios" },
-        { status: 400 }
-      );
-    }
+      itens,
+    } = await lerJson(request, osCriarSchema);
 
     // Resolve o nome do mecânico para gravar denormalizado (compat com PDF/listas).
     let mecanicoNome: string | null = null;
@@ -70,17 +64,17 @@ export async function POST(request: Request) {
       mecanicoNome = mec?.nome ?? null;
     }
 
-    const totalPecas = (itens as any[])
+    const totalPecas = itens
       .filter((i) => i.tipo === "PECA")
-      .reduce((sum: number, i: any) => sum + Number(i.valorTotal), 0);
+      .reduce((sum, i) => sum + valorDoItem(i), 0);
 
-    const totalMO = (itens as any[])
+    const totalMO = itens
       .filter((i) => i.tipo !== "PECA")
-      .reduce((sum: number, i: any) => sum + Number(i.valorTotal), 0);
+      .reduce((sum, i) => sum + valorDoItem(i), 0);
 
-    const custoTotalPecas = (itens as any[])
+    const custoTotalPecas = itens
       .filter((i) => i.tipo === "PECA")
-      .reduce((sum: number, i: any) => sum + (Number(i.custoUnit || 0) * Number(i.quantidade)), 0);
+      .reduce((sum, i) => sum + (i.custoUnit ?? 0) * i.quantidade, 0);
 
     const total = totalPecas + totalMO;
     const lucroReal = total - custoTotalPecas;
@@ -98,14 +92,14 @@ export async function POST(request: Request) {
           numero: seq.ultimo,
           clienteId,
           veiculoId,
-          descricao: descricao.trim(),
-          defeitoRelatado: defeitoRelatado?.trim() || null,
-          kmEntrada: kmEntrada ? Number(kmEntrada) : null,
-          obs: obs?.trim() || null,
-          mecanicoId: mecanicoId || null,
+          descricao,
+          defeitoRelatado: defeitoRelatado ?? null,
+          kmEntrada: kmEntrada ?? null,
+          obs: obs ?? null,
+          mecanicoId: mecanicoId ?? null,
           mecanico: mecanicoNome,
-          nivelCombustivel: nivelCombustivel?.trim() || null,
-          combustivelEmUso: combustivelEmUso?.trim() || null,
+          nivelCombustivel: nivelCombustivel ?? null,
+          combustivelEmUso: combustivelEmUso ?? null,
           totalPecas,
           totalMO,
           total,
@@ -113,14 +107,14 @@ export async function POST(request: Request) {
           lucroReal,
           margemPecas,
           itens: {
-            create: (itens as any[]).map((item) => ({
-              tipo: item.tipo || "PECA",
-              descricao: item.descricao.trim(),
-              quantidade: Number(item.quantidade),
-              valorUnit: Number(item.valorUnit),
-              valorTotal: Number(item.valorTotal),
-              custoUnit: item.custoUnit != null && item.custoUnit !== "" ? Number(item.custoUnit) : null,
-              fornecedor: item.fornecedor?.trim() || null,
+            create: itens.map((item) => ({
+              tipo: item.tipo,
+              descricao: item.descricao,
+              quantidade: item.quantidade,
+              valorUnit: item.valorUnit,
+              valorTotal: valorDoItem(item),
+              custoUnit: item.custoUnit ?? null,
+              fornecedor: item.fornecedor ?? null,
             })),
           },
         },
@@ -134,6 +128,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(os, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao criar OS" }, { status: 500 });
   }

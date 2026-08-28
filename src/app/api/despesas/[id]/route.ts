@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { despesaAtualizarSchema } from "@/lib/schemas";
 
 export async function PUT(
   request: Request,
@@ -7,8 +9,10 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
-    const { categoria, descricao, valor, vencimento, recorrente, pago } = body;
+    const { categoria, descricao, valor, vencimento, recorrente, pago } = await lerJson(
+      request,
+      despesaAtualizarSchema
+    );
 
     const atual = await prisma.despesa.findUnique({ where: { id } });
     if (!atual) {
@@ -17,14 +21,14 @@ export async function PUT(
 
     const data: Record<string, unknown> = {};
     if (categoria !== undefined) data.categoria = categoria;
-    if (descricao !== undefined) data.descricao = descricao.trim();
-    if (valor !== undefined) data.valor = Number(valor);
-    if (vencimento !== undefined) data.vencimento = new Date(vencimento);
-    if (recorrente !== undefined) data.recorrente = Boolean(recorrente);
+    if (descricao !== undefined) data.descricao = descricao;
+    if (valor !== undefined) data.valor = valor;
+    if (vencimento !== undefined) data.vencimento = vencimento;
+    if (recorrente !== undefined) data.recorrente = recorrente;
 
     const marcandoComoPaga = pago === true && !atual.pago;
     if (pago !== undefined) {
-      data.pago = Boolean(pago);
+      data.pago = pago;
       data.pagoEm = pago ? new Date() : null;
     }
 
@@ -51,6 +55,8 @@ export async function PUT(
 
     return NextResponse.json(despesa);
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar despesa" }, { status: 500 });
   }

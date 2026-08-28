@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
+import { comUrlAssinada } from "@/lib/fotos";
 import { FOTO_LEGENDA_MAX, FOTO_TIPO_VALUES } from "@/lib/constants";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { fotoAtualizarSchema } from "@/lib/schemas";
 
 export async function PATCH(
   request: Request,
@@ -9,7 +12,7 @@ export async function PATCH(
 ) {
   const { id, fotoId } = await params;
   try {
-    const body = await request.json();
+    const body = await lerJson(request, fotoAtualizarSchema);
     const foto = await prisma.fotoOS.findUnique({ where: { id: fotoId } });
     if (!foto || foto.ordemId !== id) {
       return NextResponse.json({ error: "Foto não encontrada" }, { status: 404 });
@@ -25,7 +28,7 @@ export async function PATCH(
           : null;
     }
     if ("tipo" in body) {
-      if (!FOTO_TIPO_VALUES.includes(body.tipo)) {
+      if (!body.tipo || !FOTO_TIPO_VALUES.includes(body.tipo)) {
         return NextResponse.json({ error: "Momento da foto inválido" }, { status: 400 });
       }
       data.tipo = body.tipo;
@@ -35,8 +38,11 @@ export async function PATCH(
     }
 
     const atualizada = await prisma.fotoOS.update({ where: { id: fotoId }, data });
-    return NextResponse.json(atualizada);
+    const [comAssinatura] = await comUrlAssinada([atualizada]);
+    return NextResponse.json(comAssinatura);
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao salvar foto" }, { status: 500 });
   }

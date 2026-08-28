@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { despesaCriarSchema } from "@/lib/schemas";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,28 +20,25 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { categoria, descricao, valor, vencimento, recorrente } = body;
-
-    if (!categoria || !descricao?.trim() || !valor || !vencimento) {
-      return NextResponse.json(
-        { error: "Categoria, descrição, valor e vencimento são obrigatórios" },
-        { status: 400 }
-      );
-    }
+    const { categoria, descricao, valor, vencimento, recorrente } = await lerJson(
+      request,
+      despesaCriarSchema
+    );
 
     const despesa = await prisma.despesa.create({
       data: {
         categoria,
-        descricao: descricao.trim(),
-        valor: Number(valor),
-        vencimento: new Date(vencimento),
-        recorrente: Boolean(recorrente),
+        descricao,
+        valor,
+        vencimento,
+        recorrente: recorrente ?? false,
       },
     });
 
     return NextResponse.json(despesa, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao criar despesa" }, { status: 500 });
   }

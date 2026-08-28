@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { orcamentoCriarSchema, valorDoItem } from "@/lib/schemas";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -31,7 +33,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
     const {
       clienteId,
       veiculoId,
@@ -41,32 +42,30 @@ export async function POST(request: Request) {
       descricao,
       validade,
       obs,
-      itens = [],
-    } = body;
+      itens,
+    } = await lerJson(request, orcamentoCriarSchema);
 
     // Rascunho: sem cliente cadastrado, basta uma identificação livre — mas alguma
     // identificação é obrigatória, senão o orçamento fica impossível de reconhecer.
-    if (!clienteId && !clienteNome?.trim()) {
+    if (!clienteId && !clienteNome) {
       return NextResponse.json(
         { error: "Informe o cliente cadastrado ou ao menos um nome de referência" },
         { status: 400 }
       );
     }
-    if (!descricao?.trim() && (!Array.isArray(itens) || itens.length === 0)) {
+    if (!descricao && itens.length === 0) {
       return NextResponse.json(
         { error: "Descreva o serviço ou adicione ao menos um item" },
         { status: 400 }
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lista = itens as any[];
-    const totalPecas = lista
+    const totalPecas = itens
       .filter((i) => i.tipo === "PECA")
-      .reduce((sum, i) => sum + Number(i.valorTotal), 0);
-    const totalMO = lista
+      .reduce((sum, i) => sum + valorDoItem(i), 0);
+    const totalMO = itens
       .filter((i) => i.tipo !== "PECA")
-      .reduce((sum, i) => sum + Number(i.valorTotal), 0);
+      .reduce((sum, i) => sum + valorDoItem(i), 0);
     const total = totalPecas + totalMO;
 
     const orcamento = await prisma.$transaction(async (tx) => {
@@ -79,28 +78,28 @@ export async function POST(request: Request) {
       return tx.orcamento.create({
         data: {
           numero: seq.ultimo,
-          clienteId: clienteId || null,
-          veiculoId: veiculoId || null,
+          clienteId: clienteId ?? null,
+          veiculoId: veiculoId ?? null,
           // Só guarda os dados livres quando não há cadastro — evita duas versões
           // do mesmo dado divergindo depois.
-          clienteNome: clienteId ? null : clienteNome?.trim() || null,
-          clienteTelefone: clienteId ? null : clienteTelefone?.trim() || null,
-          veiculoDesc: veiculoId ? null : veiculoDesc?.trim() || null,
-          descricao: descricao?.trim() || null,
-          validade: validade ? new Date(validade) : null,
-          obs: obs?.trim() || null,
+          clienteNome: clienteId ? null : clienteNome ?? null,
+          clienteTelefone: clienteId ? null : clienteTelefone ?? null,
+          veiculoDesc: veiculoId ? null : veiculoDesc ?? null,
+          descricao: descricao ?? null,
+          validade: validade ?? null,
+          obs: obs ?? null,
           totalPecas,
           totalMO,
           total,
           itens: {
-            create: lista.map((item) => ({
-              tipo: item.tipo || "PECA",
-              descricao: item.descricao.trim(),
-              quantidade: Number(item.quantidade),
-              valorUnit: Number(item.valorUnit),
-              valorTotal: Number(item.valorTotal),
-              custoUnit: item.custoUnit != null && item.custoUnit !== "" ? Number(item.custoUnit) : null,
-              fornecedor: item.fornecedor?.trim() || null,
+            create: itens.map((item) => ({
+              tipo: item.tipo,
+              descricao: item.descricao,
+              quantidade: item.quantidade,
+              valorUnit: item.valorUnit,
+              valorTotal: valorDoItem(item),
+              custoUnit: item.custoUnit ?? null,
+              fornecedor: item.fornecedor ?? null,
             })),
           },
         },
@@ -110,6 +109,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(orcamento, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao criar orçamento" }, { status: 500 });
   }

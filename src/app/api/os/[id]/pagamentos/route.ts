@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { recalcularPagamento } from "@/lib/pagamentos";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { pagamentoSchema } from "@/lib/schemas";
 
 export async function POST(
   request: Request,
@@ -9,23 +11,15 @@ export async function POST(
   const { id: ordemId } = await params;
 
   try {
-    const body = await request.json();
-    const { valor, formaPagamento, obs } = body;
-
-    if (!valor || Number(valor) <= 0) {
-      return NextResponse.json(
-        { error: "Valor deve ser maior que zero" },
-        { status: 400 }
-      );
-    }
+    const { valor, formaPagamento, obs } = await lerJson(request, pagamentoSchema);
 
     const result = await prisma.$transaction(async (tx) => {
       const pagamento = await tx.pagamentoOS.create({
         data: {
           ordemId,
-          valor: Number(valor),
-          formaPagamento: formaPagamento || "DINHEIRO",
-          obs: obs?.trim() || null,
+          valor,
+          formaPagamento,
+          obs: obs ?? null,
         },
       });
 
@@ -36,7 +30,7 @@ export async function POST(
 
       if (!os) throw new Error("OS não encontrada");
 
-      const novoValorPago = os.valorPago + Number(valor);
+      const novoValorPago = os.valorPago + valor;
       const pago = novoValorPago >= os.total;
 
       await tx.ordemServico.update({
@@ -49,6 +43,8 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json(
       { error: "Erro ao registrar pagamento" },

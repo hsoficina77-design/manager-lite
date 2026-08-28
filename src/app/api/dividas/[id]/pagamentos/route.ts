@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { pagamentoSchema } from "@/lib/schemas";
 
 export async function GET(
   _req: Request,
@@ -19,20 +21,15 @@ export async function POST(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
-    const { valor, formaPagamento, obs } = body;
-
-    if (!valor || Number(valor) <= 0) {
-      return NextResponse.json({ error: "Valor deve ser maior que zero" }, { status: 400 });
-    }
+    const { valor, formaPagamento, obs } = await lerJson(request, pagamentoSchema);
 
     const result = await prisma.$transaction(async (tx) => {
       const pagamento = await tx.pagamentoDivida.create({
         data: {
           dividaId: Number(id),
-          valor: Number(valor),
-          formaPagamento: formaPagamento || "DINHEIRO",
-          obs: obs?.trim() || null,
+          valor,
+          formaPagamento,
+          obs: obs ?? null,
         },
       });
 
@@ -43,7 +40,7 @@ export async function POST(
 
       if (!divida) throw new Error("Dívida não encontrada");
 
-      const novoValorPago = divida.valorPago + Number(valor);
+      const novoValorPago = divida.valorPago + valor;
       const pago = novoValorPago >= divida.valor;
 
       await tx.dividaAvulsa.update({
@@ -56,6 +53,8 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao registrar pagamento" }, { status: 500 });
   }

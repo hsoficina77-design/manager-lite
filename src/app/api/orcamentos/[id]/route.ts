@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { orcamentoAtualizarSchema, valorDoItem } from "@/lib/schemas";
 
 export async function GET(
   _req: Request,
@@ -30,7 +32,6 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
     const {
       status,
       clienteId,
@@ -43,7 +44,7 @@ export async function PUT(
       desconto,
       obs,
       itens,
-    } = body;
+    } = await lerJson(request, orcamentoAtualizarSchema);
 
     const current = await prisma.orcamento.findUnique({
       where: { id },
@@ -67,21 +68,15 @@ export async function PUT(
       );
     }
 
-    const temItens = Array.isArray(itens);
     let totalPecas = current.totalPecas;
     let totalMO = current.totalMO;
 
-    if (temItens) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const lista = itens as any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const valorDoItem = (i: any) =>
-        Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit));
-      totalPecas = lista.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
-      totalMO = lista.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
+    if (itens) {
+      totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
+      totalMO = itens.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
     }
 
-    const novoDesconto = desconto !== undefined ? Number(desconto) : current.desconto;
+    const novoDesconto = desconto !== undefined ? desconto : current.desconto;
     const total = totalPecas + totalMO - novoDesconto;
 
     const data: Record<string, unknown> = {
@@ -89,45 +84,43 @@ export async function PUT(
       total,
     };
 
-    if (temItens) {
+    if (itens) {
       data.totalPecas = totalPecas;
       data.totalMO = totalMO;
     }
 
     if (status !== undefined) data.status = status;
-    if (clienteId !== undefined) data.clienteId = clienteId || null;
-    if (veiculoId !== undefined) data.veiculoId = veiculoId || null;
-    if (descricao !== undefined) data.descricao = descricao?.trim() || null;
+    if (clienteId !== undefined) data.clienteId = clienteId;
+    if (veiculoId !== undefined) data.veiculoId = veiculoId;
+    if (descricao !== undefined) data.descricao = descricao;
 
     // Dados livres só existem enquanto não há cadastro: vincular o real limpa o rascunho.
     if (clienteId) {
       data.clienteNome = null;
       data.clienteTelefone = null;
     } else {
-      if (clienteNome !== undefined) data.clienteNome = clienteNome?.trim() || null;
-      if (clienteTelefone !== undefined) data.clienteTelefone = clienteTelefone?.trim() || null;
+      if (clienteNome !== undefined) data.clienteNome = clienteNome;
+      if (clienteTelefone !== undefined) data.clienteTelefone = clienteTelefone;
     }
     if (veiculoId) data.veiculoDesc = null;
-    else if (veiculoDesc !== undefined) data.veiculoDesc = veiculoDesc?.trim() || null;
-    if (validade !== undefined) data.validade = validade ? new Date(validade) : null;
-    if (obs !== undefined) data.obs = obs?.trim() || null;
+    else if (veiculoDesc !== undefined) data.veiculoDesc = veiculoDesc;
+    if (validade !== undefined) data.validade = validade;
+    if (obs !== undefined) data.obs = obs;
 
-    if (temItens) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const lista = itens as any[];
+    if (itens) {
       await prisma.$transaction(async (tx) => {
         await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
-        if (lista.length > 0) {
+        if (itens.length > 0) {
           await tx.itemOrcamento.createMany({
-            data: lista.map((i) => ({
+            data: itens.map((i) => ({
               orcamentoId: id,
-              tipo: i.tipo || "PECA",
-              descricao: String(i.descricao).trim(),
-              quantidade: Number(i.quantidade),
-              valorUnit: Number(i.valorUnit),
-              valorTotal: Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit)),
-              custoUnit: i.custoUnit != null && i.custoUnit !== "" ? Number(i.custoUnit) : null,
-              fornecedor: i.fornecedor?.trim() || null,
+              tipo: i.tipo,
+              descricao: i.descricao,
+              quantidade: i.quantidade,
+              valorUnit: i.valorUnit,
+              valorTotal: valorDoItem(i),
+              custoUnit: i.custoUnit ?? null,
+              fornecedor: i.fornecedor ?? null,
             })),
           });
         }
@@ -140,6 +133,8 @@ export async function PUT(
     const orcamento = await prisma.orcamento.findUnique({ where: { id } });
     return NextResponse.json(orcamento);
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar orçamento" }, { status: 500 });
   }

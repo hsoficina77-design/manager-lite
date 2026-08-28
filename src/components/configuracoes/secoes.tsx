@@ -216,7 +216,7 @@ function Marca({ form, setCampo, logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverL
             <input
               ref={inputLogo}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={(e) => {
                 const arquivo = e.target.files?.[0];

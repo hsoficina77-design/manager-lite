@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { mecanicoAtualizarSchema } from "@/lib/schemas";
 
 export async function GET(
   _req: Request,
@@ -28,19 +30,16 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
-    const { nome, telefone, especialidade, ativo } = body;
+    const { nome, telefone, especialidade, ativo } = await lerJson(
+      request,
+      mecanicoAtualizarSchema
+    );
 
     const data: Record<string, unknown> = {};
-    if (nome !== undefined) {
-      if (!nome?.trim()) {
-        return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
-      }
-      data.nome = nome.trim();
-    }
-    if (telefone !== undefined) data.telefone = telefone?.trim() || null;
-    if (especialidade !== undefined) data.especialidade = especialidade?.trim() || null;
-    if (ativo !== undefined) data.ativo = Boolean(ativo);
+    if (nome !== undefined) data.nome = nome;
+    if (telefone !== undefined) data.telefone = telefone;
+    if (especialidade !== undefined) data.especialidade = especialidade;
+    if (ativo !== undefined) data.ativo = ativo;
 
     const mecanico = await prisma.mecanico.update({ where: { id }, data });
 
@@ -54,6 +53,8 @@ export async function PUT(
 
     return NextResponse.json(mecanico);
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar mecânico" }, { status: 500 });
   }

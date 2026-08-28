@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { dividaAtualizarSchema } from "@/lib/schemas";
 
 export async function PUT(
   request: Request,
@@ -7,19 +9,20 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
-    const { descricao, valor } = body;
+    const { descricao, valor } = await lerJson(request, dividaAtualizarSchema);
 
     const divida = await prisma.dividaAvulsa.update({
       where: { id: Number(id) },
       data: {
-        ...(descricao !== undefined && { descricao: descricao.trim() }),
-        ...(valor !== undefined && { valor: Number(valor) }),
+        ...(descricao !== undefined && { descricao }),
+        ...(valor !== undefined && { valor }),
       },
     });
 
     return NextResponse.json(divida);
-  } catch {
+  } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     return NextResponse.json({ error: "Erro ao atualizar dívida" }, { status: 500 });
   }
 }

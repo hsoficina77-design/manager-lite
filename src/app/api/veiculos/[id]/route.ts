@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dadosVeiculo, erroVeiculo } from "@/lib/veiculo";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { veiculoSchema } from "@/lib/schemas";
 
 export async function PUT(
   request: Request,
@@ -8,7 +10,7 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
+    const body = await lerJson(request, veiculoSchema);
 
     const dados = dadosVeiculo(body);
     const erro = erroVeiculo(dados);
@@ -21,6 +23,8 @@ export async function PUT(
 
     return NextResponse.json(veiculo);
   } catch (err: any) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     if (err.code === "P2002") {
       return NextResponse.json({ error: "Placa já cadastrada" }, { status: 409 });
     }

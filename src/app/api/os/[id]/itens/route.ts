@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { itemAvulsoSchema, valorDoItem } from "@/lib/schemas";
 
 function recalcOS(itens: { tipo: string; valorTotal: number; custoUnit: number | null; quantidade: number }[], desconto: number) {
   const totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + i.valorTotal, 0);
@@ -20,29 +22,19 @@ export async function POST(
   const { id: ordemId } = await params;
 
   try {
-    const body = await request.json();
-    const { tipo, descricao, quantidade, valorUnit, custoUnit, fornecedor } = body;
-
-    if (!descricao?.trim() || !quantidade || !valorUnit) {
-      return NextResponse.json(
-        { error: "Descrição, quantidade e valor unitário são obrigatórios" },
-        { status: 400 }
-      );
-    }
-
-    const valorTotal = Number(quantidade) * Number(valorUnit);
+    const entrada = await lerJson(request, itemAvulsoSchema);
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.itemOrdem.create({
         data: {
           ordemId,
-          tipo: tipo || "PECA",
-          descricao: descricao.trim(),
-          quantidade: Number(quantidade),
-          valorUnit: Number(valorUnit),
-          valorTotal,
-          custoUnit: custoUnit != null && custoUnit !== "" ? Number(custoUnit) : null,
-          fornecedor: fornecedor?.trim() || null,
+          tipo: entrada.tipo,
+          descricao: entrada.descricao,
+          quantidade: entrada.quantidade,
+          valorUnit: entrada.valorUnit,
+          valorTotal: valorDoItem(entrada),
+          custoUnit: entrada.custoUnit ?? null,
+          fornecedor: entrada.fornecedor ?? null,
         },
       });
 
@@ -61,6 +53,8 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao adicionar item" }, { status: 500 });
   }

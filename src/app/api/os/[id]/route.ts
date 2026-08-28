@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
+import { comUrlAssinada } from "@/lib/fotos";
 import { OS_CONCLUIDA } from "@/lib/constants";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { osAtualizarSchema, valorDoItem } from "@/lib/schemas";
 
 export async function GET(
   _req: Request,
@@ -24,7 +27,8 @@ export async function GET(
     return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
   }
 
-  return NextResponse.json(os);
+  // As fotos saem daqui com URL assinada e temporária — ver lib/fotos.
+  return NextResponse.json({ ...os, fotos: await comUrlAssinada(os.fotos) });
 }
 
 export async function PUT(
@@ -33,7 +37,6 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const body = await request.json();
     const {
       status,
       clienteId,
@@ -50,7 +53,7 @@ export async function PUT(
       combustivelEmUso,
       nps,
       itens,
-    } = body;
+    } = await lerJson(request, osAtualizarSchema);
 
     const current = await prisma.ordemServico.findUnique({
       where: { id },
@@ -62,22 +65,19 @@ export async function PUT(
     }
 
     // Quando os itens são enviados (edição completa), recalcula os totais a partir deles.
-    const temItens = Array.isArray(itens);
     let totalPecas = current.totalPecas;
     let totalMO = current.totalMO;
     let custoTotalPecas = current.custoTotalPecas;
 
-    if (temItens) {
-      const lista = itens as any[];
-      const valorDoItem = (i: any) => Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit));
-      totalPecas = lista.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
-      totalMO = lista.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
-      custoTotalPecas = lista
+    if (itens) {
+      totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
+      totalMO = itens.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
+      custoTotalPecas = itens
         .filter((i) => i.tipo === "PECA")
-        .reduce((s, i) => s + Number(i.custoUnit || 0) * Number(i.quantidade), 0);
+        .reduce((s, i) => s + (i.custoUnit ?? 0) * i.quantidade, 0);
     }
 
-    const novoDesconto = desconto !== undefined ? Number(desconto) : current.desconto;
+    const novoDesconto = desconto !== undefined ? desconto : current.desconto;
     const total = totalPecas + totalMO - novoDesconto;
     const lucroReal = total - custoTotalPecas;
     const margemPecas = totalPecas > 0
@@ -91,7 +91,7 @@ export async function PUT(
       margemPecas,
     };
 
-    if (temItens) {
+    if (itens) {
       data.totalPecas = totalPecas;
       data.totalMO = totalMO;
       data.custoTotalPecas = custoTotalPecas;
@@ -102,22 +102,22 @@ export async function PUT(
     if (status !== undefined) data.status = status;
     if (clienteId !== undefined) data.clienteId = clienteId;
     if (veiculoId !== undefined) data.veiculoId = veiculoId;
-    if (descricao !== undefined) data.descricao = descricao.trim();
-    if (defeitoRelatado !== undefined) data.defeitoRelatado = defeitoRelatado?.trim() || null;
-    if (kmEntrada !== undefined) data.kmEntrada = kmEntrada ? Number(kmEntrada) : null;
-    if (kmSaida !== undefined) data.kmSaida = kmSaida ? Number(kmSaida) : null;
-    if (obs !== undefined) data.obs = obs?.trim() || null;
+    if (descricao !== undefined) data.descricao = descricao;
+    if (defeitoRelatado !== undefined) data.defeitoRelatado = defeitoRelatado;
+    if (kmEntrada !== undefined) data.kmEntrada = kmEntrada;
+    if (kmSaida !== undefined) data.kmSaida = kmSaida;
+    if (obs !== undefined) data.obs = obs;
     if (formaPagamento !== undefined) data.formaPagamento = formaPagamento || null;
     if (mecanicoId !== undefined) {
-      data.mecanicoId = mecanicoId || null;
+      data.mecanicoId = mecanicoId;
       const mec = mecanicoId
         ? await prisma.mecanico.findUnique({ where: { id: mecanicoId }, select: { nome: true } })
         : null;
       data.mecanico = mec?.nome ?? null;
     }
-    if (nivelCombustivel !== undefined) data.nivelCombustivel = nivelCombustivel || null;
-    if (combustivelEmUso !== undefined) data.combustivelEmUso = combustivelEmUso || null;
-    if (nps !== undefined) data.nps = nps ? Number(nps) : null;
+    if (nivelCombustivel !== undefined) data.nivelCombustivel = nivelCombustivel;
+    if (combustivelEmUso !== undefined) data.combustivelEmUso = combustivelEmUso;
+    if (nps !== undefined) data.nps = nps;
 
     // `fechamento` é a data de entrega, e é ela que decide em que semana/mês a OS conta
     // como produção. Por isso só muda na transição: reescrevê-la a cada PATCH faria uma
@@ -134,21 +134,20 @@ export async function PUT(
       }
     }
 
-    if (temItens) {
-      const lista = itens as any[];
+    if (itens) {
       await prisma.$transaction(async (tx) => {
         await tx.itemOrdem.deleteMany({ where: { ordemId: id } });
-        if (lista.length > 0) {
+        if (itens.length > 0) {
           await tx.itemOrdem.createMany({
-            data: lista.map((i) => ({
+            data: itens.map((i) => ({
               ordemId: id,
-              tipo: i.tipo || "PECA",
-              descricao: String(i.descricao).trim(),
-              quantidade: Number(i.quantidade),
-              valorUnit: Number(i.valorUnit),
-              valorTotal: Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit)),
-              custoUnit: i.custoUnit != null && i.custoUnit !== "" ? Number(i.custoUnit) : null,
-              fornecedor: i.fornecedor?.trim() || null,
+              tipo: i.tipo,
+              descricao: i.descricao,
+              quantidade: i.quantidade,
+              valorUnit: i.valorUnit,
+              valorTotal: valorDoItem(i),
+              custoUnit: i.custoUnit ?? null,
+              fornecedor: i.fornecedor ?? null,
             })),
           });
         }
@@ -161,6 +160,8 @@ export async function PUT(
     const os = await prisma.ordemServico.findUnique({ where: { id } });
     return NextResponse.json(os);
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar OS" }, { status: 500 });
   }

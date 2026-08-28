@@ -32,12 +32,13 @@ const MAX_DIM_LOGO = 512;
  * Prepara a logo para envio: reduz o tamanho sem estragar a arte.
  *
  * Diferente das fotos, aqui não se converte tudo para JPEG — logo com fundo
- * transparente viraria um retângulo branco no cabeçalho da OS. PNG continua PNG,
- * e SVG passa direto (é vetor: já é leve e escala sozinho).
+ * transparente viraria um retângulo branco no cabeçalho da OS. PNG continua PNG.
+ *
+ * SVG não é aceito: o bucket é público e serve o arquivo na íntegra, e SVG é o
+ * único formato de imagem da web que executa script. O servidor recusa de novo,
+ * pelos bytes — ver lib/imagem-upload.
  */
 export async function compressLogo(file: File): Promise<Blob> {
-  if (file.type === "image/svg+xml") return file;
-
   const img = await loadImage(await readAsDataUrl(file));
   if (img.naturalWidth <= MAX_DIM_LOGO && img.naturalHeight <= MAX_DIM_LOGO) return file;
 

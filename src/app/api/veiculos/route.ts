@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dadosVeiculo, erroVeiculo } from "@/lib/veiculo";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { veiculoCriarSchema } from "@/lib/schemas";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -16,14 +18,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { clienteId } = body;
+    const { clienteId, ...campos } = await lerJson(request, veiculoCriarSchema);
 
-    if (!clienteId) {
-      return NextResponse.json({ error: "clienteId é obrigatório" }, { status: 400 });
-    }
-
-    const dados = dadosVeiculo(body);
+    const dados = dadosVeiculo(campos);
     const erro = erroVeiculo(dados);
     if (erro) return NextResponse.json({ error: erro }, { status: 400 });
 
@@ -33,6 +30,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(veiculo, { status: 201 });
   } catch (err: any) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     if (err.code === "P2002") {
       return NextResponse.json({ error: "Placa já cadastrada" }, { status: 409 });
     }

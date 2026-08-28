@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { lerJson, respostaDeValidacao } from "@/lib/validacao";
+import { metaCriarSchema } from "@/lib/schemas";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -23,20 +25,11 @@ export async function GET(request: Request) {
 // Upsert de meta por (mecanicoId, ano, mes). valorAlvo <= 0 remove a meta.
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { mecanicoId, ano, mes, valorAlvo } = body;
+    const { mecanicoId, ano, mes, valorAlvo: alvo } = await lerJson(request, metaCriarSchema);
 
-    if (!mecanicoId || !ano || !mes) {
-      return NextResponse.json(
-        { error: "mecanicoId, ano e mes são obrigatórios" },
-        { status: 400 }
-      );
-    }
+    const chave = { mecanicoId, ano, mes };
 
-    const alvo = Number(valorAlvo);
-    const chave = { mecanicoId, ano: Number(ano), mes: Number(mes) };
-
-    if (!alvo || alvo <= 0) {
+    if (alvo <= 0) {
       await prisma.meta.deleteMany({ where: chave });
       return NextResponse.json({ ok: true, removed: true });
     }
@@ -49,6 +42,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(meta, { status: 201 });
   } catch (err) {
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
     console.error(err);
     return NextResponse.json({ error: "Erro ao salvar meta" }, { status: 500 });
   }

@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { deleteFotos, uploadLogo } from "@/lib/supabase-storage";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { CONFIG_ID } from "@/lib/configuracao";
+import { FORMATOS_ACEITOS, tipoRealDaImagem } from "@/lib/imagem-upload";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — logo é arte pequena, não foto de serviço
-const TIPOS_OK = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 
 /** Remove do Storage a logo que estava no lugar (best-effort). */
 async function descartarAnterior(logoPath: string | null | undefined) {
@@ -19,14 +19,18 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
     }
-    if (!TIPOS_OK.includes(file.type)) {
-      return NextResponse.json(
-        { error: "Formato inválido — envie PNG, JPG, WebP ou SVG" },
-        { status: 400 }
-      );
-    }
     if (file.size > MAX_BYTES) {
       return NextResponse.json({ error: "Arquivo muito grande (máx. 2MB)" }, { status: 400 });
+    }
+
+    // O formato vem dos bytes, não do `file.type` — ver lib/imagem-upload.
+    const bytes = await file.arrayBuffer();
+    const tipo = tipoRealDaImagem(bytes);
+    if (!tipo) {
+      return NextResponse.json(
+        { error: `Formato inválido — envie ${FORMATOS_ACEITOS}` },
+        { status: 400 }
+      );
     }
 
     const anterior = await prisma.configuracao.findUnique({
@@ -34,8 +38,7 @@ export async function POST(request: Request) {
       select: { logoPath: true },
     });
 
-    const bytes = await file.arrayBuffer();
-    const { path, url } = await uploadLogo(bytes, file.type);
+    const { path, url } = await uploadLogo(bytes, tipo);
 
     await prisma.configuracao.upsert({
       where: { id: CONFIG_ID },
