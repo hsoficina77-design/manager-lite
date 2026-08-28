@@ -8,6 +8,7 @@ import { osAtualizarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
 import { custosParaSalvar } from "@/lib/custos";
+import { planoDeItens } from "@/lib/itens";
 
 export async function GET(
   _req: Request,
@@ -153,21 +154,28 @@ export async function PUT(
 
     if (itens) {
       await prisma.$transaction(async (tx) => {
-        await tx.itemOrdem.deleteMany({ where: { ordemId: id } });
-        if (itens.length > 0) {
+        // Item que já existe é atualizado no lugar, e não recriado: trocar o id a cada
+        // gravação quebraria a recuperação de custo do operador — ver lib/itens.
+        const noBanco = await tx.itemOrdem.findMany({
+          where: { ordemId: id },
+          select: { id: true },
+        });
+        const plano = planoDeItens(itens, custos, new Set(noBanco.map((i) => i.id)));
+
+        for (const { id: itemId, dados } of plano.atualizar) {
+          await tx.itemOrdem.update({ where: { id: itemId }, data: dados });
+        }
+
+        // Antes de criar os novos: `manter` não os conhece, e apagar depois levaria
+        // junto o que acabou de entrar.
+        await tx.itemOrdem.deleteMany({ where: { ordemId: id, id: { notIn: plano.manter } } });
+
+        if (plano.criar.length > 0) {
           await tx.itemOrdem.createMany({
-            data: itens.map((i, idx) => ({
-              ordemId: id,
-              tipo: i.tipo,
-              descricao: i.descricao,
-              quantidade: i.quantidade,
-              valorUnit: i.valorUnit,
-              valorTotal: valorDoItem(i),
-              custoUnit: custos[idx],
-              fornecedor: i.fornecedor ?? null,
-            })),
+            data: plano.criar.map((dados) => ({ ordemId: id, ...dados })),
           });
         }
+
         await tx.ordemServico.update({ where: { id }, data });
       });
     } else {

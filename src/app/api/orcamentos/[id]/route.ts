@@ -5,6 +5,7 @@ import { orcamentoAtualizarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
 import { custosParaSalvar } from "@/lib/custos";
+import { planoDeItens } from "@/lib/itens";
 
 export async function GET(
   _req: Request,
@@ -123,22 +124,27 @@ export async function PUT(
 
     if (itens) {
       await prisma.$transaction(async (tx) => {
-        await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
-        if (itens.length > 0) {
+        // Item que já existe é atualizado no lugar, e não recriado — ver lib/itens.
+        const noBanco = await tx.itemOrcamento.findMany({
+          where: { orcamentoId: id },
+          select: { id: true },
+        });
+        const plano = planoDeItens(itens, custos, new Set(noBanco.map((i) => i.id)));
+
+        for (const { id: itemId, dados } of plano.atualizar) {
+          await tx.itemOrcamento.update({ where: { id: itemId }, data: dados });
+        }
+
+        await tx.itemOrcamento.deleteMany({
+          where: { orcamentoId: id, id: { notIn: plano.manter } },
+        });
+
+        if (plano.criar.length > 0) {
           await tx.itemOrcamento.createMany({
-            data: itens.map((i, idx) => ({
-              orcamentoId: id,
-              tipo: i.tipo,
-              descricao: i.descricao,
-              quantidade: i.quantidade,
-              valorUnit: i.valorUnit,
-              valorTotal: valorDoItem(i),
-              // Custo do payload só quando é o dono — ver src/lib/custos.ts.
-              custoUnit: custos[idx],
-              fornecedor: i.fornecedor ?? null,
-            })),
+            data: plano.criar.map((dados) => ({ orcamentoId: id, ...dados })),
           });
         }
+
         await tx.orcamento.update({ where: { id }, data });
       });
     } else {
