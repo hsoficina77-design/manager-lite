@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { dadosVeiculo, erroVeiculo } from "@/lib/veiculo";
 
 export async function PUT(
   request: Request,
@@ -8,28 +9,14 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { marca, modelo, ano, placa, cor, km, motorizacao, valvulas, anoFabricacao, anoModelo, combustivel, combustivelEmUso } = body;
 
-    if (!marca?.trim() || !modelo?.trim()) {
-      return NextResponse.json({ error: "Marca e modelo são obrigatórios" }, { status: 400 });
-    }
+    const dados = dadosVeiculo(body);
+    const erro = erroVeiculo(dados);
+    if (erro) return NextResponse.json({ error: erro }, { status: 400 });
 
     const veiculo = await prisma.veiculo.update({
       where: { id },
-      data: {
-        marca: marca.trim(),
-        modelo: modelo.trim(),
-        ano: ano ? Number(ano) : null,
-        placa: placa?.trim().toUpperCase() || null,
-        cor: cor?.trim() || null,
-        km: km ? Number(km) : null,
-        motorizacao: motorizacao?.trim() || null,
-        valvulas: valvulas?.trim() || null,
-        anoFabricacao: anoFabricacao ? Number(anoFabricacao) : null,
-        anoModelo: anoModelo ? Number(anoModelo) : null,
-        combustivel: combustivel?.trim() || null,
-        combustivelEmUso: combustivelEmUso?.trim() || null,
-      },
+      data: dados,
     });
 
     return NextResponse.json(veiculo);

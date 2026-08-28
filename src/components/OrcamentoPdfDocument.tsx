@@ -1,4 +1,5 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { anoVeiculo } from "@/lib/constants";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -129,7 +130,7 @@ export function OrcamentoPdfDocument({
   const clienteNome = orc.cliente?.nome || orc.clienteNome?.trim() || "Sem identificação";
   const clienteTelefone = orc.cliente ? orc.cliente.telefone : orc.clienteTelefone;
   const veiculoNome = orc.veiculo
-    ? `${orc.veiculo.marca} ${orc.veiculo.modelo}${orc.veiculo.ano ? ` (${orc.veiculo.ano})` : ""}`
+    ? `${orc.veiculo.marca} ${orc.veiculo.modelo}${anoVeiculo(orc.veiculo) ? ` (${anoVeiculo(orc.veiculo)})` : ""}`
     : orc.veiculoDesc;
 
   const veicLinha: string[] = [];

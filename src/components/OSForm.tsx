@@ -4,13 +4,15 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { anoVeiculo } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
+import ClienteSelect from "./ClienteSelect";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Mecanico = { id: string; nome: string; especialidade: string | null };
 type Veiculo = {
   id: string; marca: string; modelo: string; placa: string | null; ano: number | null;
-  combustivel: string | null;
+  anoFabricacao: number | null; anoModelo: number | null; combustivel: string | null;
 };
 export type ItemForm = {
   /** Item que já existe no banco. O operador não enxerga custo, então é por este id
@@ -274,12 +276,12 @@ export default function OSForm({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">Cliente *</label>
-                  <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} required className={inputCls}>
-                    <option value="">Selecionar cliente...</option>
-                    {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.nome}{c.telefone ? ` · ${c.telefone}` : ""}</option>
-                    ))}
-                  </select>
+                  <ClienteSelect
+                    clientes={clientes}
+                    value={clienteId}
+                    onChange={setClienteId}
+                    placeholder="Selecionar cliente..."
+                  />
                 </div>
 
                 <div>
@@ -287,7 +289,7 @@ export default function OSForm({
                   <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} required disabled={!clienteId || veiculos.length === 0} className={inputCls + " disabled:bg-zinc-50 disabled:text-zinc-400"}>
                     <option value="">{!clienteId ? "Selecione um cliente primeiro" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Selecionar veículo..."}</option>
                     {veiculos.map((v) => (
-                      <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{v.ano ? ` (${v.ano})` : ""}</option>
+                      <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{anoVeiculo(v) ? ` (${anoVeiculo(v)})` : ""}</option>
                     ))}
                   </select>
                   {clienteId && veiculos.length === 0 && (

@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ORIGENS, COMBUSTIVEIS, COMBUSTIVEIS_BICOMBUSTIVEL } from "@/lib/constants";
+import { ORIGENS } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
+import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDeRascunho } from "@/components/VeiculoCampos";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -18,17 +19,10 @@ export default function NovoClientePage() {
   const [telefones, setTelefones] = useState<string[]>([]);
 
   const [addVeiculo, setAddVeiculo] = useState(false);
-  const [veiculo, setVeiculo] = useState({
-    marca: "", modelo: "", placa: "", cor: "", ano: "",
-    cilindrada: "", combustivel: "", combustivelEmUso: "",
-  });
+  const [veiculo, setVeiculo] = useState(VEICULO_FORM_VAZIO);
 
   function setField(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function setVField(key: string, value: string) {
-    setVeiculo((v) => ({ ...v, [key]: value }));
   }
 
   function addTelefone() {
@@ -57,7 +51,7 @@ export default function NovoClientePage() {
     setForm(pendingDraft.form);
     setTelefones(pendingDraft.telefones);
     setAddVeiculo(pendingDraft.addVeiculo);
-    setVeiculo(pendingDraft.veiculo);
+    setVeiculo(veiculoFormDeRascunho(pendingDraft.veiculo));
     discardPending();
   }
 
@@ -70,9 +64,7 @@ export default function NovoClientePage() {
         ...form,
         telefones: telefones.filter(Boolean),
       };
-      if (addVeiculo && veiculo.marca && veiculo.modelo) {
-        payload.veiculo = veiculo;
-      }
+      if (addVeiculo) payload.veiculo = veiculo;
       const res = await fetch("/api/clientes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,7 +80,6 @@ export default function NovoClientePage() {
   }
 
   const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
-  const showCombUso = COMBUSTIVEIS_BICOMBUSTIVEL.includes(veiculo.combustivel);
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
@@ -236,111 +227,7 @@ export default function NovoClientePage() {
           </div>
 
           {addVeiculo && (
-            <div className="grid grid-cols-2 gap-3">
-              {/* 1. Marca */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Marca *</label>
-                <input
-                  required={addVeiculo}
-                  value={veiculo.marca}
-                  onChange={(e) => setVField("marca", e.target.value)}
-                  placeholder="Ex: Chevrolet"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* 2. Modelo */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo *</label>
-                <input
-                  required={addVeiculo}
-                  value={veiculo.modelo}
-                  onChange={(e) => setVField("modelo", e.target.value)}
-                  placeholder="Ex: Onix"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* 3. Placa */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Placa</label>
-                <input
-                  value={veiculo.placa}
-                  onChange={(e) => setVField("placa", e.target.value.toUpperCase())}
-                  placeholder="ABC1D23"
-                  maxLength={8}
-                  className={inputCls}
-                />
-              </div>
-
-              {/* 4. Cor */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Cor</label>
-                <input
-                  value={veiculo.cor}
-                  onChange={(e) => setVField("cor", e.target.value)}
-                  placeholder="Ex: Prata"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* 5. Ano */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Ano</label>
-                <input
-                  type="number"
-                  value={veiculo.ano}
-                  onChange={(e) => setVField("ano", e.target.value)}
-                  placeholder="2020"
-                  min={1950}
-                  max={new Date().getFullYear() + 2}
-                  className={inputCls}
-                />
-              </div>
-
-              {/* 6. Cilindrada */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Cilindrada</label>
-                <input
-                  value={veiculo.cilindrada}
-                  onChange={(e) => setVField("cilindrada", e.target.value)}
-                  placeholder="Ex: 1.0"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* 7. Combustível */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Combustível</label>
-                <select
-                  value={veiculo.combustivel}
-                  onChange={(e) => setVField("combustivel", e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">Selecione...</option>
-                  {COMBUSTIVEIS.map((c) => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 8. Combustível em uso (somente para Flex/Híbrido) */}
-              {showCombUso && (
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Combustível em uso</label>
-                  <select
-                    value={veiculo.combustivelEmUso}
-                    onChange={(e) => setVField("combustivelEmUso", e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="GASOLINA">Gasolina</option>
-                    <option value="ETANOL">Álcool</option>
-                    <option value="GNV">GNV</option>
-                  </select>
-                </div>
-              )}
-            </div>
+            <VeiculoCampos value={veiculo} onChange={setVeiculo} obrigatorio />
           )}
         </section>
 

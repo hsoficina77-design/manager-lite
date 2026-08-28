@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
-import { FOTO_TIPOS, tipoDaFoto, labelStatus } from "@/lib/constants";
+import { FOTO_TIPOS, tipoDaFoto, labelStatus, anoVeiculo } from "@/lib/constants";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -240,7 +240,7 @@ export function OSPdfDocument({
           <View style={s.infoCol}>
             <Text style={s.boxTitle}>Veículo</Text>
             <Text style={s.boxName}>
-              {os.veiculo.marca} {os.veiculo.modelo}{os.veiculo.ano ? ` (${os.veiculo.ano})` : ""}
+              {os.veiculo.marca} {os.veiculo.modelo}{anoVeiculo(os.veiculo) ? ` (${anoVeiculo(os.veiculo)})` : ""}
             </Text>
             {os.veiculo.placa ? <Text style={s.boxLine}>Placa: {os.veiculo.placa}</Text> : null}
             {veicLinha2.length > 0 ? <Text style={s.boxLine}>{veicLinha2.join("  ·  ")}</Text> : null}

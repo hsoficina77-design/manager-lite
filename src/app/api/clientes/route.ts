@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { dadosVeiculo, erroVeiculo } from "@/lib/veiculo";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -34,6 +35,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
     }
 
+    const dadosNovoVeiculo = veiculo ? dadosVeiculo(veiculo) : null;
+    if (dadosNovoVeiculo && erroVeiculo(dadosNovoVeiculo)) {
+      return NextResponse.json({ error: erroVeiculo(dadosNovoVeiculo) }, { status: 400 });
+    }
+
     const cliente = await prisma.cliente.create({
       data: {
         nome: nome.trim(),
@@ -49,22 +55,8 @@ export async function POST(request: Request) {
         endereco: endereco?.trim() || null,
         cidade: cidade?.trim() || null,
         estado: estado?.trim() || null,
-        ...(veiculo?.marca?.trim() && veiculo?.modelo?.trim()
-          ? {
-              veiculos: {
-                create: {
-                  marca: veiculo.marca.trim(),
-                  modelo: veiculo.modelo.trim(),
-                  placa: veiculo.placa?.trim().toUpperCase() || null,
-                  cor: veiculo.cor?.trim() || null,
-                  ano: veiculo.ano ? Number(veiculo.ano) : null,
-                  motorizacao: veiculo.cilindrada?.trim() || null,
-                  combustivel: veiculo.combustivel?.trim() || null,
-                  combustivelEmUso: veiculo.combustivelEmUso?.trim() || null,
-                },
-              },
-            }
-          : {}),
+        // Veículo é opcional aqui; sem marca/modelo o cliente entra sozinho.
+        ...(dadosNovoVeiculo ? { veiculos: { create: dadosNovoVeiculo } } : {}),
       },
     });
 

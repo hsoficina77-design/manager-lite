@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
-import { FOTO_TIPOS, tipoDaFoto, labelStatus, corStatus, OS_STATUS_VALUES, OS_CONCLUIDA } from "@/lib/constants";
+import { FOTO_TIPOS, tipoDaFoto, labelStatus, corStatus, OS_STATUS_VALUES, OS_CONCLUIDA, anoVeiculo } from "@/lib/constants";
 import OSFotos, { type Foto } from "@/components/OSFotos";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
@@ -345,7 +345,7 @@ export default function OSDetailPage() {
               <div className="space-y-2">
                 <Row
                   label="Veículo"
-                  value={`${os.veiculo.marca} ${os.veiculo.modelo}${os.veiculo.ano ? ` (${os.veiculo.ano})` : ""}`}
+                  value={`${os.veiculo.marca} ${os.veiculo.modelo}${anoVeiculo(os.veiculo) ? ` (${anoVeiculo(os.veiculo)})` : ""}`}
                   bold
                 />
                 {os.veiculo.placa && <Row label="Placa" value={os.veiculo.placa} />}

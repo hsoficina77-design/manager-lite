@@ -1,36 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { labelStatus, corStatus } from "@/lib/constants";
+import { labelStatus, corStatus, ORIGENS, anoVeiculo } from "@/lib/constants";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
+import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDe, type VeiculoForm } from "@/components/VeiculoCampos";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS",
   "MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
 ];
-const ORIGENS = [
-  { value: "INDICACAO", label: "Indicação" },
-  { value: "GOOGLE", label: "Google" },
-  { value: "CHATGPT", label: "ChatGPT" },
-  { value: "INSTAGRAM", label: "Instagram" },
-  { value: "FACEBOOK", label: "Facebook" },
-  { value: "FAIXADA", label: "Faixada" },
-  { value: "OUTRO", label: "Outro" },
-];
-const COMBUSTIVEIS = [
-  { value: "GASOLINA", label: "Gasolina" },
-  { value: "ETANOL", label: "Etanol" },
-  { value: "FLEX", label: "Flex" },
-  { value: "DIESEL", label: "Diesel" },
-  { value: "ELETRICO", label: "Elétrico" },
-  { value: "HIBRIDO", label: "Híbrido" },
-  { value: "GNV", label: "GNV" },
-];
-const VALVULAS = ["8V","12V","16V","20V","24V"];
-
 
 type Veiculo = {
   id: string; marca: string; modelo: string; ano: number | null; placa: string | null;
@@ -89,13 +70,14 @@ export default function ClienteDetailPage() {
   const [telefones, setTelefones] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Um formulário só para cadastrar e editar: `veiculoEditando` guarda o id
+  // quando é edição (null = veículo novo).
   const [showVeiculoForm, setShowVeiculoForm] = useState(false);
-  const [veiculoForm, setVeiculoForm] = useState({
-    marca: "", modelo: "", ano: "", placa: "", cor: "", km: "",
-    motorizacao: "", valvulas: "", anoFabricacao: "", anoModelo: "",
-    combustivel: "", combustivelEmUso: "",
-  });
+  const [veiculoEditando, setVeiculoEditando] = useState<string | null>(null);
+  const [veiculoForm, setVeiculoForm] = useState<VeiculoForm>(VEICULO_FORM_VAZIO);
+  const [veiculoErro, setVeiculoErro] = useState("");
   const [savingVeiculo, setSavingVeiculo] = useState(false);
+  const veiculoFormRef = useRef<HTMLFormElement>(null);
 
   function setField(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -162,19 +144,47 @@ export default function ClienteDetailPage() {
     router.push("/clientes");
   }
 
+  function abrirNovoVeiculo() {
+    setVeiculoEditando(null);
+    setVeiculoForm(VEICULO_FORM_VAZIO);
+    setVeiculoErro("");
+    setShowVeiculoForm(true);
+  }
+
+  function abrirEdicaoVeiculo(v: Veiculo) {
+    setVeiculoEditando(v.id);
+    setVeiculoForm(veiculoFormDe(v));
+    setVeiculoErro("");
+    setShowVeiculoForm(true);
+    // No celular a lista é longa: leva o formulário para a tela em vez de
+    // deixar o usuário procurar onde o carro abriu para edição.
+    requestAnimationFrame(() =>
+      veiculoFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    );
+  }
+
+  function fecharVeiculoForm() {
+    setShowVeiculoForm(false);
+    setVeiculoEditando(null);
+    setVeiculoErro("");
+  }
+
   async function saveVeiculo(e: React.FormEvent) {
     e.preventDefault();
+    setVeiculoErro("");
     setSavingVeiculo(true);
     try {
-      const res = await fetch("/api/veiculos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...veiculoForm, clienteId: id }),
-      });
+      const res = await fetch(
+        veiculoEditando ? `/api/veiculos/${veiculoEditando}` : "/api/veiculos",
+        {
+          method: veiculoEditando ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...veiculoForm, clienteId: id }),
+        }
+      );
       const data = await res.json();
-      if (!res.ok) { alert(data.error || "Erro ao salvar veículo"); return; }
-      setShowVeiculoForm(false);
-      setVeiculoForm({ marca: "", modelo: "", ano: "", placa: "", cor: "", km: "", motorizacao: "", valvulas: "", anoFabricacao: "", anoModelo: "", combustivel: "", combustivelEmUso: "" });
+      if (!res.ok) { setVeiculoErro(data.error || "Erro ao salvar veículo"); return; }
+      fecharVeiculoForm();
       load();
     } finally {
       setSavingVeiculo(false);
@@ -190,8 +200,6 @@ export default function ClienteDetailPage() {
 
   if (loading) return <div className="p-6 text-zinc-400 text-sm">Carregando...</div>;
   if (!cliente) return <div className="p-6 text-zinc-400 text-sm">Cliente não encontrado.</div>;
-
-  const showCombUso = ["FLEX","HIBRIDO"].includes(veiculoForm.combustivel);
 
   const stats = cliente.stats;
 
@@ -405,88 +413,23 @@ export default function ClienteDetailPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-zinc-800">Veículos</h2>
-          <button onClick={() => setShowVeiculoForm(!showVeiculoForm)} className="text-sm text-brand-600 hover:underline">
+          <button onClick={abrirNovoVeiculo} className="text-sm text-brand-600 hover:underline">
             + Adicionar
           </button>
         </div>
 
         {showVeiculoForm && (
-          <form onSubmit={saveVeiculo} className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              {/* 1. Marca */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Marca *</label>
-                <input value={veiculoForm.marca} onChange={(e) => setVeiculoForm({ ...veiculoForm, marca: e.target.value })} required placeholder="Ex: Chevrolet" className={inputCls} />
-              </div>
-              {/* 2. Modelo */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Modelo *</label>
-                <input value={veiculoForm.modelo} onChange={(e) => setVeiculoForm({ ...veiculoForm, modelo: e.target.value })} required placeholder="Ex: Onix" className={inputCls} />
-              </div>
-              {/* 3. Placa */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Placa</label>
-                <input value={veiculoForm.placa} onChange={(e) => setVeiculoForm({ ...veiculoForm, placa: e.target.value.toUpperCase() })} placeholder="ABC1D23" maxLength={8} className={inputCls} />
-              </div>
-              {/* 4. Cor */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Cor</label>
-                <input value={veiculoForm.cor} onChange={(e) => setVeiculoForm({ ...veiculoForm, cor: e.target.value })} placeholder="Ex: Prata" className={inputCls} />
-              </div>
-              {/* 5. Ano Fabricação */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Ano Fabricação</label>
-                <input type="number" inputMode="numeric" value={veiculoForm.anoFabricacao} onChange={(e) => setVeiculoForm({ ...veiculoForm, anoFabricacao: e.target.value })} placeholder="2019" className={inputCls} />
-              </div>
-              {/* 6. Ano Modelo */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Ano Modelo</label>
-                <input type="number" inputMode="numeric" value={veiculoForm.anoModelo} onChange={(e) => setVeiculoForm({ ...veiculoForm, anoModelo: e.target.value })} placeholder="2020" className={inputCls} />
-              </div>
-              {/* 7. Cilindrada */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Cilindrada</label>
-                <input value={veiculoForm.motorizacao} onChange={(e) => setVeiculoForm({ ...veiculoForm, motorizacao: e.target.value })} placeholder="Ex: 1.0" className={inputCls} />
-              </div>
-              {/* 8. Válvulas */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Válvulas</label>
-                <select value={veiculoForm.valvulas} onChange={(e) => setVeiculoForm({ ...veiculoForm, valvulas: e.target.value })} className={inputCls}>
-                  <option value="">Selecione...</option>
-                  {VALVULAS.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              {/* 9. Combustível */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Combustível</label>
-                <select value={veiculoForm.combustivel} onChange={(e) => setVeiculoForm({ ...veiculoForm, combustivel: e.target.value, combustivelEmUso: "" })} className={inputCls}>
-                  <option value="">Selecione...</option>
-                  {COMBUSTIVEIS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-              </div>
-              {/* 10. Combustível em uso (Flex/Híbrido) */}
-              {showCombUso && (
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1">Combustível em uso</label>
-                  <select value={veiculoForm.combustivelEmUso} onChange={(e) => setVeiculoForm({ ...veiculoForm, combustivelEmUso: e.target.value })} className={inputCls}>
-                    <option value="">Selecione...</option>
-                    <option value="GASOLINA">Gasolina</option>
-                    <option value="ETANOL">Álcool</option>
-                    <option value="GNV">GNV</option>
-                  </select>
-                </div>
-              )}
-              {/* KM */}
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">KM</label>
-                <input type="number" inputMode="numeric" value={veiculoForm.km} onChange={(e) => setVeiculoForm({ ...veiculoForm, km: e.target.value })} className={inputCls} />
-              </div>
-            </div>
+          <form ref={veiculoFormRef} onSubmit={saveVeiculo} className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+            <h3 className="font-medium text-zinc-800">
+              {veiculoEditando ? "Editar veículo" : "Novo veículo"}
+            </h3>
+            <VeiculoCampos value={veiculoForm} onChange={setVeiculoForm} obrigatorio />
+            {veiculoErro && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{veiculoErro}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={savingVeiculo} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
-                {savingVeiculo ? "Salvando..." : "Salvar Veículo"}
+                {savingVeiculo ? "Salvando..." : veiculoEditando ? "Salvar alterações" : "Salvar Veículo"}
               </button>
-              <button type="button" onClick={() => setShowVeiculoForm(false)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-white">
+              <button type="button" onClick={fecharVeiculoForm} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-white">
                 Cancelar
               </button>
             </div>
@@ -508,13 +451,14 @@ export default function ClienteDetailPage() {
                   </p>
                   <p className="text-sm text-zinc-500">
                     {v.placa ? `Placa: ${v.placa}` : "Sem placa"}
-                    {v.anoFabricacao ? ` · ${v.anoFabricacao}/${v.anoModelo || ""}` : v.ano ? ` · ${v.ano}` : ""}
+                    {anoVeiculo(v) ? ` · ${anoVeiculo(v)}` : ""}
                     {v.km ? ` · ${v.km.toLocaleString("pt-BR")} km` : ""}
                     {v.combustivel ? ` · ${v.combustivel}` : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-3">
                   <CopiarVeiculo veiculo={v} label="Copiar" />
+                  <button onClick={() => abrirEdicaoVeiculo(v)} className="text-sm text-brand-600 hover:underline">Editar</button>
                   <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-brand-600 hover:underline">Nova OS</Link>
                   <button onClick={() => deleteVeiculo(v.id)} className="text-sm text-red-500 hover:underline">Excluir</button>
                 </div>

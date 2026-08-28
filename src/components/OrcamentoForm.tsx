@@ -4,12 +4,15 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
-import { COMBUSTIVEIS, COMBUSTIVEIS_BICOMBUSTIVEL, COMBUSTIVEL_EM_USO } from "@/lib/constants";
+import { anoVeiculo } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
+import ClienteSelect from "./ClienteSelect";
+import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoCompleto, veiculoIniciado } from "./VeiculoCampos";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Veiculo = {
   id: string; marca: string; modelo: string; placa: string | null; ano: number | null;
+  anoFabricacao: number | null; anoModelo: number | null;
 };
 export type ItemForm = {
   /** Item que já existe no banco. O operador não enxerga custo, então é por este id
@@ -71,10 +74,7 @@ export default function OrcamentoForm({
   const [novoCliente, setNovoCliente] = useState({
     nome: "", telefone: "", apelido: "",
   });
-  const [novoVeiculo, setNovoVeiculo] = useState({
-    marca: "", modelo: "", placa: "", cor: "", ano: "",
-    cilindrada: "", combustivel: "", combustivelEmUso: "",
-  });
+  const [novoVeiculo, setNovoVeiculo] = useState(VEICULO_FORM_VAZIO);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then(setClientes);
@@ -111,7 +111,7 @@ export default function OrcamentoForm({
   function abrirNovoCliente() {
     // Aproveita o que já foi anotado no rascunho para não redigitar.
     setNovoCliente({ nome: clienteNome.trim(), telefone: clienteTelefone.trim(), apelido: "" });
-    setNovoVeiculo({ marca: "", modelo: "", placa: "", cor: "", ano: "", cilindrada: "", combustivel: "", combustivelEmUso: "" });
+    setNovoVeiculo(VEICULO_FORM_VAZIO);
     setClienteErro("");
     setShowNovoCliente(true);
   }
@@ -119,10 +119,9 @@ export default function OrcamentoForm({
   async function salvarNovoCliente(e: React.FormEvent) {
     e.preventDefault();
     if (!novoCliente.nome.trim()) { setClienteErro("Informe o nome do cliente."); return; }
-    const temVeiculo = novoVeiculo.marca.trim() && novoVeiculo.modelo.trim();
+    const temVeiculo = veiculoCompleto(novoVeiculo);
     // Veículo é tudo-ou-nada: se começou a preencher, marca e modelo são obrigatórios.
-    const veiculoIniciado = Object.values(novoVeiculo).some((v) => v.trim());
-    if (veiculoIniciado && !temVeiculo) {
+    if (veiculoIniciado(novoVeiculo) && !temVeiculo) {
       setClienteErro("Para cadastrar o veículo, informe ao menos marca e modelo.");
       return;
     }
@@ -326,12 +325,12 @@ export default function OrcamentoForm({
                 + Novo cliente
               </button>
             </div>
-            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className={inputCls}>
-              <option value="">Sem cadastro — anotar só o nome</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>{c.nome}{c.telefone ? ` · ${c.telefone}` : ""}</option>
-              ))}
-            </select>
+            <ClienteSelect
+              clientes={clientes}
+              value={clienteId}
+              onChange={setClienteId}
+              emptyLabel="Sem cadastro — anotar só o nome"
+            />
           </div>
 
           {/* Rascunho: identificação livre enquanto o cliente não está cadastrado. */}
@@ -369,7 +368,7 @@ export default function OrcamentoForm({
             <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} disabled={!clienteId || veiculos.length === 0} className={inputCls + " disabled:bg-zinc-50 disabled:text-zinc-400"}>
               <option value="">{!clienteId ? "Sem cadastro — descrever abaixo" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Sem veículo / a definir"}</option>
               {veiculos.map((v) => (
-                <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{v.ano ? ` (${v.ano})` : ""}</option>
+                <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{anoVeiculo(v) ? ` (${anoVeiculo(v)})` : ""}</option>
               ))}
             </select>
             {!veiculoId && (
@@ -586,48 +585,7 @@ export default function OrcamentoForm({
                 {veiculoDesc.trim() && (
                   <p className="text-xs text-zinc-400">Anotado no rascunho: “{veiculoDesc.trim()}”</p>
                 )}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Marca</label>
-                    <input value={novoVeiculo.marca} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, marca: e.target.value })} placeholder="Ex: Chevrolet" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Modelo</label>
-                    <input value={novoVeiculo.modelo} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })} placeholder="Ex: Onix" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Placa</label>
-                    <input value={novoVeiculo.placa} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value.toUpperCase() })} placeholder="ABC1D23" maxLength={8} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Cor</label>
-                    <input value={novoVeiculo.cor} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, cor: e.target.value })} placeholder="Ex: Prata" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Ano</label>
-                    <input type="number" value={novoVeiculo.ano} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, ano: e.target.value })} placeholder="2020" min={1950} max={new Date().getFullYear() + 2} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Cilindrada</label>
-                    <input value={novoVeiculo.cilindrada} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, cilindrada: e.target.value })} placeholder="Ex: 1.0" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Combustível</label>
-                    <select value={novoVeiculo.combustivel} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, combustivel: e.target.value })} className={inputCls}>
-                      <option value="">Selecione...</option>
-                      {COMBUSTIVEIS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                    </select>
-                  </div>
-                  {COMBUSTIVEIS_BICOMBUSTIVEL.includes(novoVeiculo.combustivel) && (
-                    <div>
-                      <label className="block text-xs text-zinc-500 mb-1">Combustível em uso</label>
-                      <select value={novoVeiculo.combustivelEmUso} onChange={(e) => setNovoVeiculo({ ...novoVeiculo, combustivelEmUso: e.target.value })} className={inputCls}>
-                        <option value="">Selecione...</option>
-                        {COMBUSTIVEL_EM_USO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
+                <VeiculoCampos value={novoVeiculo} onChange={setNovoVeiculo} />
               </div>
 
               {clienteErro && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{clienteErro}</p>}

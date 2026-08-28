@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { anoVeiculo } from "@/lib/constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -26,7 +27,10 @@ type OrcamentoIdentificacao = {
   cliente?: { nome: string } | null;
   clienteNome?: string | null;
   clienteTelefone?: string | null;
-  veiculo?: { marca: string; modelo: string; placa?: string | null; ano?: number | null } | null;
+  veiculo?: {
+    marca: string; modelo: string; placa?: string | null;
+    ano?: number | null; anoFabricacao?: number | null; anoModelo?: number | null;
+  } | null;
   veiculoDesc?: string | null;
 };
 
@@ -42,7 +46,8 @@ export function telefoneCliente(
 
 export function descricaoVeiculo(o: OrcamentoIdentificacao): string | null {
   if (o.veiculo) {
-    const { marca, modelo, placa, ano } = o.veiculo;
+    const { marca, modelo, placa } = o.veiculo;
+    const ano = anoVeiculo(o.veiculo);
     return `${marca} ${modelo}${placa ? ` · ${placa}` : ""}${ano ? ` (${ano})` : ""}`;
   }
   return o.veiculoDesc?.trim() || null;

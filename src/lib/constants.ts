@@ -80,6 +80,8 @@ export function labelCombustivel(valor: string | null | undefined): string | nul
   return COMBUSTIVEIS.find((c) => c.value === valor)?.label ?? valor;
 }
 
+export const VALVULAS = ["8V", "12V", "16V", "20V", "24V"] as const;
+
 // Dados do veículo que interessam na hora de cotar peça. Todos opcionais menos
 // marca/modelo: o cadastro antigo costuma ter buracos e o texto se adapta.
 export type VeiculoInfo = {
@@ -88,8 +90,6 @@ export type VeiculoInfo = {
   ano?: number | null;
   anoFabricacao?: number | null;
   anoModelo?: number | null;
-  placa?: string | null;
-  cor?: string | null;
   km?: number | null;
   motorizacao?: string | null;
   valvulas?: string | null;
@@ -117,8 +117,6 @@ export function textoVeiculo(v: VeiculoInfo): string {
   if (ano) linhas.push(`Ano: ${ano}`);
   const combustivel = labelCombustivel(v.combustivel);
   if (combustivel) linhas.push(`Combustível: ${combustivel}`);
-  if (v.cor) linhas.push(`Cor: ${v.cor}`);
-  if (v.placa) linhas.push(`Placa: ${v.placa}`);
   if (v.km) linhas.push(`KM: ${v.km.toLocaleString("pt-BR")}`);
 
   return linhas.join("\n");
@@ -138,6 +136,9 @@ export const FOTO_TIPO_VALUES: readonly string[] = FOTO_TIPOS.map((t) => t.value
 
 // Fotos criadas antes da separação por momento ficam como serviço.
 export const FOTO_TIPO_PADRAO: FotoTipo = "SERVICO";
+
+/** Descrição da foto: uma linha curta, que cabe na legenda do PDF sem quebrar a grade. */
+export const FOTO_LEGENDA_MAX = 140;
 
 /** Momento da foto, tolerante a valor desconhecido — assim nenhuma foto some da tela. */
 export function tipoDaFoto(tipo: string): FotoTipo {

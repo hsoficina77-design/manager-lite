@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
+import { anoVeiculo } from "@/lib/constants";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 
@@ -323,7 +324,7 @@ export default function OrcamentoDetailPage() {
                     label="Veículo"
                     value={
                       orc.veiculo
-                        ? `${orc.veiculo.marca} ${orc.veiculo.modelo}${orc.veiculo.ano ? ` (${orc.veiculo.ano})` : ""}`
+                        ? `${orc.veiculo.marca} ${orc.veiculo.modelo}${anoVeiculo(orc.veiculo) ? ` (${anoVeiculo(orc.veiculo)})` : ""}`
                         : orc.veiculoDesc!
                     }
                     bold
