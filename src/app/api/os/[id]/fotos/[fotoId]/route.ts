@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
-import { FOTO_TIPO_VALUES } from "@/lib/constants";
+import { FOTO_LEGENDA_MAX, FOTO_TIPO_VALUES } from "@/lib/constants";
 
 export async function PATCH(
   request: Request,
@@ -19,7 +19,10 @@ export async function PATCH(
     // então só mexe no que veio no corpo.
     const data: { legenda?: string | null; tipo?: string } = {};
     if ("legenda" in body) {
-      data.legenda = typeof body.legenda === "string" ? body.legenda.trim() || null : null;
+      data.legenda =
+        typeof body.legenda === "string"
+          ? body.legenda.trim().slice(0, FOTO_LEGENDA_MAX) || null
+          : null;
     }
     if ("tipo" in body) {
       if (!FOTO_TIPO_VALUES.includes(body.tipo)) {

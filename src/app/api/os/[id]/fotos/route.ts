@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { uploadFoto } from "@/lib/supabase-storage";
-import { FOTO_TIPO_PADRAO, FOTO_TIPO_VALUES } from "@/lib/constants";
+import { FOTO_LEGENDA_MAX, FOTO_TIPO_PADRAO, FOTO_TIPO_VALUES } from "@/lib/constants";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB (a compressão no cliente deixa bem abaixo disso)
 const TIPOS_OK = ["image/jpeg", "image/png", "image/webp"];
@@ -29,7 +29,8 @@ export async function POST(
       return NextResponse.json({ error: "Arquivo muito grande (máx. 10MB)" }, { status: 400 });
     }
 
-    const legenda = (form.get("legenda") as string | null)?.trim() || null;
+    const legenda =
+      (form.get("legenda") as string | null)?.trim().slice(0, FOTO_LEGENDA_MAX) || null;
     const tipo = (form.get("tipo") as string | null) ?? FOTO_TIPO_PADRAO;
     if (!FOTO_TIPO_VALUES.includes(tipo)) {
       return NextResponse.json({ error: "Momento da foto inválido" }, { status: 400 });

@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn, formatDate } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compress";
-import { FOTO_TIPOS, FOTO_TIPO_PADRAO, tipoDaFoto, type FotoTipo } from "@/lib/constants";
+import {
+  FOTO_LEGENDA_MAX,
+  FOTO_TIPOS,
+  FOTO_TIPO_PADRAO,
+  tipoDaFoto,
+  type FotoTipo,
+} from "@/lib/constants";
 
 export type Foto = {
   id: string;
@@ -36,6 +42,9 @@ export default function OSFotos({
   // O visor guarda o id, não o índice: mudar o momento reordena a lista e um
   // índice fixo saltaria para outra foto.
   const [visor, setVisor] = useState<string | null>(null);
+  // Descrever é um modo opcional: em OS simples a grade continua limpa, só com
+  // as fotos; em OS elaboradas o mecânico liga o modo e escreve embaixo de cada uma.
+  const [descrevendo, setDescrevendo] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
   const tipoAlvo = useRef<FotoTipo>(FOTO_TIPO_PADRAO);
@@ -168,13 +177,31 @@ export default function OSFotos({
 
   return (
     <div className="no-print bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-      <div>
-        <h2 className="font-semibold text-zinc-800">Fotos</h2>
-        <p className="text-xs text-zinc-500">
-          {total > 0
-            ? `${total} foto${total > 1 ? "s" : ""} — aparecem no fim do PDF do cliente, separadas por momento`
-            : "Registre o veículo na entrada, o serviço e a entrega"}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-zinc-800">Fotos</h2>
+          <p className="text-xs text-zinc-500">
+            {descrevendo && total > 0
+              ? "Escreva embaixo de cada foto o que ela mostra — a descrição sai no PDF do cliente"
+              : total > 0
+                ? `${total} foto${total > 1 ? "s" : ""} — aparecem no fim do PDF do cliente, separadas por momento`
+                : "Registre o veículo na entrada, o serviço e a entrega"}
+          </p>
+        </div>
+        {podeEditar && total > 0 && (
+          <button
+            onClick={() => setDescrevendo((v) => !v)}
+            aria-pressed={descrevendo}
+            className={cn(
+              "shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+              descrevendo
+                ? "border-brand-600 bg-brand-600 text-brand-fg hover:bg-brand-700"
+                : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+            )}
+          >
+            {descrevendo ? "Concluir" : "Descrever fotos"}
+          </button>
+        )}
       </div>
 
       {podeEditar && (
@@ -213,9 +240,11 @@ export default function OSFotos({
           fotos={fotos.filter((f) => tipoDaFoto(f.tipo) === t.value)}
           enviando={enviando.filter((e) => e.tipo === t.value)}
           podeEditar={podeEditar}
+          descrevendo={descrevendo}
           onSoltar={(files) => enviarArquivos(files, t.value)}
           onEscolher={(origem) => escolher(origem, t.value)}
           onAbrir={setVisor}
+          onLegenda={salvarLegenda}
           onTentarNovamente={(e) => enviarPendente(e)}
           onRemoverPendente={removerPendente}
         />
@@ -247,9 +276,11 @@ function Secao({
   fotos,
   enviando,
   podeEditar,
+  descrevendo,
   onSoltar,
   onEscolher,
   onAbrir,
+  onLegenda,
   onTentarNovamente,
   onRemoverPendente,
 }: {
@@ -258,9 +289,11 @@ function Secao({
   fotos: Foto[];
   enviando: Enviando[];
   podeEditar: boolean;
+  descrevendo: boolean;
   onSoltar: (files: FileList) => void;
   onEscolher: (origem: "camera" | "galeria") => void;
   onAbrir: (id: string) => void;
+  onLegenda: (id: string, texto: string) => void;
   onTentarNovamente: (item: Enviando) => void;
   onRemoverPendente: (tempId: string) => void;
 }) {
@@ -327,27 +360,48 @@ function Secao({
           <p className="px-1 py-2 text-xs text-zinc-400">Nenhuma foto.</p>
         )
       ) : (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-          {fotos.map((foto) => (
-            <button
-              key={foto.id}
-              onClick={() => onAbrir(foto.id)}
-              className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={foto.url}
-                alt={foto.legenda ?? `Foto — ${label}`}
-                loading="lazy"
-                className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              />
-              {foto.legenda && (
-                <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-[10px] text-white">
-                  {foto.legenda}
-                </span>
-              )}
-            </button>
-          ))}
+        <div
+          className={cn(
+            "grid gap-2",
+            descrevendo
+              ? "grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4"
+              : "grid-cols-3 sm:grid-cols-4 md:grid-cols-5"
+          )}
+        >
+          {fotos.map((foto) => {
+            const miniatura = (
+              <button
+                key={foto.id}
+                onClick={() => onAbrir(foto.id)}
+                className="group relative aspect-square w-full overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={foto.url}
+                  alt={foto.legenda ?? `Foto — ${label}`}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
+                {/* No modo descrever o texto aparece no campo abaixo, sem cobrir a foto. */}
+                {foto.legenda && !descrevendo && (
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-[10px] text-white">
+                    {foto.legenda}
+                  </span>
+                )}
+              </button>
+            );
+
+            if (!descrevendo) return miniatura;
+            return (
+              <div key={foto.id} className="space-y-1.5">
+                {miniatura}
+                <CampoDescricao
+                  legenda={foto.legenda}
+                  onSalvar={(texto) => onLegenda(foto.id, texto)}
+                />
+              </div>
+            );
+          })}
 
           {enviando.map((e) =>
             e.erro ? (
@@ -535,8 +589,8 @@ function Visor({
               value={legenda}
               onChange={(e) => setLegenda(e.target.value)}
               onBlur={() => legenda !== (foto.legenda ?? "") && onLegenda(legenda)}
-              placeholder="Legenda (ex: Pastilha desgastada, Painel na entrega)"
-              maxLength={80}
+              placeholder="Descrição (ex: Pastilha desgastada, Painel na entrega)"
+              maxLength={FOTO_LEGENDA_MAX}
               className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
             />
           </>
@@ -548,6 +602,36 @@ function Visor({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Campo de descrição embaixo da miniatura (modo "Descrever fotos").
+ * Salva ao sair do campo ou no Enter — dá para descer de foto em foto com Tab.
+ */
+function CampoDescricao({
+  legenda,
+  onSalvar,
+}: {
+  legenda: string | null;
+  onSalvar: (texto: string) => void;
+}) {
+  const [texto, setTexto] = useState(legenda ?? "");
+
+  // A lista pode ser reordenada (troca de momento); mantém o campo em dia com a foto.
+  useEffect(() => setTexto(legenda ?? ""), [legenda]);
+
+  return (
+    <input
+      value={texto}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={() => texto.trim() !== (legenda ?? "") && onSalvar(texto)}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      placeholder="Descreva a foto"
+      maxLength={FOTO_LEGENDA_MAX}
+      aria-label="Descrição da foto"
+      className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-xs text-zinc-700 placeholder:text-zinc-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
+    />
   );
 }
 
