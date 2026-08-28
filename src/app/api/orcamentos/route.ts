@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
 
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const clienteId = searchParams.get("clienteId");
@@ -26,10 +31,16 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(orcamentos);
+  return NextResponse.json(semFinanceiro(orcamentos, guarda.usuario.papel));
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
+  // Operador não vê custo — logo, também não define custo.
+  const podeDefinirCusto = guarda.usuario.papel === "ADMIN";
+
   try {
     const body = await request.json();
     const {
@@ -99,7 +110,10 @@ export async function POST(request: Request) {
               quantidade: Number(item.quantidade),
               valorUnit: Number(item.valorUnit),
               valorTotal: Number(item.valorTotal),
-              custoUnit: item.custoUnit != null && item.custoUnit !== "" ? Number(item.custoUnit) : null,
+              custoUnit:
+                podeDefinirCusto && item.custoUnit != null && item.custoUnit !== ""
+                  ? Number(item.custoUnit)
+                  : null,
               fornecedor: item.fornecedor?.trim() || null,
             })),
           },
@@ -108,7 +122,7 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(orcamento, { status: 201 });
+    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel), { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Erro ao criar orçamento" }, { status: 500 });

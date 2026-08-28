@@ -2,11 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
 import { OS_CONCLUIDA } from "@/lib/constants";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
+import { custosParaSalvar, type ItemEntrada } from "@/lib/custos";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
 
   const os = await prisma.ordemServico.findUnique({
@@ -24,13 +30,17 @@ export async function GET(
     return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
   }
 
-  return NextResponse.json(os);
+  // Some com custo unitário dos itens, lucro e margem quando quem pede não é dono.
+  return NextResponse.json(semFinanceiro(os, guarda.usuario.papel));
 }
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
     const body = await request.json();
@@ -67,14 +77,21 @@ export async function PUT(
     let totalMO = current.totalMO;
     let custoTotalPecas = current.custoTotalPecas;
 
+    // Custo dos itens: do payload quando é o dono, do banco quando é o operador —
+    // que não recebe custo na leitura e, sem isto, zeraria o lucro ao salvar.
+    const custos = temItens
+      ? await custosParaSalvar(itens as ItemEntrada[], guarda.usuario.papel, { os: id })
+      : [];
+
     if (temItens) {
       const lista = itens as any[];
       const valorDoItem = (i: any) => Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit));
       totalPecas = lista.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
       totalMO = lista.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
-      custoTotalPecas = lista
-        .filter((i) => i.tipo === "PECA")
-        .reduce((s, i) => s + Number(i.custoUnit || 0) * Number(i.quantidade), 0);
+      custoTotalPecas = lista.reduce(
+        (s, i, idx) => (i.tipo === "PECA" ? s + (custos[idx] ?? 0) * Number(i.quantidade) : s),
+        0
+      );
     }
 
     const novoDesconto = desconto !== undefined ? Number(desconto) : current.desconto;
@@ -140,14 +157,14 @@ export async function PUT(
         await tx.itemOrdem.deleteMany({ where: { ordemId: id } });
         if (lista.length > 0) {
           await tx.itemOrdem.createMany({
-            data: lista.map((i) => ({
+            data: lista.map((i, idx) => ({
               ordemId: id,
               tipo: i.tipo || "PECA",
               descricao: String(i.descricao).trim(),
               quantidade: Number(i.quantidade),
               valorUnit: Number(i.valorUnit),
               valorTotal: Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit)),
-              custoUnit: i.custoUnit != null && i.custoUnit !== "" ? Number(i.custoUnit) : null,
+              custoUnit: custos[idx],
               fornecedor: i.fornecedor?.trim() || null,
             })),
           });
@@ -159,7 +176,7 @@ export async function PUT(
     }
 
     const os = await prisma.ordemServico.findUnique({ where: { id } });
-    return NextResponse.json(os);
+    return NextResponse.json(semFinanceiro(os, guarda.usuario.papel));
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar OS" }, { status: 500 });

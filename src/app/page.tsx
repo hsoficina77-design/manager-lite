@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { exigirUsuario } from "@/lib/auth";
 import { formatCurrency, cn } from "@/lib/utils";
 import { labelStatus, corStatus, margemOS, corMargem } from "@/lib/constants";
 import {
@@ -53,7 +54,11 @@ export default async function Dashboard({
   searchParams: Promise<{ aba?: string; periodo?: string; offset?: string }>;
 }) {
   const sp = await searchParams;
-  const aba = sp.aba === "resultado" ? "resultado" : "operacao";
+  const usuario = await exigirUsuario();
+  // Resultado é a aba do dinheiro (DRE, lucro, despesas): só o dono. Para o operador
+  // ela nem aparece, e um link direto cai na Operação.
+  const ehDono = usuario.papel === "ADMIN";
+  const aba = ehDono && sp.aba === "resultado" ? "resultado" : "operacao";
   const periodo: PeriodoKey = ehPeriodo(sp.periodo) ? sp.periodo : "mes";
   const offset = Number.parseInt(sp.offset ?? "0", 10) || 0;
 
@@ -68,17 +73,23 @@ export default async function Dashboard({
               : "O que foi entregue no período"}
           </p>
         </div>
-        <div className="flex gap-1 bg-zinc-100 rounded-lg p-1">
-          <AbaLink href="/?aba=operacao" ativa={aba === "operacao"}>
-            Operação
-          </AbaLink>
-          <AbaLink href={`/?aba=resultado&periodo=${periodo}`} ativa={aba === "resultado"}>
-            Resultado
-          </AbaLink>
-        </div>
+        {ehDono && (
+          <div className="flex gap-1 bg-zinc-100 rounded-lg p-1">
+            <AbaLink href="/?aba=operacao" ativa={aba === "operacao"}>
+              Operação
+            </AbaLink>
+            <AbaLink href={`/?aba=resultado&periodo=${periodo}`} ativa={aba === "resultado"}>
+              Resultado
+            </AbaLink>
+          </div>
+        )}
       </div>
 
-      {aba === "operacao" ? <Operacao /> : <Resultado periodo={periodo} offset={offset} />}
+      {aba === "operacao" ? (
+        <Operacao ehDono={ehDono} />
+      ) : (
+        <Resultado periodo={periodo} offset={offset} />
+      )}
     </div>
   );
 }
@@ -89,7 +100,7 @@ export default async function Dashboard({
 // 40 dias continua sendo trabalho a fazer, e o dinheiro dela continua sendo dinheiro a
 // entrar. O que separa o carro ativo do encalhado é o aging na lista, não um recorte
 // que faz ele desaparecer da conta.
-async function Operacao() {
+async function Operacao({ ehDono }: { ehDono: boolean }) {
   const agora = new Date();
   const hoje = janelaHoje(agora);
 
@@ -140,45 +151,51 @@ async function Operacao() {
 
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className={cn("grid gap-4", ehDono ? "grid-cols-2 lg:grid-cols-5" : "grid-cols-3")}>
         <StatCard label="No pátio" value={String(patio.length)} href="/os?status=patio" />
         <StatCard label="Em serviço" value={String(emServico)} href="/os?status=patio" />
         <StatCard label="Ag. peça" value={String(agPeca)} href="/os?status=patio" />
-        <StatCard
-          label="A Receber"
-          value={formatCurrency(totalAReceber)}
-          sub="de OS já entregues"
-          href="/contas-receber"
-          highlight={totalAReceber > 0}
-        />
-        <StatCard
-          label="Devedores"
-          value={String(devedoresCount)}
-          href="/contas-receber"
-          highlight={devedoresCount > 0}
-        />
+        {ehDono && (
+          <>
+            <StatCard
+              label="A Receber"
+              value={formatCurrency(totalAReceber)}
+              sub="de OS já entregues"
+              href="/contas-receber"
+              highlight={totalAReceber > 0}
+            />
+            <StatCard
+              label="Devedores"
+              value={String(devedoresCount)}
+              href="/contas-receber"
+              highlight={devedoresCount > 0}
+            />
+          </>
+        )}
       </div>
 
       {/* Previsibilidade de caixa: o resultado de fechar tudo que está no pátio. */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="mb-3">
-          <h2 className="font-semibold text-zinc-800">Se finalizar tudo do pátio</h2>
-          <p className="text-xs text-zinc-500">
-            {patio.length} OS em aberto · custo de peças estimado pelo que já está lançado nas OS
-          </p>
+      {ehDono && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="mb-3">
+            <h2 className="font-semibold text-zinc-800">Se finalizar tudo do pátio</h2>
+            <p className="text-xs text-zinc-500">
+              {patio.length} OS em aberto · custo de peças estimado pelo que já está lançado nas OS
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <Metrica label="Receita potencial" valor={formatCurrency(previsao.receita)} />
+            <Metrica label="Custo de peças" valor={`- ${formatCurrency(previsao.custoPecas)}`} />
+            <Metrica
+              label="Lucro potencial"
+              valor={formatCurrency(previsao.lucro)}
+              cor={previsao.lucro >= 0 ? "text-green-600" : "text-red-600"}
+              forte
+            />
+            <Metrica label="Caixa a entrar" valor={formatCurrency(previsao.aEntrar)} />
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <Metrica label="Receita potencial" valor={formatCurrency(previsao.receita)} />
-          <Metrica label="Custo de peças" valor={`- ${formatCurrency(previsao.custoPecas)}`} />
-          <Metrica
-            label="Lucro potencial"
-            valor={formatCurrency(previsao.lucro)}
-            cor={previsao.lucro >= 0 ? "text-green-600" : "text-red-600"}
-            forte
-          />
-          <Metrica label="Caixa a entrar" valor={formatCurrency(previsao.aEntrar)} />
-        </div>
-      </div>
+      )}
 
       {/* O único número com data nesta aba: o realizado do dia. */}
       <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
@@ -189,12 +206,16 @@ async function Operacao() {
               {hojeResumo.n} OS
             </p>
           </div>
-          <Metrica label="Faturado" valor={formatCurrency(hojeResumo.faturado)} />
-          <Metrica
-            label="Lucro"
-            valor={formatCurrency(hojeResumo.lucro)}
-            cor={hojeResumo.lucro >= 0 ? "text-green-600" : "text-red-600"}
-          />
+          {ehDono && (
+            <>
+              <Metrica label="Faturado" valor={formatCurrency(hojeResumo.faturado)} />
+              <Metrica
+                label="Lucro"
+                valor={formatCurrency(hojeResumo.lucro)}
+                cor={hojeResumo.lucro >= 0 ? "text-green-600" : "text-red-600"}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -204,12 +225,18 @@ async function Operacao() {
             <h2 className="font-semibold text-zinc-800">Pátio</h2>
             <p className="text-xs text-zinc-500">Parada há mais tempo primeiro</p>
           </div>
-          <ListaOS ordens={patio} vazio="Nenhuma OS em aberto." patio agora={agora} />
+          <ListaOS
+            ordens={patio}
+            vazio="Nenhuma OS em aberto."
+            patio
+            agora={agora}
+            mostrarLucro={ehDono}
+          />
         </div>
 
         <div className="space-y-4">
           <AcoesRapidas />
-          <CardDevedores top5={top5} />
+          {ehDono && <CardDevedores top5={top5} />}
         </div>
       </div>
     </>
@@ -502,11 +529,14 @@ function ListaOS({
   vazio,
   patio,
   agora,
+  mostrarLucro = true,
 }: {
   ordens: OSLista[];
   vazio: string;
   patio?: boolean;
   agora: Date;
+  /** Lucro e margem por OS são coisa de dono. */
+  mostrarLucro?: boolean;
 }) {
   if (ordens.length === 0) {
     return (
@@ -562,12 +592,14 @@ function ListaOS({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-start">
-              <div className="text-right text-xs sm:w-24" title={lucroTitulo}>
-                <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
-                <p className={cn("text-[11px]", corMargem(margem))}>
-                  {margem === null ? "—" : `${margem.toFixed(0)}% margem`}
-                </p>
-              </div>
+              {mostrarLucro && (
+                <div className="text-right text-xs sm:w-24" title={lucroTitulo}>
+                  <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
+                  <p className={cn("text-[11px]", corMargem(margem))}>
+                    {margem === null ? "—" : `${margem.toFixed(0)}% margem`}
+                  </p>
+                </div>
+              )}
               {patio && (
                 <span
                   className={cn("hidden rounded-full px-2 py-0.5 text-xs font-medium sm:inline-block", corAging(dias))}

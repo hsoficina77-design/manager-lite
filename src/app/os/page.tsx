@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { labelStatus, corStatus, margemOS, corMargem, OS_EM_ABERTO, OS_CONCLUIDA } from "@/lib/constants";
 import { Suspense } from "react";
+import { useEhDono } from "@/components/UsuarioProvider";
 
 const GRUPOS = [
   { key: "patio", label: "Pátio", statuses: OS_EM_ABERTO, bg: "bg-zinc-50" },
@@ -22,7 +23,7 @@ const TABS = [
 type OS = {
   id: string; numero: number; status: string; descricao: string;
   total: number; pago: boolean; abertura: string; mecanico: string | null;
-  lucroReal: number;
+  lucroReal?: number; // ausente para o operador (ver src/lib/permissoes.ts)
   cliente: { id: string; nome: string; apelido: string | null };
   veiculo: { marca: string; modelo: string; placa: string | null };
 };
@@ -38,8 +39,8 @@ type Ordenacao = (typeof ORDENACOES)[number]["value"];
 function ordenar(lista: OS[], por: Ordenacao): OS[] {
   const arr = [...lista];
   switch (por) {
-    case "lucro_desc": return arr.sort((a, b) => b.lucroReal - a.lucroReal);
-    case "lucro_asc": return arr.sort((a, b) => a.lucroReal - b.lucroReal);
+    case "lucro_desc": return arr.sort((a, b) => (b.lucroReal ?? 0) - (a.lucroReal ?? 0));
+    case "lucro_asc": return arr.sort((a, b) => (a.lucroReal ?? 0) - (b.lucroReal ?? 0));
     case "valor_desc": return arr.sort((a, b) => b.total - a.total);
     default: return arr.sort((a, b) => new Date(b.abertura).getTime() - new Date(a.abertura).getTime());
   }
@@ -48,6 +49,7 @@ function ordenar(lista: OS[], por: Ordenacao): OS[] {
 function OSListContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const ehDono = useEhDono();
   const tabParam = searchParams.get("status") || "";
   const q = searchParams.get("q") || "";
   const mecanico = searchParams.get("mecanico") || "";
@@ -133,7 +135,7 @@ function OSListContent() {
   // Resumo de lucro do que está visível agora (reage a abas, busca e filtros).
   const consideradas = filtered.filter((os) => os.status !== "CANCELADA");
   const faturamento = consideradas.reduce((s, os) => s + os.total, 0);
-  const lucroTotal = consideradas.reduce((s, os) => s + os.lucroReal, 0);
+  const lucroTotal = consideradas.reduce((s, os) => s + (os.lucroReal ?? 0), 0);
   const margemMedia = faturamento > 0 ? (lucroTotal / faturamento) * 100 : null;
 
   return (
@@ -172,7 +174,7 @@ function OSListContent() {
             onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
             className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            {ORDENACOES.map((o) => (
+            {ORDENACOES.filter((o) => ehDono || !o.value.startsWith("lucro")).map((o) => (
               <option key={o.value} value={o.value}>Ordenar: {o.label}</option>
             ))}
           </select>
@@ -202,21 +204,25 @@ function OSListContent() {
       </div>
 
       {!loading && consideradas.length > 0 && (
-        <div className="mb-4 grid grid-cols-3 gap-3 rounded-xl border border-zinc-200 bg-white p-4">
+        <div className={cn("mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-white p-4", ehDono ? "grid-cols-3" : "grid-cols-1")}>
           <div>
             <p className="text-xs text-zinc-400">Faturamento{tabParam ? "" : " (exceto canceladas)"}</p>
             <p className="font-semibold text-zinc-900">{formatCurrency(faturamento)}</p>
           </div>
-          <div>
-            <p className="text-xs text-zinc-400">Lucro real</p>
-            <p className={cn("font-semibold", corMargem(margemMedia))}>{formatCurrency(lucroTotal)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-zinc-400">Margem média</p>
-            <p className={cn("font-semibold", corMargem(margemMedia))}>
-              {margemMedia === null ? "—" : `${margemMedia.toFixed(0)}%`}
-            </p>
-          </div>
+          {ehDono && (
+            <>
+              <div>
+                <p className="text-xs text-zinc-400">Lucro real</p>
+                <p className={cn("font-semibold", corMargem(margemMedia))}>{formatCurrency(lucroTotal)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Margem média</p>
+                <p className={cn("font-semibold", corMargem(margemMedia))}>
+                  {margemMedia === null ? "—" : `${margemMedia.toFixed(0)}%`}
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -235,7 +241,7 @@ function OSListContent() {
                 </div>
                 <div className="rounded-b-xl border border-t-0 border-zinc-200 bg-white divide-y divide-zinc-100 overflow-hidden">
                   {grupo.items.map((os) => (
-                    <OSRow key={os.id} os={os} />
+                    <OSRow key={os.id} os={os} ehDono={ehDono} />
                   ))}
                 </div>
               </div>
@@ -248,7 +254,7 @@ function OSListContent() {
                 Canceladas <span className="rounded-full bg-white bg-opacity-70 px-2 py-0.5 text-xs">{canceladas.length}</span>
               </div>
               <div className="rounded-b-xl border border-t-0 border-zinc-200 bg-white divide-y divide-zinc-100 overflow-hidden">
-                {canceladas.map((os) => <OSRow key={os.id} os={os} />)}
+                {canceladas.map((os) => <OSRow key={os.id} os={os} ehDono={ehDono} />)}
               </div>
             </div>
           )}
@@ -264,9 +270,9 @@ function OSListContent() {
   );
 }
 
-function OSRow({ os }: { os: OS }) {
-  const margem = margemOS(os);
-  const mostrarLucro = os.status !== "CANCELADA" && os.total > 0;
+function OSRow({ os, ehDono }: { os: OS; ehDono: boolean }) {
+  const margem = margemOS({ ...os, lucroReal: os.lucroReal ?? 0 });
+  const mostrarLucro = ehDono && os.status !== "CANCELADA" && os.total > 0;
   return (
     <Link href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-4">
       <div className="flex items-center gap-3 sm:contents">
@@ -296,7 +302,7 @@ function OSRow({ os }: { os: OS }) {
       </div>
       {mostrarLucro && (
         <div className="shrink-0 text-right text-xs w-20 hidden lg:block" title="Lucro real (após custo de peças)">
-          <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
+          <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal ?? 0)}</p>
           <p className={corMargem(margem)}>{margem === null ? "—" : `${margem.toFixed(0)}%`}</p>
         </div>
       )}

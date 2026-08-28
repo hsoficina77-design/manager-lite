@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
+import { useEhDono } from "@/components/UsuarioProvider";
 
 const OrcamentoPdfButton = dynamic(() => import("@/components/OrcamentoPdfButton"), {
   ssr: false,
@@ -57,6 +58,7 @@ const TIPO_LABEL: Record<string, string> = { PECA: "Peça", MAO_DE_OBRA: "Mão d
 export default function OrcamentoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const ehDono = useEhDono();
   const [orc, setOrc] = useState<Orcamento | null>(null);
   const [loading, setLoading] = useState(true);
   const [changingStatus, setChangingStatus] = useState(false);
@@ -183,7 +185,7 @@ export default function OrcamentoDetailPage() {
               {converting ? "Convertendo..." : "Converter em OS"}
             </button>
           )}
-          {!convertido && (
+          {!convertido && ehDono && (
             <button onClick={excluir} disabled={deleting} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
               Excluir
             </button>
@@ -224,7 +226,7 @@ export default function OrcamentoDetailPage() {
       )}
 
       {/* Visão interna — margens. Não sai na impressão nem no PDF do cliente. */}
-      {temValores && (
+      {ehDono && temValores && (
         <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 pt-4">
           <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">

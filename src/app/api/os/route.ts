@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
 
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const pendente = searchParams.get("pendente") === "true";
@@ -34,10 +39,22 @@ export async function GET(request: Request) {
     orderBy: { abertura: "desc" },
   });
 
-  return NextResponse.json(ordens);
+  // Custo, lucro e margem não saem daqui para quem não é dono.
+  return NextResponse.json(semFinanceiro(ordens, guarda.usuario.papel));
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
+  // Operador não vê custo — logo, também não define custo. OS aberta por ele nasce
+  // sem custo de peça, e o dono preenche depois.
+  const podeDefinirCusto = guarda.usuario.papel === "ADMIN";
+  const custoDoItem = (item: { custoUnit?: unknown }) =>
+    podeDefinirCusto && item.custoUnit != null && item.custoUnit !== ""
+      ? Number(item.custoUnit)
+      : null;
+
   try {
     const body = await request.json();
     const {
@@ -80,7 +97,7 @@ export async function POST(request: Request) {
 
     const custoTotalPecas = (itens as any[])
       .filter((i) => i.tipo === "PECA")
-      .reduce((sum: number, i: any) => sum + (Number(i.custoUnit || 0) * Number(i.quantidade)), 0);
+      .reduce((sum: number, i: any) => sum + (custoDoItem(i) ?? 0) * Number(i.quantidade), 0);
 
     const total = totalPecas + totalMO;
     const lucroReal = total - custoTotalPecas;
@@ -119,7 +136,7 @@ export async function POST(request: Request) {
               quantidade: Number(item.quantidade),
               valorUnit: Number(item.valorUnit),
               valorTotal: Number(item.valorTotal),
-              custoUnit: item.custoUnit != null && item.custoUnit !== "" ? Number(item.custoUnit) : null,
+              custoUnit: custoDoItem(item),
               fornecedor: item.fornecedor?.trim() || null,
             })),
           },
@@ -132,7 +149,7 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(os, { status: 201 });
+    return NextResponse.json(semFinanceiro(os, guarda.usuario.papel), { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Erro ao criar OS" }, { status: 500 });

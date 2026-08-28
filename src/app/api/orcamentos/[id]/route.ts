@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
+import { custosParaSalvar, type ItemEntrada } from "@/lib/custos";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
 
   const orcamento = await prisma.orcamento.findUnique({
@@ -21,13 +27,16 @@ export async function GET(
     return NextResponse.json({ error: "Orçamento não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(orcamento);
+  return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel));
 }
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
     const body = await request.json();
@@ -70,6 +79,11 @@ export async function PUT(
     const temItens = Array.isArray(itens);
     let totalPecas = current.totalPecas;
     let totalMO = current.totalMO;
+
+    // Custo dos itens: do payload quando é o dono, do banco quando é o operador.
+    const custos = temItens
+      ? await custosParaSalvar(itens as ItemEntrada[], guarda.usuario.papel, { orcamento: id })
+      : [];
 
     if (temItens) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,14 +133,15 @@ export async function PUT(
         await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
         if (lista.length > 0) {
           await tx.itemOrcamento.createMany({
-            data: lista.map((i) => ({
+            data: lista.map((i, idx) => ({
               orcamentoId: id,
               tipo: i.tipo || "PECA",
               descricao: String(i.descricao).trim(),
               quantidade: Number(i.quantidade),
               valorUnit: Number(i.valorUnit),
               valorTotal: Number(i.valorTotal ?? Number(i.quantidade) * Number(i.valorUnit)),
-              custoUnit: i.custoUnit != null && i.custoUnit !== "" ? Number(i.custoUnit) : null,
+              // Custo do payload só quando é o dono — ver src/lib/custos.ts.
+              custoUnit: custos[idx],
               fornecedor: i.fornecedor?.trim() || null,
             })),
           });
@@ -138,7 +153,7 @@ export async function PUT(
     }
 
     const orcamento = await prisma.orcamento.findUnique({ where: { id } });
-    return NextResponse.json(orcamento);
+    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel));
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar orçamento" }, { status: 500 });
