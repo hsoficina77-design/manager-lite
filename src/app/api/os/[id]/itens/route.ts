@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { itemAvulsoSchema, valorDoItem } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
 
 function recalcOS(itens: { tipo: string; valorTotal: number; custoUnit: number | null; quantidade: number }[], desconto: number) {
   const totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + i.valorTotal, 0);
@@ -19,6 +21,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id: ordemId } = await params;
 
   try {
@@ -33,7 +38,8 @@ export async function POST(
           quantidade: entrada.quantidade,
           valorUnit: entrada.valorUnit,
           valorTotal: valorDoItem(entrada),
-          custoUnit: entrada.custoUnit ?? null,
+          // Operador não vê nem define custo; item lançado por ele entra sem custo.
+          custoUnit: guarda.usuario.papel === "ADMIN" ? entrada.custoUnit ?? null : null,
           fornecedor: entrada.fornecedor ?? null,
         },
       });
@@ -51,7 +57,7 @@ export async function POST(
       return item;
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(semFinanceiro(result, guarda.usuario.papel), { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

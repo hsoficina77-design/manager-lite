@@ -3,11 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { OS_EM_ABERTO } from "@/lib/constants";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { clienteAtualizarSchema } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
 
   const [cliente, agg, primeiraOS, ultimaOS, osAbertas] = await Promise.all([
@@ -66,7 +71,7 @@ export async function GET(
     ultimaOS: ultimaOS?.abertura ?? null,
   };
 
-  return NextResponse.json({ ...cliente, stats });
+  return NextResponse.json(semFinanceiro({ ...cliente, stats }, guarda.usuario.papel));
 }
 
 export async function PUT(

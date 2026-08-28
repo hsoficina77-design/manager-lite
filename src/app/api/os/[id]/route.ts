@@ -5,11 +5,17 @@ import { comUrlAssinada } from "@/lib/fotos";
 import { OS_CONCLUIDA } from "@/lib/constants";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { osAtualizarSchema, valorDoItem } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
+import { custosParaSalvar } from "@/lib/custos";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
 
   const os = await prisma.ordemServico.findUnique({
@@ -27,14 +33,20 @@ export async function GET(
     return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
   }
 
-  // As fotos saem daqui com URL assinada e temporária — ver lib/fotos.
-  return NextResponse.json({ ...os, fotos: await comUrlAssinada(os.fotos) });
+  // Duas filtragens na saída: as fotos vão com URL assinada e temporária (lib/fotos),
+  // e custo unitário, lucro e margem somem quando quem pede não é dono (lib/permissoes).
+  return NextResponse.json(
+    semFinanceiro({ ...os, fotos: await comUrlAssinada(os.fotos) }, guarda.usuario.papel)
+  );
 }
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
     const {
@@ -69,12 +81,17 @@ export async function PUT(
     let totalMO = current.totalMO;
     let custoTotalPecas = current.custoTotalPecas;
 
+    // Custo dos itens: do payload quando é o dono, do banco quando é o operador —
+    // que não recebe custo na leitura e, sem isto, zeraria o lucro ao salvar.
+    const custos = itens ? await custosParaSalvar(itens, guarda.usuario.papel, { os: id }) : [];
+
     if (itens) {
       totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
       totalMO = itens.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
-      custoTotalPecas = itens
-        .filter((i) => i.tipo === "PECA")
-        .reduce((s, i) => s + (i.custoUnit ?? 0) * i.quantidade, 0);
+      custoTotalPecas = itens.reduce(
+        (s, i, idx) => (i.tipo === "PECA" ? s + (custos[idx] ?? 0) * i.quantidade : s),
+        0
+      );
     }
 
     const novoDesconto = desconto !== undefined ? desconto : current.desconto;
@@ -139,14 +156,14 @@ export async function PUT(
         await tx.itemOrdem.deleteMany({ where: { ordemId: id } });
         if (itens.length > 0) {
           await tx.itemOrdem.createMany({
-            data: itens.map((i) => ({
+            data: itens.map((i, idx) => ({
               ordemId: id,
               tipo: i.tipo,
               descricao: i.descricao,
               quantidade: i.quantidade,
               valorUnit: i.valorUnit,
               valorTotal: valorDoItem(i),
-              custoUnit: i.custoUnit ?? null,
+              custoUnit: custos[idx],
               fornecedor: i.fornecedor ?? null,
             })),
           });
@@ -158,7 +175,7 @@ export async function PUT(
     }
 
     const os = await prisma.ordemServico.findUnique({ where: { id } });
-    return NextResponse.json(os);
+    return NextResponse.json(semFinanceiro(os, guarda.usuario.papel));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

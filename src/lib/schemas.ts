@@ -57,6 +57,11 @@ const CATEGORIAS_DESPESA = [
 // ── Itens (OS e orçamento usam o mesmo formato) ─────────────────────────────
 
 export const itemSchema = z.object({
+  // Id do item que já existe no banco. Não é usado para gravar (a lista é sempre
+  // substituída inteira), mas sem ele `lib/custos.ts` não consegue recuperar o custo
+  // que o operador não recebeu — e salvar zeraria o lucro do dono. Como o zod remove
+  // o que não está declarado, tirar esta linha reintroduz esse bug em silêncio.
+  id: id("Id do item").optional(),
   tipo: enumComPadrao("Tipo do item", TIPOS_ITEM, "PECA"),
   descricao: obrigatorio("Descrição do item", LIMITES.descricao),
   quantidade: dinheiro("Quantidade").max(LIMITES.quantidade, "Quantidade acima do limite"),

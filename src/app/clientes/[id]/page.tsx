@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { labelStatus, corStatus, ORIGENS, anoVeiculo } from "@/lib/constants";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDe, type VeiculoForm } from "@/components/VeiculoCampos";
+import { useEhDono } from "@/components/UsuarioProvider";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS",
@@ -26,7 +27,8 @@ type OS = {
 };
 type ClienteStats = {
   totalOS: number; osAbertas: number; totalFaturado: number; totalMO: number;
-  totalPecas: number; lucroTotal: number; totalRecebido: number; totalPendente: number;
+  totalPecas: number; totalRecebido: number; totalPendente: number;
+  lucroTotal?: number; // ausente para o operador (ver src/lib/permissoes.ts)
   ticketMedio: number; npsMedio: number | null; primeiraOS: string | null; ultimaOS: string | null;
 };
 type Cliente = {
@@ -59,6 +61,7 @@ const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm foc
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const ehDono = useEhDono();
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -251,11 +254,15 @@ export default function ClienteDetailPage() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <MetricCard label="Total faturado" value={formatCurrency(stats.totalFaturado)} />
-              <MetricCard
-                label="Lucro bruto"
-                value={formatCurrency(stats.lucroTotal)}
-                highlight={stats.lucroTotal > 0 ? "green" : stats.lucroTotal < 0 ? "red" : undefined}
-              />
+              {ehDono && (
+                <MetricCard
+                  label="Lucro bruto"
+                  value={formatCurrency(stats.lucroTotal ?? 0)}
+                  highlight={
+                    (stats.lucroTotal ?? 0) > 0 ? "green" : (stats.lucroTotal ?? 0) < 0 ? "red" : undefined
+                  }
+                />
+              )}
               <MetricCard label="Ticket médio" value={formatCurrency(stats.ticketMedio)} />
               <MetricCard label="Ordens de serviço" value={String(stats.totalOS)} sub={stats.osAbertas > 0 ? `${stats.osAbertas} em aberto` : "nenhuma em aberto"} />
               <MetricCard label="Mão de obra" value={formatCurrency(stats.totalMO)} />

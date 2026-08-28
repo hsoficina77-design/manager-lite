@@ -9,6 +9,7 @@ import { FOTO_TIPOS, tipoDaFoto, labelStatus, corStatus, OS_STATUS_VALUES, OS_CO
 import OSFotos, { type Foto } from "@/components/OSFotos";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
+import { useEhDono } from "@/components/UsuarioProvider";
 
 const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
   ssr: false,
@@ -31,7 +32,8 @@ type OS = {
   totalPecas: number; totalMO: number; desconto: number; total: number;
   pago: boolean; valorPago: number; formaPagamento: string | null; obs: string | null;
   mecanico: string | null; nivelCombustivel: string | null; combustivelEmUso: string | null;
-  custoTotalPecas: number; lucroReal: number; margemPecas: number;
+  // Ausentes na resposta quando quem pede é operador (ver src/lib/permissoes.ts).
+  custoTotalPecas?: number; lucroReal?: number; margemPecas?: number;
   abertura: string; fechamento: string | null;
   cliente: {
     id: string; nome: string; telefone: string | null; cpfCnpj: string | null;
@@ -66,6 +68,7 @@ type PayMode = "TOTAL" | "PARCIAL" | "SEM_PAGAMENTO";
 export default function OSDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const ehDono = useEhDono();
   const [os, setOs] = useState<OS | null>(null);
   const [loading, setLoading] = useState(true);
   const [pgtoForm, setPgtoForm] = useState({ valor: "", formaPagamento: "DINHEIRO", obs: "" });
@@ -243,7 +246,7 @@ export default function OSDetailPage() {
   const saldo = os.total - os.valorPago;
   // `custoTotalPecas` não vem para o operador — o `?? 0` mantém a conta definida
   // mesmo assim, e o bloco que a usa só é renderizado para o dono.
-  const margemValor = os.totalPecas - os.custoTotalPecas;
+  const margemValor = os.totalPecas - (os.custoTotalPecas ?? 0);
   const podeEditar = os.status !== "ENTREGUE" && os.status !== "CANCELADA";
 
   // Valor/validação do modal de pagamento
@@ -299,9 +302,12 @@ export default function OSDetailPage() {
             ))}
           </select>
           <OSPdfButton os={os} />
-          <button onClick={deleteOS} disabled={deletingOS} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
-            Excluir
-          </button>
+          {/* Excluir apaga faturamento junto — fica com o dono (ver src/lib/permissoes.ts). */}
+          {ehDono && (
+            <button onClick={deleteOS} disabled={deletingOS} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+              Excluir
+            </button>
+          )}
         </div>
         </div>
       </div>
@@ -525,7 +531,7 @@ export default function OSDetailPage() {
       {/* Ferramentas de gestão — não aparecem na impressão */}
       <div className="no-print mt-6 space-y-5 lg:sticky lg:top-20 lg:mt-0 lg:self-start">
         {/* Visão interna — lucros. Só o dono: a API nem envia estes campos ao operador. */}
-        {(os.custoTotalPecas > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
+        {ehDono && ((os.custoTotalPecas ?? 0) > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
           <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
@@ -545,14 +551,14 @@ export default function OSDetailPage() {
             <div className={cn("grid grid-cols-2 gap-x-3 gap-y-3 transition-all duration-300", !revelado && "blur-sm select-none pointer-events-none")}>
               <div>
                 <p className="text-xs text-zinc-400">Custo das peças</p>
-                <p className="text-base font-semibold text-zinc-900">{formatCurrency(os.custoTotalPecas)}</p>
+                <p className="text-base font-semibold text-zinc-900">{formatCurrency(os.custoTotalPecas ?? 0)}</p>
               </div>
               <div>
                 <p className="text-xs text-zinc-400">Margem em peças</p>
                 <p className={cn("text-base font-semibold", margemValor >= 0 ? "text-green-600" : "text-red-500")}>
                   {formatCurrency(margemValor)}
                   {os.totalPecas > 0 && (
-                    <span className="ml-1 text-xs font-normal text-zinc-400">({os.margemPecas.toFixed(0)}%)</span>
+                    <span className="ml-1 text-xs font-normal text-zinc-400">({(os.margemPecas ?? 0).toFixed(0)}%)</span>
                   )}
                 </p>
               </div>
@@ -562,7 +568,7 @@ export default function OSDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-zinc-400">Lucro real</p>
-                <p className="text-base font-bold text-green-700">{formatCurrency(os.lucroReal)}</p>
+                <p className="text-base font-bold text-green-700">{formatCurrency(os.lucroReal ?? 0)}</p>
               </div>
             </div>
           </div>

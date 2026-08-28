@@ -1,8 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
+import { UsuarioProvider } from "@/components/UsuarioProvider";
 import { prisma } from "@/lib/prisma";
+import { getUsuarioAtual } from "@/lib/auth";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
+import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
 import { cssDoTema } from "@/lib/tema";
 import "./globals.css";
 
@@ -32,14 +37,29 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [osPendentes, dividasPendentes, config] = await Promise.all([
-    prisma.ordemServico.count({ where: { pago: false, status: "ENTREGUE" } }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).dividaAvulsa.count({ where: { pago: false } }) as Promise<number>,
+  const [config, usuario, cabecalhos] = await Promise.all([
     getConfiguracao(),
+    getUsuarioAtual(),
+    headers(),
   ]);
 
-  const pendingCount = osPendentes + dividasPendentes;
+  // Cookie válido mas sem usuário significa sessão que deixou de existir — acesso
+  // desativado ou derrubado pelo dono. O proxy não tem como saber disso (não alcança
+  // o banco), então é aqui que essa pessoa é mandada de volta ao login.
+  const rota = cabecalhos.get(HEADER_ROTA) ?? "";
+  if (!usuario && rota && !ehRotaPublica(rota)) {
+    redirect(`/login?next=${encodeURIComponent(rota)}`);
+  }
+
+  // As telas de login e de primeiro acesso caem aqui sem usuário — e não devem ganhar
+  // menu lateral nem contagem de pendências. O tema, sim: a marca já aparece no login.
+  const conteudo = usuario ? (
+    <AppComMenu usuario={usuario} config={config}>
+      {children}
+    </AppComMenu>
+  ) : (
+    children
+  );
 
   return (
     <html lang="pt-BR">
@@ -49,17 +69,55 @@ export default async function RootLayout({
         <style id="tema-da-marca" dangerouslySetInnerHTML={{ __html: cssDoTema(config) }} />
       </head>
       <body className="min-h-screen bg-gray-100 text-zinc-900 antialiased">
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar
-            pendingCount={pendingCount}
-            nome={nomeDoMenu(config)}
-            logoUrl={config.logoUrl}
-          />
-          <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
-            <div className="mx-auto max-w-6xl">{children}</div>
-          </main>
-        </div>
+        <UsuarioProvider
+          usuario={
+            usuario
+              ? { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel }
+              : null
+          }
+        >
+          {conteudo}
+        </UsuarioProvider>
       </body>
     </html>
   );
+}
+
+async function AppComMenu({
+  usuario,
+  config,
+  children,
+}: {
+  usuario: NonNullable<Awaited<ReturnType<typeof getUsuarioAtual>>>;
+  config: Awaited<ReturnType<typeof getConfiguracao>>;
+  children: React.ReactNode;
+}) {
+  // Contas a receber é tela de dono; para o operador o contador nem é consultado.
+  const pendingCount =
+    usuario.papel === "ADMIN"
+      ? await contarPendencias()
+      : 0;
+
+  return (
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar
+        pendingCount={pendingCount}
+        nome={nomeDoMenu(config)}
+        logoUrl={config.logoUrl}
+        usuario={{ nome: usuario.nome, papel: usuario.papel }}
+      />
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
+    </div>
+  );
+}
+
+async function contarPendencias(): Promise<number> {
+  const [osPendentes, dividasPendentes] = await Promise.all([
+    prisma.ordemServico.count({ where: { pago: false, status: "ENTREGUE" } }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma as any).dividaAvulsa.count({ where: { pago: false } }) as Promise<number>,
+  ]);
+  return osPendentes + dividasPendentes;
 }

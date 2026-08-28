@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { orcamentoCriarSchema, valorDoItem } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
 
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const clienteId = searchParams.get("clienteId");
@@ -28,10 +33,16 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(orcamentos);
+  return NextResponse.json(semFinanceiro(orcamentos, guarda.usuario.papel));
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
+  // Operador não vê custo — logo, também não define custo.
+  const podeDefinirCusto = guarda.usuario.papel === "ADMIN";
+
   try {
     const {
       clienteId,
@@ -98,7 +109,9 @@ export async function POST(request: Request) {
               quantidade: item.quantidade,
               valorUnit: item.valorUnit,
               valorTotal: valorDoItem(item),
-              custoUnit: item.custoUnit ?? null,
+              // Orçamento novo: todo item é novo, então não há custo no banco a
+              // preservar — o do operador simplesmente não entra.
+              custoUnit: podeDefinirCusto ? item.custoUnit ?? null : null,
               fornecedor: item.fornecedor ?? null,
             })),
           },
@@ -107,7 +120,7 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(orcamento, { status: 201 });
+    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel), { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

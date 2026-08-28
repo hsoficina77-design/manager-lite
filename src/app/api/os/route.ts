@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { osCriarSchema, valorDoItem } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
 
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const pendente = searchParams.get("pendente") === "true";
@@ -36,10 +41,22 @@ export async function GET(request: Request) {
     orderBy: { abertura: "desc" },
   });
 
-  return NextResponse.json(ordens);
+  // Custo, lucro e margem não saem daqui para quem não é dono.
+  return NextResponse.json(semFinanceiro(ordens, guarda.usuario.papel));
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
+  // Operador não vê custo — logo, também não define custo. OS aberta por ele nasce
+  // sem custo de peça, e o dono preenche depois.
+  const podeDefinirCusto = guarda.usuario.papel === "ADMIN";
+  const custoDoItem = (item: { custoUnit?: unknown }) =>
+    podeDefinirCusto && item.custoUnit != null && item.custoUnit !== ""
+      ? Number(item.custoUnit)
+      : null;
+
   try {
     const {
       clienteId,
@@ -74,7 +91,7 @@ export async function POST(request: Request) {
 
     const custoTotalPecas = itens
       .filter((i) => i.tipo === "PECA")
-      .reduce((sum, i) => sum + (i.custoUnit ?? 0) * i.quantidade, 0);
+      .reduce((sum, i) => sum + (custoDoItem(i) ?? 0) * i.quantidade, 0);
 
     const total = totalPecas + totalMO;
     const lucroReal = total - custoTotalPecas;
@@ -113,7 +130,7 @@ export async function POST(request: Request) {
               quantidade: item.quantidade,
               valorUnit: item.valorUnit,
               valorTotal: valorDoItem(item),
-              custoUnit: item.custoUnit ?? null,
+              custoUnit: custoDoItem(item),
               fornecedor: item.fornecedor ?? null,
             })),
           },
@@ -126,7 +143,7 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(os, { status: 201 });
+    return NextResponse.json(semFinanceiro(os, guarda.usuario.papel), { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

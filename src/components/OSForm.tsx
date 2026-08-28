@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/utils";
 import { anoVeiculo } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import ClienteSelect from "./ClienteSelect";
+import { useEhDono } from "@/components/UsuarioProvider";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Mecanico = { id: string; nome: string; especialidade: string | null };
@@ -46,6 +47,8 @@ export default function OSForm({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Custo e lucro só existem na tela do dono — a API nem manda esses campos ao operador.
+  const ehDono = useEhDono();
   const preClienteId = initial?.clienteId ?? searchParams.get("clienteId") ?? "";
   const preVeiculoId = initial?.veiculoId ?? searchParams.get("veiculoId") ?? "";
 
@@ -394,7 +397,7 @@ export default function OSForm({
               <label className="block text-xs text-zinc-500 mb-1">Qtd</label>
               <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
-            {itemForm.tipo === "PECA" && (
+            {ehDono && itemForm.tipo === "PECA" && (
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs text-zinc-500 mb-1">Custo unit. (R$)</label>
                 <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
@@ -403,7 +406,7 @@ export default function OSForm({
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs text-zinc-500 mb-1">
                 Venda unit. (R$)
-                {itemMargem !== null && (
+                {ehDono && itemMargem !== null && (
                   <span className={`ml-1 font-medium ${itemMargem >= 0 ? "text-green-600" : "text-red-500"}`}>
                     ({itemMargem.toFixed(0)}%)
                   </span>
@@ -423,7 +426,7 @@ export default function OSForm({
             </div>
           </div>
 
-          {Number(itemForm.valorUnit) > 0 && (
+          {ehDono && Number(itemForm.valorUnit) > 0 && (
             <p className="text-xs text-zinc-500">
               Ganho deste item:{" "}
               <span className={`font-semibold ${itemGanho >= 0 ? "text-green-600" : "text-red-500"}`}>
@@ -444,7 +447,7 @@ export default function OSForm({
                   <th className="text-right pb-2 font-medium">Qtd</th>
                   <th className="text-right pb-2 font-medium">Venda</th>
                   <th className="text-right pb-2 font-medium">Total</th>
-                  <th className="text-right pb-2 font-medium">Ganho</th>
+                  {ehDono && <th className="text-right pb-2 font-medium">Ganho</th>}
                   <th className="pb-2"></th>
                 </tr>
               </thead>
@@ -456,7 +459,7 @@ export default function OSForm({
                     <td className="py-1.5 text-right text-zinc-600">{item.quantidade}</td>
                     <td className="py-1.5 text-right text-zinc-600">{formatCurrency(Number(item.valorUnit))}</td>
                     <td className="py-1.5 text-right font-medium text-zinc-900">{formatCurrency(Number(item.quantidade) * Number(item.valorUnit))}</td>
-                    <td className={`py-1.5 text-right font-medium ${ganhoItem(item) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatCurrency(ganhoItem(item))}</td>
+                    {ehDono && <td className={`py-1.5 text-right font-medium ${ganhoItem(item) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatCurrency(ganhoItem(item))}</td>}
                     <td className="py-1.5 pl-2">
                       <div className="flex items-center justify-end gap-1">
                         <button type="button" onClick={() => startEdit(idx)} aria-label="Editar item" title="Editar" className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
@@ -493,13 +496,15 @@ export default function OSForm({
                   </div>
                 </div>
 
-                <div className="space-y-1 text-sm rounded-lg bg-zinc-50 p-3">
-                  <div className="flex justify-between text-zinc-500"><span>Custo das peças</span><span>{formatCurrency(custoTotalPecas)}</span></div>
-                  <div className="flex justify-between font-semibold text-green-700">
-                    <span>Lucro estimado</span>
-                    <span>{formatCurrency(lucroTotal)}{total > 0 ? ` (${margemTotal.toFixed(0)}%)` : ""}</span>
+                {ehDono && (
+                  <div className="space-y-1 text-sm rounded-lg bg-zinc-50 p-3">
+                    <div className="flex justify-between text-zinc-500"><span>Custo das peças</span><span>{formatCurrency(custoTotalPecas)}</span></div>
+                    <div className="flex justify-between font-semibold text-green-700">
+                      <span>Lucro estimado</span>
+                      <span>{formatCurrency(lucroTotal)}{total > 0 ? ` (${margemTotal.toFixed(0)}%)` : ""}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 

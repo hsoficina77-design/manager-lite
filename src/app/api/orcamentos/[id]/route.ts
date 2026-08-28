@@ -2,11 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { orcamentoAtualizarSchema, valorDoItem } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
+import { semFinanceiro } from "@/lib/permissoes";
+import { custosParaSalvar } from "@/lib/custos";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
 
   const orcamento = await prisma.orcamento.findUnique({
@@ -23,13 +29,16 @@ export async function GET(
     return NextResponse.json({ error: "Orçamento não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(orcamento);
+  return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel));
 }
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
     const {
@@ -70,6 +79,11 @@ export async function PUT(
 
     let totalPecas = current.totalPecas;
     let totalMO = current.totalMO;
+
+    // Custo dos itens: do payload quando é o dono, do banco quando é o operador.
+    const custos = itens
+      ? await custosParaSalvar(itens, guarda.usuario.papel, { orcamento: id })
+      : [];
 
     if (itens) {
       totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
@@ -112,14 +126,15 @@ export async function PUT(
         await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
         if (itens.length > 0) {
           await tx.itemOrcamento.createMany({
-            data: itens.map((i) => ({
+            data: itens.map((i, idx) => ({
               orcamentoId: id,
               tipo: i.tipo,
               descricao: i.descricao,
               quantidade: i.quantidade,
               valorUnit: i.valorUnit,
               valorTotal: valorDoItem(i),
-              custoUnit: i.custoUnit ?? null,
+              // Custo do payload só quando é o dono — ver src/lib/custos.ts.
+              custoUnit: custos[idx],
               fornecedor: i.fornecedor ?? null,
             })),
           });
@@ -131,7 +146,7 @@ export async function PUT(
     }
 
     const orcamento = await prisma.orcamento.findUnique({ where: { id } });
-    return NextResponse.json(orcamento);
+    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

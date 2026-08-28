@@ -261,6 +261,44 @@ model Sequencia {
   ultimo Int    @default(0)
 }
 
+// papel: ADMIN | OPERADOR
+//
+// ADMIN é o dono: vê dinheiro (lucro, margem, custo, caixa, contas) e configura o
+// sistema. OPERADOR toca a operação — clientes, OS, orçamentos, fotos — e nunca
+// enxerga custo nem lucro. A separação não é só de tela: as rotas de API filtram os
+// campos financeiros antes de responder, senão bastaria abrir o DevTools.
+model Usuario {
+  id           String    @id @default(cuid())
+  nome         String
+  email        String    @unique
+  senhaHash    String
+  papel        String    @default("OPERADOR")
+  ativo        Boolean   @default(true)
+  ultimoAcesso DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessoes Sessao[]
+}
+
+// Sessão de login. Guardar no banco (em vez de só assinar um token) é o que permite
+// desligar um acesso na hora: excluir a linha derruba a sessão no próximo carregamento,
+// sem esperar o cookie expirar.
+//
+// O `id` é o próprio segredo (32 bytes aleatórios), então nunca é logado nem exibido.
+model Sessao {
+  id        String   @id
+  usuarioId String
+  expiraEm  DateTime
+  criadaEm  DateTime @default(now())
+  userAgent String?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([expiraEm])
+}
+
 // Configurações da oficina — linha única, id fixo "default".
 //
 // Tudo que hoje estaria chumbado no código (nome, CNPJ, telefone, logo, cores) mora
