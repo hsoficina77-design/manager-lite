@@ -1,5 +1,11 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { FOTO_TIPOS, tipoDaFoto, labelStatus } from "@/lib/constants";
+import {
+  CONFIG_PADRAO,
+  linhasDoCabecalho,
+  rodapeDoDocumento,
+  type Configuracao,
+} from "@/lib/configuracao";
 
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
@@ -133,6 +139,13 @@ const s = StyleSheet.create({
   signatureLine: { width: 220, borderTopWidth: 1, borderTopColor: C.mute, paddingTop: 4 },
   signatureLabel: { fontSize: 8, color: C.mute, textAlign: "center" },
 
+  // Recado da oficina (garantia, termos) — configurável no painel
+  aviso: {
+    marginTop: 14, borderWidth: 1, borderColor: C.line, borderRadius: 6,
+    backgroundColor: C.soft, padding: 10,
+  },
+  avisoTexto: { fontSize: 8, color: C.sub, lineHeight: 1.45 },
+
   // Fotos
   fotosTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 2 },
   fotosSub: { fontSize: 8.5, color: C.sub, marginBottom: 2 },
@@ -161,11 +174,18 @@ export function OSPdfDocument({
   os,
   logoSrc,
   fotos = [],
+  config = CONFIG_PADRAO,
 }: {
   os: OSForPdf;
   logoSrc?: string;
   fotos?: FotoPdf[];
+  config?: Configuracao;
 }) {
+  // Identidade da oficina — nome, contatos, rodapé e cor saem do painel.
+  const cabecalho = linhasDoCabecalho(config);
+  const rodape = rodapeDoDocumento(config);
+  const marca = config.corPrimaria;
+
   const veicLinha2: string[] = [];
   if (os.veiculo.cor) veicLinha2.push(`Cor: ${os.veiculo.cor}`);
   if (os.veiculo.motorizacao) veicLinha2.push(`Motor: ${os.veiculo.motorizacao}`);
@@ -175,7 +195,7 @@ export function OSPdfDocument({
   if (os.combustivelEmUso) veicLinha2.push(`Em uso: ${os.combustivelEmUso}`);
 
   return (
-    <Document title={`OS ${os.numero} - HS Oficina Mecânica`} author="HS Oficina Mecânica">
+    <Document title={`OS ${os.numero} - ${config.nome}`} author={config.nome}>
       <Page size="A4" style={s.page}>
         {/* Cabeçalho */}
         <View style={s.header}>
@@ -183,21 +203,22 @@ export function OSPdfDocument({
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             {logoSrc ? <Image style={s.logo} src={logoSrc} /> : null}
             <View style={s.brandText}>
-              <Text style={s.brandName}>HS OFICINA MECÂNICA</Text>
-              <Text style={s.brandLine}>CNPJ: 67.090.409/0001-17</Text>
-              <Text style={s.brandLine}>Telefone: (11) 91330-4006</Text>
+              <Text style={s.brandName}>{config.nome.toUpperCase()}</Text>
+              {cabecalho.map((linha) => (
+                <Text key={linha} style={s.brandLine}>{linha}</Text>
+              ))}
             </View>
           </View>
           <View>
             <Text style={s.osLabel}>Ordem de Serviço</Text>
-            <Text style={s.osNum}>Nº {os.numero}</Text>
+            <Text style={[s.osNum, { color: marca }]}>Nº {os.numero}</Text>
             <Text style={s.osDate}>Abertura: {dia(os.abertura)}</Text>
             {os.fechamento ? <Text style={s.osDate}>Fechamento: {dia(os.fechamento)}</Text> : null}
             <Text style={s.osStatus}>Status: {STATUS_LABEL[os.status] ?? labelStatus(os.status)}</Text>
           </View>
         </View>
 
-        <View style={s.rule} />
+        <View style={[s.rule, { backgroundColor: marca }]} />
 
         {/* Cliente e Veículo */}
         <View style={s.infoBox}>
@@ -293,16 +314,25 @@ export function OSPdfDocument({
           </>
         ) : null}
 
-        {/* Assinatura */}
-        <View style={s.signature} wrap={false}>
-          <View style={s.signatureLine}>
-            <Text style={s.signatureLabel}>Assinatura do Cliente</Text>
+        {/* Recado da oficina (garantia, termos) */}
+        {config.mensagemDocumento ? (
+          <View style={s.aviso} wrap={false}>
+            <Text style={s.avisoTexto}>{config.mensagemDocumento}</Text>
           </View>
-        </View>
+        ) : null}
+
+        {/* Assinatura */}
+        {config.mostrarAssinatura ? (
+          <View style={s.signature} wrap={false}>
+            <View style={s.signatureLine}>
+              <Text style={s.signatureLabel}>Assinatura do Cliente</Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Rodapé fixo */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>HS Oficina Mecânica · (11) 91330-4006</Text>
+          <Text style={s.footerText}>{rodape}</Text>
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
@@ -343,7 +373,7 @@ export function OSPdfDocument({
           })}
 
           <View style={s.footer} fixed>
-            <Text style={s.footerText}>HS Oficina Mecânica · (11) 91330-4006</Text>
+            <Text style={s.footerText}>{rodape}</Text>
             <Text
               style={s.footerText}
               render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}

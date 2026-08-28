@@ -41,16 +41,22 @@ export function publicUrl(path: string) {
   return `${url}/storage/v1/object/public/${BUCKET}/${path}`;
 }
 
-/** Envia um arquivo e retorna { path, url }. */
-export async function uploadFoto(
-  osId: string,
+function extensao(contentType: string) {
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  if (contentType === "image/svg+xml") return "svg";
+  return "jpg";
+}
+
+/** Envia um arquivo sob uma pasta do bucket e retorna { path, url }. */
+export async function uploadArquivo(
+  pasta: string,
   bytes: ArrayBuffer,
   contentType: string
 ): Promise<{ path: string; url: string }> {
   await ensureBucket();
   const { url, key } = config();
-  const ext = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-  const path = `os/${osId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `${pasta}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extensao(contentType)}`;
   const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${path}`, {
     method: "POST",
     headers: headers(key, { "Content-Type": contentType, "Cache-Control": "public, max-age=31536000" }),
@@ -60,6 +66,16 @@ export async function uploadFoto(
     throw new Error(`Erro no upload: ${res.status} ${await res.text()}`);
   }
   return { path, url: publicUrl(path) };
+}
+
+/** Foto da OS — cada OS tem sua pasta. */
+export function uploadFoto(osId: string, bytes: ArrayBuffer, contentType: string) {
+  return uploadArquivo(`os/${osId}`, bytes, contentType);
+}
+
+/** Logo da oficina (painel de configurações). */
+export function uploadLogo(bytes: ArrayBuffer, contentType: string) {
+  return uploadArquivo("marca", bytes, contentType);
 }
 
 /** Exclui arquivos do bucket (best-effort — não lança em caso de falha). */

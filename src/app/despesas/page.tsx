@@ -135,22 +135,22 @@ export default function DespesasPage() {
             <form onSubmit={submitNova} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Categoria</label>
-                <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                   {CATEGORIAS.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Descrição *</label>
-                <input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Valor (R$) *</label>
-                  <input type="number" inputMode="decimal" min="0.01" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <input type="number" inputMode="decimal" min="0.01" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Vencimento *</label>
-                  <input type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <input type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-zinc-600 cursor-pointer">
@@ -158,7 +158,7 @@ export default function DespesasPage() {
                 Recorrente (gera a próxima automaticamente ao pagar)
               </label>
               <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={saving} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                <button type="submit" disabled={saving} className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
                   {saving ? "Criando..." : "Criar"}
                 </button>
                 <button type="button" onClick={() => setModalNova(false)} className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
@@ -175,7 +175,7 @@ export default function DespesasPage() {
           <h1 className="text-2xl font-bold text-zinc-900">Contas a Pagar</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Despesas fixas e recorrentes da oficina</p>
         </div>
-        <button onClick={() => setModalNova(true)} className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+        <button onClick={() => setModalNova(true)} className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700">
           + Nova despesa
         </button>
       </div>

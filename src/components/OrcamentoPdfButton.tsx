@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { pdf } from "@react-pdf/renderer";
+import { carregarConfiguracao } from "@/lib/useConfiguracao";
 import { OrcamentoPdfDocument, type OrcamentoForPdf } from "./OrcamentoPdfDocument";
 
 async function toDataUrl(url: string): Promise<string | undefined> {
@@ -36,19 +37,20 @@ function nomeArquivo(orc: OrcamentoForPdf) {
 }
 
 export default function OrcamentoPdfButton({ orc }: { orc: OrcamentoForPdf }) {
-  const [logo, setLogo] = useState<string | undefined>(undefined);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState(false);
-
-  useEffect(() => {
-    toDataUrl("/logo-hs.png").then(setLogo);
-  }, []);
 
   async function baixar() {
     setGerando(true);
     setErro(false);
     try {
-      const blob = await pdf(<OrcamentoPdfDocument orc={orc} logoSrc={logo} />).toBlob();
+      // Identidade e logo só são buscadas na hora de gerar o arquivo.
+      const config = await carregarConfiguracao();
+      const logo = config.logoUrl ? await toDataUrl(config.logoUrl) : undefined;
+
+      const blob = await pdf(
+        <OrcamentoPdfDocument orc={orc} logoSrc={logo} config={config} />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

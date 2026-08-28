@@ -312,7 +312,7 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
             <h2 className="font-semibold text-zinc-800">DRE Simplificado</h2>
             <p className="text-xs text-zinc-500">Mesmas OS listadas abaixo</p>
           </div>
-          <Link href="/despesas" className="shrink-0 text-xs text-red-600 hover:underline">
+          <Link href="/despesas" className="shrink-0 text-xs text-brand-600 hover:underline">
             Contas a pagar →
           </Link>
         </div>
@@ -607,7 +607,7 @@ function AcoesRapidas() {
       </Link>
       <Link
         href="/os/nova"
-        className="flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors"
+        className="flex items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm font-medium text-brand-700 hover:bg-brand-100 transition-colors"
       >
         + Nova OS
       </Link>
@@ -622,7 +622,7 @@ function CardDevedores({ top5 }: { top5: { nome: string; saldo: number }[] }) {
     <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-red-800 text-sm">Maiores devedores</h3>
-        <Link href="/contas-receber" className="text-xs text-red-600 hover:underline">
+        <Link href="/contas-receber" className="text-xs text-brand-600 hover:underline">
           Ver todos →
         </Link>
       </div>

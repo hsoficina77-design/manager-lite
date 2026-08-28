@@ -63,11 +63,11 @@ export default function CaixaPage() {
             type="date"
             value={data}
             onChange={(e) => setData(e.target.value)}
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <button onClick={() => mudarDia(1)} disabled={isHoje} className="rounded-lg border border-zinc-300 px-2.5 py-2 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">→</button>
           {!isHoje && (
-            <button onClick={() => setData(hojeISO())} className="text-xs text-red-600 hover:underline">Hoje</button>
+            <button onClick={() => setData(hojeISO())} className="text-xs text-brand-600 hover:underline">Hoje</button>
           )}
         </div>
       </div>

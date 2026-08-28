@@ -73,10 +73,10 @@ export default function ProdutividadePage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Produtividade</h1>
         <div className="flex items-center gap-2">
-          <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+          <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
             {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
           </select>
-          <select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+          <select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
             {anos.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -106,7 +106,7 @@ export default function ProdutividadePage() {
           {/* Ranking de mecânicos */}
           {ordenadas.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white py-12 text-center text-sm text-zinc-400">
-              Nenhum mecânico ativo. <Link href="/mecanicos" className="text-red-600 underline">Cadastrar mecânico</Link>
+              Nenhum mecânico ativo. <Link href="/mecanicos" className="text-brand-600 underline">Cadastrar mecânico</Link>
             </div>
           ) : (
             <div className="space-y-3">

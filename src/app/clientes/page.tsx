@@ -47,7 +47,7 @@ export default async function ClientesPage({
         <h1 className="text-2xl font-bold text-zinc-900">Clientes</h1>
         <Link
           href="/clientes/novo"
-          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 transition-colors"
         >
           + Novo Cliente
         </Link>
@@ -58,7 +58,7 @@ export default async function ClientesPage({
           name="q"
           defaultValue={q}
           placeholder="Buscar por nome, apelido, placa, marca, modelo..."
-          className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           autoComplete="off"
         />
         <input
@@ -66,14 +66,14 @@ export default async function ClientesPage({
           name="de"
           defaultValue={de}
           title="Cadastro a partir de"
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <input
           type="date"
           name="ate"
           defaultValue={ate}
           title="Cadastro até"
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <button
           type="submit"

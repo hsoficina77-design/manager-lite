@@ -140,7 +140,7 @@ function OSListContent() {
     <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Ordens de Serviço</h1>
-        <Link href="/os/nova" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
+        <Link href="/os/nova" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 transition-colors">
           + Nova OS
         </Link>
       </div>
@@ -165,12 +165,12 @@ function OSListContent() {
       <div className="mb-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <button onClick={() => setShowFiltros(!showFiltros)} className="text-sm text-zinc-500 hover:text-zinc-700 flex items-center gap-1">
-            {showFiltros ? "▲" : "▼"} Filtros avançados {hasFilters && <span className="bg-red-100 text-red-700 rounded-full px-2 text-xs">ativo</span>}
+            {showFiltros ? "▲" : "▼"} Filtros avançados {hasFilters && <span className="bg-brand-100 text-brand-700 rounded-full px-2 text-xs">ativo</span>}
           </button>
           <select
             value={ordenacao}
             onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-            className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             {ORDENACOES.map((o) => (
               <option key={o.value} value={o.value}>Ordenar: {o.label}</option>
@@ -183,18 +183,18 @@ function OSListContent() {
               value={localQ}
               onChange={(e) => setLocalQ(e.target.value)}
               placeholder="Buscar nome, apelido, placa, mecânico, #OS..."
-              className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             <select
               value={localMecanico}
               onChange={(e) => setLocalMecanico(e.target.value)}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="">Todos mecânicos</option>
               {mecanicos.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)}
             </select>
-            <input type="date" value={localDe} onChange={(e) => setLocalDe(e.target.value)} title="De" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
-            <input type="date" value={localAte} onChange={(e) => setLocalAte(e.target.value)} title="Até" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+            <input type="date" value={localDe} onChange={(e) => setLocalDe(e.target.value)} title="De" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            <input type="date" value={localAte} onChange={(e) => setLocalAte(e.target.value)} title="Até" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             <button onClick={applyFilters} className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Aplicar</button>
             <button onClick={clearFilters} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Limpar filtros</button>
           </div>

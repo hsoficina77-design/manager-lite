@@ -3,6 +3,31 @@
 @tailwind utilities;
 
 @layer base {
+  /* Tema padrão da marca (vermelho + menu preto) — as cores com que o sistema nasceu.
+     O layout raiz sobrescreve estas variáveis com as cores salvas no painel de
+     configurações; ficam aqui para o app nunca renderizar sem cor, mesmo se o
+     banco estiver fora do ar ou a oficina ainda não tiver configurado nada. */
+  :root {
+    --brand-50: 254 241 241;
+    --brand-100: 252 227 227;
+    --brand-200: 249 204 204;
+    --brand-300: 244 174 174;
+    --brand-400: 235 126 126;
+    --brand-500: 226 78 78;
+    --brand-600: 220 38 38;
+    --brand-700: 183 30 30;
+    --brand-800: 150 27 27;
+    --brand-900: 130 28 28;
+    --brand-950: 74 18 18;
+    --brand-fg: 255 255 255;
+
+    --menu-bg: 9 9 11;
+    --menu-fg: 255 255 255;
+    --menu-borda: 37 37 45;
+    --menu-hover: 46 46 56;
+    --menu-texto: 162 162 162;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: #d4d4d8 transparent;

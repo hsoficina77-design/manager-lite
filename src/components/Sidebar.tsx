@@ -13,7 +13,15 @@ type LinkDef = {
   children?: LinkDef[];
 };
 
-export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
+export function Sidebar({
+  pendingCount = 0,
+  nome = "Minha Oficina",
+  logoUrl = null,
+}: {
+  pendingCount?: number;
+  nome?: string;
+  logoUrl?: string | null;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -57,14 +65,38 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
   const toggleExpand = (href: string) =>
     setExpanded((prev) => ({ ...prev, [href]: !prev[href] }));
 
+  // Sem logo configurada, a marca cai numa inicial em bloco — nunca uma imagem quebrada.
+  const inicial = nome.trim().charAt(0).toUpperCase() || "O";
+
+  const marca = (tamanho: "sm" | "md") => {
+    const box = tamanho === "sm" ? "h-8 w-8" : "h-11 w-11";
+    return logoUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt={nome}
+        className={cn("shrink-0 object-contain", box)}
+      />
+    ) : (
+      <span
+        aria-hidden
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-lg bg-brand-600 font-black text-brand-fg",
+          box,
+          tamanho === "sm" ? "text-sm" : "text-lg"
+        )}
+      >
+        {inicial}
+      </span>
+    );
+  };
+
   const brand = (
-    <div className="flex items-center gap-2.5">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo-hs.png" alt="HS Oficina Mecânica" width={44} height={44} className="shrink-0 h-11 w-11 object-contain" />
-      <div className="leading-tight">
-        <span className="block font-bold text-white text-sm tracking-tight">HS Oficina</span>
-        <span className="text-xs text-zinc-500">Mecânica</span>
-      </div>
+    <div className="flex min-w-0 items-center gap-2.5">
+      {marca("md")}
+      <span className="min-w-0 truncate text-sm font-bold tracking-tight text-menu-fg">
+        {nome}
+      </span>
     </div>
   );
 
@@ -81,8 +113,8 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
               className={cn(
                 "flex items-center rounded-md transition-colors",
                 isActive && !childActive
-                  ? "bg-red-700 text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+                  ? "bg-brand-700 text-brand-fg"
+                  : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
               )}
             >
               <Link
@@ -102,7 +134,7 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
                   onClick={() => toggleExpand(link.href)}
                   aria-label={isExpanded ? `Recolher ${link.label}` : `Expandir ${link.label}`}
                   aria-expanded={isExpanded}
-                  className="px-2 py-2.5 text-current hover:text-white"
+                  className="px-2 py-2.5 text-current hover:text-menu-fg"
                 >
                   <svg
                     width="16"
@@ -122,7 +154,7 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
               )}
             </div>
             {link.children && isExpanded && (
-              <div className="mt-0.5 ml-3 space-y-0.5 border-l border-zinc-800 pl-2">
+              <div className="mt-0.5 ml-3 space-y-0.5 border-l border-menu-borda pl-2">
                 {link.children.map((child) => (
                   <Link
                     key={child.href}
@@ -130,8 +162,8 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
                     className={cn(
                       "flex items-center px-3 py-2 rounded-md text-sm transition-colors",
                       isLinkActive(child)
-                        ? "bg-red-700 text-white font-medium"
-                        : "text-zinc-500 hover:text-white hover:bg-zinc-800"
+                        ? "bg-brand-700 text-brand-fg font-medium"
+                        : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
                     )}
                   >
                     {child.label}
@@ -145,20 +177,54 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
     </nav>
   );
 
+  // Configurações fica no pé, separada da operação do dia a dia.
+  // Configurações fica no pé, separada da operação do dia a dia.
+  const rodape = (
+    <div className="border-t border-menu-borda p-3">
+      <Link
+        href="/configuracoes"
+        className={cn(
+          "flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+          pathname.startsWith("/configuracoes")
+            ? "bg-brand-700 text-brand-fg"
+            : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
+        )}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="shrink-0"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        Configurações
+      </Link>
+    </div>
+  );
+
   return (
     <>
       {/* Sidebar desktop */}
-      <aside className="hidden md:flex w-56 bg-zinc-950 text-zinc-100 flex-col shrink-0 no-print">
-        <div className="px-4 py-5 border-b border-zinc-800">{brand}</div>
+      <aside className="hidden md:flex w-56 bg-menu text-menu-fg flex-col shrink-0 no-print">
+        <div className="px-4 py-5 border-b border-menu-borda">{brand}</div>
         {nav}
+        {rodape}
       </aside>
 
       {/* Barra superior mobile (fixa) */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 flex items-center gap-3 bg-zinc-950 text-zinc-100 px-4 no-print">
+      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 flex items-center gap-3 bg-menu text-menu-fg px-4 no-print">
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"
-          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-300 hover:bg-zinc-800 hover:text-white active:bg-zinc-800"
+          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-menu-texto hover:bg-menu-hover hover:text-menu-fg active:bg-menu-hover"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <line x1="3" y1="6" x2="21" y2="6" />
@@ -166,9 +232,8 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-hs.png" alt="HS Oficina Mecânica" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
-        <span className="font-bold text-white text-sm tracking-tight">HS Oficina</span>
+        {marca("sm")}
+        <span className="min-w-0 truncate text-sm font-bold tracking-tight text-menu-fg">{nome}</span>
         {pendingCount > 0 && (
           <Link
             href="/contas-receber"
@@ -183,13 +248,13 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
       {open && (
         <div className="md:hidden fixed inset-0 z-40 no-print">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 h-full w-72 max-w-[80%] bg-zinc-950 text-zinc-100 flex flex-col shadow-xl animate-in">
-            <div className="px-4 py-5 border-b border-zinc-800 flex items-center justify-between">
+          <aside className="absolute left-0 top-0 h-full w-72 max-w-[80%] bg-menu text-menu-fg flex flex-col shadow-xl animate-in">
+            <div className="px-4 py-5 border-b border-menu-borda flex items-center justify-between gap-2">
               {brand}
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Fechar menu"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-white active:bg-zinc-800"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-menu-texto hover:bg-menu-hover hover:text-menu-fg active:bg-menu-hover"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -198,6 +263,7 @@ export function Sidebar({ pendingCount = 0 }: { pendingCount?: number }) {
               </button>
             </div>
             {nav}
+            {rodape}
           </aside>
         </div>
       )}

@@ -1,4 +1,4 @@
-// Redimensiona imagens no navegador (canvas, sem dependências).
+ // Redimensiona imagens no navegador (canvas, sem dependências).
 // Usado em dois momentos:
 //  - upload: fotos de celular (~4MB) viram JPEGs de ~150-300KB no Storage;
 //  - PDF: miniaturas menores ainda, só em memória, sem gravar nada no bucket.
@@ -21,6 +21,33 @@ export async function compressImage(file: File): Promise<Blob> {
     canvas.toBlob(resolve, "image/jpeg", QUALITY)
   );
   // Se a compressão falhar ou não reduzir, mantém o original
+  if (!blob || blob.size >= file.size) return file;
+  return blob;
+}
+
+// Logo da oficina: arte pequena, mas quem envia costuma mandar a original grande.
+const MAX_DIM_LOGO = 512;
+
+/**
+ * Prepara a logo para envio: reduz o tamanho sem estragar a arte.
+ *
+ * Diferente das fotos, aqui não se converte tudo para JPEG — logo com fundo
+ * transparente viraria um retângulo branco no cabeçalho da OS. PNG continua PNG,
+ * e SVG passa direto (é vetor: já é leve e escala sozinho).
+ */
+export async function compressLogo(file: File): Promise<Blob> {
+  if (file.type === "image/svg+xml") return file;
+
+  const img = await loadImage(await readAsDataUrl(file));
+  if (img.naturalWidth <= MAX_DIM_LOGO && img.naturalHeight <= MAX_DIM_LOGO) return file;
+
+  const canvas = desenharEscalado(img, MAX_DIM_LOGO);
+  if (!canvas) return file;
+
+  const tipo = file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, tipo, QUALITY)
+  );
   if (!blob || blob.size >= file.size) return file;
   return blob;
 }

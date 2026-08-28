@@ -87,7 +87,7 @@ export default function NovoClientePage() {
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
   const showCombUso = COMBUSTIVEIS_BICOMBUSTIVEL.includes(veiculo.combustivel);
 
   return (
@@ -199,7 +199,7 @@ export default function NovoClientePage() {
               <button
                 type="button"
                 onClick={addTelefone}
-                className="text-sm text-red-600 hover:underline"
+                className="text-sm text-brand-600 hover:underline"
               >
                 + Adicionar telefone
               </button>
@@ -213,7 +213,7 @@ export default function NovoClientePage() {
               value={form.obs}
               onChange={(e) => setField("obs", e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
             />
           </div>
         </section>
@@ -351,7 +351,7 @@ export default function NovoClientePage() {
         <button
           type="submit"
           disabled={saving}
-          className="w-full rounded-lg bg-red-600 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+          className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50 transition-colors"
         >
           {saving ? "Salvando..." : "Criar Cliente"}
         </button>

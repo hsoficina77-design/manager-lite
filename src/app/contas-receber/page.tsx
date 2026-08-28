@@ -257,17 +257,17 @@ export default function ContasReceberPage() {
             <form onSubmit={submitPgto} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Valor (R$) *</label>
-                <input type="number" inputMode="decimal" min="0.01" step="0.01" value={pgtoForm.valor} onChange={(e) => setPgtoForm({ ...pgtoForm, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <input type="number" inputMode="decimal" min="0.01" step="0.01" value={pgtoForm.valor} onChange={(e) => setPgtoForm({ ...pgtoForm, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Forma de pagamento</label>
-                <select value={pgtoForm.formaPagamento} onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                <select value={pgtoForm.formaPagamento} onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                   {FORMAS_PGTO.map((f) => <option key={f} value={f}>{FORMAS_LABEL[f]}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Observação</label>
-                <input value={pgtoForm.obs} onChange={(e) => setPgtoForm({ ...pgtoForm, obs: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <input value={pgtoForm.obs} onChange={(e) => setPgtoForm({ ...pgtoForm, obs: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div className="flex gap-2 pt-1">
                 <button type="submit" disabled={savingPgto} className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
@@ -325,21 +325,21 @@ export default function ContasReceberPage() {
             <form onSubmit={submitNovaDivida} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Cliente *</label>
-                <select value={novaDividaForm.clienteId} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, clienteId: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                <select value={novaDividaForm.clienteId} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, clienteId: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                   <option value="">Selecionar...</option>
                   {allClientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Descrição *</label>
-                <input value={novaDividaForm.descricao} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, descricao: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <input value={novaDividaForm.descricao} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, descricao: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Valor (R$) *</label>
-                <input type="number" inputMode="decimal" min="0.01" step="0.01" value={novaDividaForm.valor} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <input type="number" inputMode="decimal" min="0.01" step="0.01" value={novaDividaForm.valor} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={savingDivida} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                <button type="submit" disabled={savingDivida} className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
                   {savingDivida ? "Criando..." : "Criar"}
                 </button>
                 <button type="button" onClick={() => setNovaDividaModal(false)} className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
@@ -361,7 +361,7 @@ export default function ContasReceberPage() {
           <button onClick={exportarCSV} disabled={filtered.length === 0} className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
             Exportar CSV
           </button>
-          <button onClick={() => setNovaDividaModal(true)} className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+          <button onClick={() => setNovaDividaModal(true)} className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700">
             + Nova dívida avulsa
           </button>
         </div>
@@ -397,12 +397,12 @@ export default function ContasReceberPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por nome, apelido, placa, #OS..."
-          className="w-full sm:flex-1 sm:max-w-sm rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full sm:flex-1 sm:max-w-sm rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <select
           value={ordenacao}
           onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           <option value="saldo">Ordenar: maior saldo</option>
           <option value="dias">Ordenar: mais atrasado</option>
@@ -492,7 +492,7 @@ export default function ContasReceberPage() {
                         <div key={os.id} className="flex flex-col gap-1.5 py-1.5 border-b border-zinc-50 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 text-sm">
-                              <Link href={`/os/${os.id}`} className="font-medium text-red-600 hover:underline shrink-0">#{os.numero}</Link>
+                              <Link href={`/os/${os.id}`} className="font-medium text-brand-600 hover:underline shrink-0">#{os.numero}</Link>
                               <span className="text-zinc-500 truncate">
                                 {os.veiculo.marca} {os.veiculo.modelo}
                                 {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}

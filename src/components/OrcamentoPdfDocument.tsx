@@ -1,4 +1,10 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import {
+  CONFIG_PADRAO,
+  linhasDoCabecalho,
+  rodapeDoDocumento,
+  type Configuracao,
+} from "@/lib/configuracao";
 
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
@@ -97,15 +103,29 @@ const s = StyleSheet.create({
   },
   footerText: { fontSize: 7.5, color: C.mute },
   footerNote: { marginTop: 20, fontSize: 8, color: C.mute, textAlign: "center" },
+
+  // Recado da oficina (garantia, termos) — configurável no painel
+  aviso: {
+    marginTop: 14, borderWidth: 1, borderColor: C.line, borderRadius: 6,
+    backgroundColor: C.soft, padding: 10,
+  },
+  avisoTexto: { fontSize: 8, color: C.sub, lineHeight: 1.45 },
 });
 
 export function OrcamentoPdfDocument({
   orc,
   logoSrc,
+  config = CONFIG_PADRAO,
 }: {
   orc: OrcamentoForPdf;
   logoSrc?: string;
+  config?: Configuracao;
 }) {
+  // Identidade da oficina — nome, contatos, rodapé e cor saem do painel.
+  const cabecalho = linhasDoCabecalho(config);
+  const rodape = rodapeDoDocumento(config);
+  const marca = config.corPrimaria;
+
   const clienteNome = orc.cliente?.nome || orc.clienteNome?.trim() || "Sem identificação";
   const clienteTelefone = orc.cliente ? orc.cliente.telefone : orc.clienteTelefone;
   const veiculoNome = orc.veiculo
@@ -117,7 +137,7 @@ export function OrcamentoPdfDocument({
   if (orc.veiculo?.motorizacao) veicLinha.push(`Motor: ${orc.veiculo.motorizacao}`);
 
   return (
-    <Document title={`Orçamento ${orc.numero} - HS Oficina Mecânica`} author="HS Oficina Mecânica">
+    <Document title={`Orçamento ${orc.numero} - ${config.nome}`} author={config.nome}>
       <Page size="A4" style={s.page}>
         {/* Cabeçalho */}
         <View style={s.header}>
@@ -125,21 +145,22 @@ export function OrcamentoPdfDocument({
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             {logoSrc ? <Image style={s.logo} src={logoSrc} /> : null}
             <View style={s.brandText}>
-              <Text style={s.brandName}>HS OFICINA MECÂNICA</Text>
-              <Text style={s.brandLine}>CNPJ: 67.090.409/0001-17</Text>
-              <Text style={s.brandLine}>Telefone: (11) 91330-4006</Text>
+              <Text style={s.brandName}>{config.nome.toUpperCase()}</Text>
+              {cabecalho.map((linha) => (
+                <Text key={linha} style={s.brandLine}>{linha}</Text>
+              ))}
             </View>
           </View>
           <View>
             <Text style={s.osLabel}>Orçamento</Text>
-            <Text style={s.osNum}>Nº {orc.numero}</Text>
+            <Text style={[s.osNum, { color: marca }]}>Nº {orc.numero}</Text>
             <Text style={s.osDate}>Data: {dia(orc.createdAt)}</Text>
             {orc.validade ? <Text style={s.osDate}>Validade: {dia(orc.validade)}</Text> : null}
             <Text style={s.osStatus}>Status: {STATUS_LABEL[orc.status] ?? orc.status}</Text>
           </View>
         </View>
 
-        <View style={s.rule} />
+        <View style={[s.rule, { backgroundColor: marca }]} />
 
         {/* Cliente e Veículo */}
         <View style={s.infoBox}>
@@ -237,11 +258,18 @@ export function OrcamentoPdfDocument({
           </View>
         ) : null}
 
+        {/* Recado da oficina (garantia, termos) */}
+        {config.mensagemDocumento ? (
+          <View style={s.aviso} wrap={false}>
+            <Text style={s.avisoTexto}>{config.mensagemDocumento}</Text>
+          </View>
+        ) : null}
+
         <Text style={s.footerNote}>Este documento é um orçamento e não possui valor fiscal.</Text>
 
         {/* Rodapé fixo */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>HS Oficina Mecânica · (11) 91330-4006</Text>
+          <Text style={s.footerText}>{rodape}</Text>
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}

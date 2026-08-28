@@ -261,6 +261,51 @@ model Sequencia {
   ultimo Int    @default(0)
 }
 
+// Configurações da oficina — linha única, id fixo "default".
+//
+// Tudo que hoje estaria chumbado no código (nome, CNPJ, telefone, logo, cores) mora
+// aqui, para que a mesma base de código sirva qualquer oficina: é este registro que
+// alimenta o cabeçalho da OS/orçamento impressos, o menu lateral e o tema do sistema.
+//
+// É uma linha só de propósito. Quando o produto virar multi-oficina de verdade, esta
+// tabela é a semente do registro de tenant — basta trocar o id fixo pela chave da
+// oficina e passar a filtrar as demais tabelas por ela.
+model Configuracao {
+  id String @id @default("default")
+
+  // Identidade — sai no topo dos documentos e no menu
+  nome      String  @default("Minha Oficina")
+  nomeCurto String? // versão enxuta para o menu lateral
+  cnpj      String?
+  telefone  String?
+  whatsapp  String?
+  email     String?
+  site      String?
+
+  // Endereço
+  cep      String?
+  endereco String?
+  cidade   String?
+  estado   String?
+
+  // Marca
+  logoUrl  String?
+  logoPath String? // caminho no Storage — usado para excluir a logo antiga
+
+  // Tema: as cores base do sistema, em hex (#rrggbb)
+  corPrimaria String @default("#dc2626")
+  corMenu     String @default("#09090b")
+
+  // Documentos (OS e orçamento impressos / PDF)
+  rodapeDocumento       String?
+  mensagemDocumento     String? // garantia, termos, recado ao cliente
+  mostrarAssinatura     Boolean @default(true)
+  validadeOrcamentoDias Int     @default(7)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // categoria: ALUGUEL | SALARIO | FORNECEDOR | ENERGIA | AGUA | INTERNET | IMPOSTO | MANUTENCAO | OUTROS
 //
 // Despesa recorrente (aluguel, salário...): ao marcar como paga, gera automaticamente

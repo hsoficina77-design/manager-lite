@@ -13,6 +13,9 @@ type Veiculo = {
   combustivel: string | null;
 };
 export type ItemForm = {
+  /** Item que já existe no banco. O operador não enxerga custo, então é por este id
+   *  que o servidor sabe qual custo preservar ao salvar. Item novo não tem. */
+  id?: string;
   tipo: string; descricao: string; quantidade: string;
   valorUnit: string; custoUnit: string;
 };
@@ -175,6 +178,7 @@ export default function OSForm({
     setSaving(true);
     try {
       const itensPayload = itens.map((i) => ({
+        id: i.id,
         tipo: i.tipo,
         descricao: i.descricao,
         quantidade: Number(i.quantidade),
@@ -228,7 +232,7 @@ export default function OSForm({
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
   const isEdit = mode === "edit";
 
   return (
@@ -297,13 +301,13 @@ export default function OSForm({
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Defeito relatado pelo cliente</label>
-                <textarea value={defeitoRelatado} onChange={(e) => setDefeitoRelatado(e.target.value)} rows={2} placeholder="Ex: cliente relata barulho ao frear e luz da injeção acesa..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+                <textarea value={defeitoRelatado} onChange={(e) => setDefeitoRelatado(e.target.value)} rows={2} placeholder="Ex: cliente relata barulho ao frear e luz da injeção acesa..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
                 <p className="mt-1 text-xs text-zinc-400">A queixa/sintoma como o cliente descreveu — separado do serviço que será executado.</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição do serviço *</label>
-                <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+                <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
               </div>
 
               <div>
@@ -320,7 +324,7 @@ export default function OSForm({
                 ) : (
                   <p className="text-sm text-zinc-500">
                     Nenhum mecânico cadastrado.{" "}
-                    <Link href="/mecanicos" className="text-red-600 underline">Cadastrar mecânico</Link>
+                    <Link href="/mecanicos" className="text-brand-600 underline">Cadastrar mecânico</Link>
                   </p>
                 )}
               </div>
@@ -374,7 +378,7 @@ export default function OSForm({
               <div className={`grid grid-cols-2 sm:grid-cols-12 gap-2 items-end rounded-lg transition-colors ${editingIdx !== null ? "ring-2 ring-amber-300 bg-amber-50/40 p-2 -m-2" : ""}`}>
             <div className="col-span-2 sm:col-span-2">
               <label className="block text-xs text-zinc-500 mb-1">Tipo</label>
-              <select value={itemForm.tipo} onChange={(e) => setItemForm({ ...itemForm, tipo: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+              <select value={itemForm.tipo} onChange={(e) => setItemForm({ ...itemForm, tipo: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="PECA">Peça</option>
                 <option value="MAO_DE_OBRA">M.O.</option>
                 <option value="SERVICO">Serviço</option>
@@ -382,16 +386,16 @@ export default function OSForm({
             </div>
             <div className={itemForm.tipo === "PECA" ? "col-span-2 sm:col-span-3" : "col-span-2 sm:col-span-5"}>
               <label className="block text-xs text-zinc-500 mb-1">Descrição</label>
-              <input value={itemForm.descricao} onChange={(e) => setItemForm({ ...itemForm, descricao: e.target.value })} placeholder="Ex: Filtro de óleo" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+              <input value={itemForm.descricao} onChange={(e) => setItemForm({ ...itemForm, descricao: e.target.value })} placeholder="Ex: Filtro de óleo" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
             </div>
             <div className="col-span-1 sm:col-span-1">
               <label className="block text-xs text-zinc-500 mb-1">Qtd</label>
-              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
             {itemForm.tipo === "PECA" && (
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs text-zinc-500 mb-1">Custo unit. (R$)</label>
-                <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+                <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
               </div>
             )}
             <div className="col-span-1 sm:col-span-2">
@@ -403,7 +407,7 @@ export default function OSForm({
                   </span>
                 )}
               </label>
-              <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
             </div>
             <div className="col-span-2 sm:col-span-2">
               {editingIdx !== null ? (
@@ -497,7 +501,7 @@ export default function OSForm({
 
                 {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-                <button type="submit" disabled={saving} className="w-full rounded-lg bg-red-600 py-3 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                <button type="submit" disabled={saving} className="w-full rounded-lg bg-brand-600 py-3 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50 transition-colors">
                   {saving ? (isEdit ? "Salvando..." : "Criando OS...") : (isEdit ? "Salvar alterações" : "Criar OS")}
                 </button>
               </div>

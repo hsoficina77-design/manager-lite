@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
+import CopiarVeiculo from "@/components/CopiarVeiculo";
+import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 
 const OrcamentoPdfButton = dynamic(() => import("@/components/OrcamentoPdfButton"), {
   ssr: false,
@@ -32,6 +34,8 @@ type Orcamento = {
   veiculo: {
     id: string; marca: string; modelo: string; placa: string | null; ano: number | null;
     cor: string | null; motorizacao: string | null;
+    anoFabricacao: number | null; anoModelo: number | null;
+    valvulas: string | null; combustivel: string | null; km: number | null;
   } | null;
   veiculoDesc: string | null;
   ordem: { id: string; numero: number } | null;
@@ -59,6 +63,7 @@ export default function OrcamentoDetailPage() {
   const [converting, setConverting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [erro, setErro] = useState("");
+  const [revelado, setRevelado] = useState(false);
 
   const load = () =>
     fetch(`/api/orcamentos/${id}`)
@@ -111,6 +116,15 @@ export default function OrcamentoDetailPage() {
   const convertido = orc.status === "CONVERTIDO" || !!orc.ordemId;
   const podeEditar = !convertido;
 
+  // Margem do orçamento — calculada dos itens, já que o orçamento não guarda custo consolidado.
+  const custoTotalPecas = orc.itens
+    .filter((i) => i.tipo === "PECA")
+    .reduce((s, i) => s + i.quantidade * (i.custoUnit ?? 0), 0);
+  const margemValor = orc.totalPecas - custoTotalPecas;
+  const margemPecasPct = orc.totalPecas > 0 ? (margemValor / orc.totalPecas) * 100 : 0;
+  const lucroEstimado = orc.total - custoTotalPecas;
+  const temValores = orc.total > 0 || custoTotalPecas > 0;
+
   const veicLinha: string[] = [];
   if (orc.veiculo?.cor) veicLinha.push(`Cor: ${orc.veiculo.cor}`);
   if (orc.veiculo?.motorizacao) veicLinha.push(`Motor: ${orc.veiculo.motorizacao}`);
@@ -123,6 +137,7 @@ export default function OrcamentoDetailPage() {
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3">
         <Link href="/orcamentos" className="text-sm text-zinc-500 hover:text-zinc-700">← Orçamentos</Link>
         <div className="flex flex-wrap items-center gap-2">
+          {orc.veiculo && <CopiarVeiculo veiculo={orc.veiculo} />}
           {!convertido && (
             <Link
               href={`/orcamentos/${orc.id}/editar`}
@@ -137,7 +152,7 @@ export default function OrcamentoDetailPage() {
               onChange={(e) => changeStatus(e.target.value)}
               disabled={changingStatus}
               className={cn(
-                "cursor-pointer appearance-none rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60",
+                "cursor-pointer appearance-none rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-60",
                 STATUS_COLOR[orc.status],
               )}
               title="Alterar status do orçamento"
@@ -208,28 +223,77 @@ export default function OrcamentoDetailPage() {
         </div>
       )}
 
+      {/* Visão interna — margens. Não sai na impressão nem no PDF do cliente. */}
+      {temValores && (
+        <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 pt-4">
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Visão interna</p>
+              <button
+                type="button"
+                onClick={() => setRevelado((v) => !v)}
+                className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 transition-colors"
+                title={revelado ? "Ocultar valores" : "Revelar valores"}
+              >
+                <EyeIcon off={revelado} />
+                {revelado ? "Ocultar" : "Revelar"}
+              </button>
+            </div>
+            <p className="mb-3 text-[11px] text-zinc-400">Não aparece para o cliente</p>
+            <div className={cn("grid grid-cols-2 gap-x-3 gap-y-3 transition-all duration-300", !revelado && "blur-sm select-none pointer-events-none")}>
+              <div>
+                <p className="text-xs text-zinc-400">Custo das peças</p>
+                <p className="text-base font-semibold text-zinc-900">{formatCurrency(custoTotalPecas)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Margem em peças</p>
+                <p className={cn("text-base font-semibold", margemValor >= 0 ? "text-green-600" : "text-red-500")}>
+                  {formatCurrency(margemValor)}
+                  {orc.totalPecas > 0 && (
+                    <span className="ml-1 text-xs font-normal text-zinc-400">({margemPecasPct.toFixed(0)}%)</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Mão de obra</p>
+                <p className="text-base font-semibold text-zinc-900">{formatCurrency(orc.totalMO)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-400">Lucro estimado</p>
+                <p className="text-base font-bold text-green-700">
+                  {formatCurrency(lucroEstimado)}
+                  {orc.total > 0 && (
+                    <span className="ml-1 text-xs font-normal text-zinc-400">
+                      ({((lucroEstimado / orc.total) * 100).toFixed(0)}%)
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {custoTotalPecas === 0 && orc.totalPecas > 0 && (
+              <p className="mt-3 text-[11px] text-amber-600">
+                Nenhum custo de peça informado — a margem está considerando custo zero.{" "}
+                {podeEditar && (
+                  <Link href={`/orcamentos/${orc.id}/editar`} className="underline">Preencher custos</Link>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Documento do orçamento — imprimível */}
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 sm:py-8">
         <div className="print-doc rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm">
-          {/* Cabeçalho da oficina */}
-          <div className="flex items-center gap-3 sm:gap-5 border-b border-zinc-200 px-5 sm:px-8 py-5 sm:py-6">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-hs.png" alt="HS Oficina Mecânica" width={80} height={80} className="h-14 w-14 sm:h-20 sm:w-20 shrink-0 object-contain" />
-            <div className="min-w-0 flex-1 text-center">
-              <h1 className="text-lg sm:text-2xl font-black uppercase tracking-wider">HS Oficina Mecânica</h1>
-              <p className="mt-0.5 text-xs text-zinc-500">CNPJ: 67.090.409/0001-17</p>
-              <p className="mt-0.5 text-xs text-zinc-500">Telefone: (11) 91330-4006</p>
-            </div>
-            {/* Espelha a largura da logo para o título centralizar no card, e não no espaço restante. */}
-            <div aria-hidden className="h-14 w-14 sm:h-20 sm:w-20 shrink-0" />
-          </div>
+          {/* Cabeçalho da oficina — vem do painel de configurações */}
+          <CabecalhoDocumento />
 
           <div className="px-5 sm:px-8 py-6">
             {/* Número do orçamento e status */}
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-zinc-400">Orçamento</p>
-                <p className="text-3xl font-black text-red-600">#{orc.numero}</p>
+                <p className="text-3xl font-black text-brand-600">#{orc.numero}</p>
               </div>
               <div className="text-right">
                 <span className={cn("rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap", STATUS_COLOR[orc.status])}>
@@ -352,6 +416,24 @@ export default function OrcamentoDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {off ? (
+        <>
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+          <line x1="1" y1="1" x2="23" y2="23" />
+        </>
+      ) : (
+        <>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </>
+      )}
+    </svg>
   );
 }
 

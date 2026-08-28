@@ -27,6 +27,7 @@ export default function EditarOSPage() {
           combustivelEmUso: os.combustivelEmUso ?? "",
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           itens: (os.itens ?? []).map((i: any) => ({
+            id: i.id,
             tipo: i.tipo,
             descricao: i.descricao,
             quantidade: String(i.quantidade),

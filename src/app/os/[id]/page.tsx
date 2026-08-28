@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
 import { FOTO_TIPOS, tipoDaFoto, labelStatus, corStatus, OS_STATUS_VALUES, OS_CONCLUIDA } from "@/lib/constants";
 import OSFotos, { type Foto } from "@/components/OSFotos";
+import CopiarVeiculo from "@/components/CopiarVeiculo";
+import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 
 const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
   ssr: false,
@@ -38,6 +40,8 @@ type OS = {
   veiculo: {
     id: string; marca: string; modelo: string; placa: string | null; ano: number | null;
     cor: string | null; motorizacao: string | null;
+    anoFabricacao: number | null; anoModelo: number | null;
+    valvulas: string | null; combustivel: string | null; km: number | null;
   };
   itens: Item[];
   pagamentos: Pagamento[];
@@ -237,6 +241,8 @@ export default function OSDetailPage() {
   if (!os) return <div className="p-6 text-sm text-zinc-400">OS não encontrada.</div>;
 
   const saldo = os.total - os.valorPago;
+  // `custoTotalPecas` não vem para o operador — o `?? 0` mantém a conta definida
+  // mesmo assim, e o bloco que a usa só é renderizado para o dono.
   const margemValor = os.totalPecas - os.custoTotalPecas;
   const podeEditar = os.status !== "ENTREGUE" && os.status !== "CANCELADA";
 
@@ -269,6 +275,7 @@ export default function OSDetailPage() {
               A receber — {formatCurrency(saldo)}
             </span>
           )}
+          <CopiarVeiculo veiculo={os.veiculo} />
           {os.status !== "CANCELADA" && (
             <Link
               href={`/os/${os.id}/editar`}
@@ -282,7 +289,7 @@ export default function OSDetailPage() {
             onChange={(e) => handleStatusChange(e.target.value)}
             disabled={changingStatus}
             className={cn(
-              "cursor-pointer appearance-none rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60",
+              "cursor-pointer appearance-none rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-60",
               corStatus(os.status),
             )}
             title="Alterar status da OS"
@@ -304,25 +311,15 @@ export default function OSDetailPage() {
       {/* Documento da OS — preview de como sai para o cliente (imprimível) */}
       <div className="min-w-0">
         <div className="print-doc rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm">
-          {/* Cabeçalho da oficina */}
-          <div className="flex items-center gap-3 sm:gap-5 border-b border-zinc-200 px-5 sm:px-8 py-5 sm:py-6">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-hs.png" alt="HS Oficina Mecânica" width={80} height={80} className="h-14 w-14 sm:h-20 sm:w-20 shrink-0 object-contain" />
-            <div className="min-w-0 flex-1 text-center">
-              <h1 className="text-lg sm:text-2xl font-black uppercase tracking-wider">HS Oficina Mecânica</h1>
-              <p className="mt-0.5 text-xs text-zinc-500">CNPJ: 67.090.409/0001-17</p>
-              <p className="mt-0.5 text-xs text-zinc-500">Telefone: (11) 91330-4006</p>
-            </div>
-            {/* Espelha a largura da logo para o título centralizar no card, e não no espaço restante. */}
-            <div aria-hidden className="h-14 w-14 sm:h-20 sm:w-20 shrink-0" />
-          </div>
+          {/* Cabeçalho da oficina — vem do painel de configurações */}
+          <CabecalhoDocumento />
 
           <div className="px-5 sm:px-8 py-6">
             {/* Número da OS e status */}
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-zinc-400">Ordem de Serviço</p>
-                <p className="text-3xl font-black text-red-600">#{os.numero}</p>
+                <p className="text-3xl font-black text-brand-600">#{os.numero}</p>
               </div>
               <div className="text-right">
                 <span className={cn("rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap", corStatus(os.status))}>
@@ -527,7 +524,7 @@ export default function OSDetailPage() {
 
       {/* Ferramentas de gestão — não aparecem na impressão */}
       <div className="no-print mt-6 space-y-5 lg:sticky lg:top-20 lg:mt-0 lg:self-start">
-        {/* Visão interna — lucros */}
+        {/* Visão interna — lucros. Só o dono: a API nem envia estes campos ao operador. */}
         {(os.custoTotalPecas > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
           <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -655,7 +652,7 @@ export default function OSDetailPage() {
                   value={descontoInput}
                   onChange={(e) => setDescontoInput(e.target.value)}
                   placeholder="0,00"
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
               <button
@@ -773,7 +770,7 @@ export default function OSDetailPage() {
                     value={pgtoForm.valor}
                     onChange={(e) => setPgtoForm({ ...pgtoForm, valor: e.target.value })}
                     required
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   {payModal.entrega && pgtoForm.valor && (
                     <p className="mt-1 text-xs text-zinc-500">
@@ -796,7 +793,7 @@ export default function OSDetailPage() {
                   <select
                     value={pgtoForm.formaPagamento}
                     onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     {FORMAS_PGTO.map((f) => <option key={f} value={f}>{FORMAS_LABEL[f]}</option>)}
                   </select>
@@ -809,7 +806,7 @@ export default function OSDetailPage() {
                   <input
                     value={pgtoForm.obs}
                     onChange={(e) => setPgtoForm({ ...pgtoForm, obs: e.target.value })}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               )}

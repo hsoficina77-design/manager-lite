@@ -74,7 +74,7 @@ function OrcamentosContent() {
     <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Orçamentos</h1>
-        <Link href="/orcamentos/novo" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
+        <Link href="/orcamentos/novo" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 transition-colors">
           + Novo Orçamento
         </Link>
       </div>
@@ -98,7 +98,7 @@ function OrcamentosContent() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar nome, apelido, placa, #..."
-          className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </div>
 

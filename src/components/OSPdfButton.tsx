@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { pdf } from "@react-pdf/renderer";
 import { toThumbDataUrl } from "@/lib/image-compress";
+import { carregarConfiguracao } from "@/lib/useConfiguracao";
 import { OSPdfDocument, type FotoPdf, type OSForPdf } from "./OSPdfDocument";
 
 async function toDataUrl(url: string): Promise<string | undefined> {
@@ -57,23 +58,25 @@ function nomeArquivo(os: OSForPdf) {
 }
 
 export default function OSPdfButton({ os }: { os: OSForPdf }) {
-  const [logo, setLogo] = useState<string | undefined>(undefined);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState(false);
-
-  useEffect(() => {
-    toDataUrl("/logo-hs.png").then(setLogo);
-  }, []);
 
   async function baixar() {
     setGerando(true);
     setErro(false);
     try {
+      // Identidade da oficina e imagens só são buscadas na hora de gerar: o PDF
+      // é raro perto do número de vezes que a tela da OS abre.
+      const config = await carregarConfiguracao();
+      const logo = config.logoUrl ? await toDataUrl(config.logoUrl) : undefined;
+
       // As imagens precisam virar data URL antes de entrar no PDF.
       const convertidas = await Promise.all((os.fotos ?? []).map(toFotoPdf));
       const fotos = convertidas.filter((f): f is FotoPdf => f !== null);
 
-      const blob = await pdf(<OSPdfDocument os={os} logoSrc={logo} fotos={fotos} />).toBlob();
+      const blob = await pdf(
+        <OSPdfDocument os={os} logoSrc={logo} fotos={fotos} config={config} />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

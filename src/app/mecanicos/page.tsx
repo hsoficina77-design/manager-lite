@@ -54,7 +54,7 @@ export default function MecanicosPage() {
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
   const ativos = mecanicos.filter((m) => m.ativo);
   const inativos = mecanicos.filter((m) => !m.ativo);
@@ -67,7 +67,7 @@ export default function MecanicosPage() {
           <Link href="/produtividade" className="flex-1 rounded-lg border border-zinc-300 px-4 py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors sm:flex-none">
             Produtividade
           </Link>
-          <button onClick={() => setShowForm((v) => !v)} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors sm:flex-none">
+          <button onClick={() => setShowForm((v) => !v)} className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 transition-colors sm:flex-none">
             {showForm ? "Cancelar" : "+ Novo mecânico"}
           </button>
         </div>
@@ -90,7 +90,7 @@ export default function MecanicosPage() {
             </div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <button type="submit" disabled={saving} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+          <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
             {saving ? "Salvando..." : "Salvar mecânico"}
           </button>
         </form>

@@ -133,7 +133,7 @@ export default function MecanicoDetailPage() {
     alert(data.error || "Não foi possível excluir.");
   }
 
-  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
   if (loading) return <div className="p-6 text-sm text-zinc-400">Carregando...</div>;
   if (!mecanico) return <div className="p-6 text-sm text-zinc-400">Mecânico não encontrado.</div>;
@@ -155,7 +155,7 @@ export default function MecanicoDetailPage() {
               <input value={fEspecialidade} onChange={(e) => setFEspecialidade(e.target.value)} placeholder="Especialidade" className={inputCls} />
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Salvar</button>
+              <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700">Salvar</button>
               <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancelar</button>
             </div>
           </form>
@@ -187,10 +187,10 @@ export default function MecanicoDetailPage() {
 
       {/* Seletor de período */}
       <div className="flex items-center gap-2">
-        <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+        <select value={mes} onChange={(e) => setMes(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
         </select>
-        <select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+        <select value={ano} onChange={(e) => setAno(Number(e.target.value))} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           {anos.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>

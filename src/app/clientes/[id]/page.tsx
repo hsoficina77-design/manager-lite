@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { labelStatus, corStatus } from "@/lib/constants";
+import CopiarVeiculo from "@/components/CopiarVeiculo";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS",
@@ -72,7 +73,7 @@ function iniciais(nome: string): string {
   return (primeira + ultima).toUpperCase();
 }
 
-const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -204,7 +205,7 @@ export default function ClienteDetailPage() {
       <div className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-white to-zinc-50 p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-600 text-lg font-bold text-white">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-600 text-lg font-bold text-brand-fg">
               {iniciais(cliente.nome)}
             </div>
             <div className="min-w-0">
@@ -325,14 +326,14 @@ export default function ClienteDetailPage() {
                 </div>
               ))}
               {telefones.length < 3 && (
-                <button type="button" onClick={() => setTelefones([...telefones, ""])} className="text-sm text-red-600 hover:underline">+ Adicionar telefone</button>
+                <button type="button" onClick={() => setTelefones([...telefones, ""])} className="text-sm text-brand-600 hover:underline">+ Adicionar telefone</button>
               )}
             </div>
 
             {/* 5. Observação */}
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Observação</label>
-              <textarea value={form.obs} onChange={(e) => setField("obs", e.target.value)} rows={2} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none" />
+              <textarea value={form.obs} onChange={(e) => setField("obs", e.target.value)} rows={2} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
             </div>
 
             <h3 className="font-medium text-zinc-800 pt-2">Endereço</h3>
@@ -360,7 +361,7 @@ export default function ClienteDetailPage() {
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-2">
-              <button type="submit" disabled={saving} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+              <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? "Salvando..." : "Salvar"}
               </button>
               <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
@@ -404,7 +405,7 @@ export default function ClienteDetailPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-zinc-800">Veículos</h2>
-          <button onClick={() => setShowVeiculoForm(!showVeiculoForm)} className="text-sm text-red-600 hover:underline">
+          <button onClick={() => setShowVeiculoForm(!showVeiculoForm)} className="text-sm text-brand-600 hover:underline">
             + Adicionar
           </button>
         </div>
@@ -482,7 +483,7 @@ export default function ClienteDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button type="submit" disabled={savingVeiculo} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+              <button type="submit" disabled={savingVeiculo} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
                 {savingVeiculo ? "Salvando..." : "Salvar Veículo"}
               </button>
               <button type="button" onClick={() => setShowVeiculoForm(false)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-white">
@@ -512,8 +513,9 @@ export default function ClienteDetailPage() {
                     {v.combustivel ? ` · ${v.combustivel}` : ""}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-red-600 hover:underline">Nova OS</Link>
+                <div className="flex shrink-0 flex-wrap items-center gap-3">
+                  <CopiarVeiculo veiculo={v} label="Copiar" />
+                  <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-brand-600 hover:underline">Nova OS</Link>
                   <button onClick={() => deleteVeiculo(v.id)} className="text-sm text-red-500 hover:underline">Excluir</button>
                 </div>
               </div>
@@ -526,7 +528,7 @@ export default function ClienteDetailPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-zinc-800">Ordens de Serviço</h2>
-          <Link href={`/os/nova?clienteId=${cliente.id}`} className="text-sm text-red-600 hover:underline">+ Nova OS</Link>
+          <Link href={`/os/nova?clienteId=${cliente.id}`} className="text-sm text-brand-600 hover:underline">+ Nova OS</Link>
         </div>
 
         {cliente.ordens.length === 0 ? (

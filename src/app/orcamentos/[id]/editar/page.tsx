@@ -26,6 +26,7 @@ export default function EditarOrcamentoPage() {
           obs: o.obs ?? "",
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           itens: (o.itens ?? []).map((i: any) => ({
+            id: i.id,
             tipo: i.tipo,
             descricao: i.descricao,
             quantidade: String(i.quantidade),
