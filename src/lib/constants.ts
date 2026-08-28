@@ -75,6 +75,55 @@ export const COMBUSTIVEIS = [
   { value: "GNV", label: "GNV" },
 ] as const;
 
+export function labelCombustivel(valor: string | null | undefined): string | null {
+  if (!valor) return null;
+  return COMBUSTIVEIS.find((c) => c.value === valor)?.label ?? valor;
+}
+
+// Dados do veículo que interessam na hora de cotar peça. Todos opcionais menos
+// marca/modelo: o cadastro antigo costuma ter buracos e o texto se adapta.
+export type VeiculoInfo = {
+  marca: string;
+  modelo: string;
+  ano?: number | null;
+  anoFabricacao?: number | null;
+  anoModelo?: number | null;
+  placa?: string | null;
+  cor?: string | null;
+  km?: number | null;
+  motorizacao?: string | null;
+  valvulas?: string | null;
+  combustivel?: string | null;
+};
+
+/** Ano no formato que a auto peça usa: fabricação/modelo quando existem os dois. */
+export function anoVeiculo(v: VeiculoInfo): string | null {
+  if (v.anoFabricacao && v.anoModelo) return `${v.anoFabricacao}/${v.anoModelo}`;
+  const unico = v.anoFabricacao ?? v.anoModelo ?? v.ano;
+  return unico ? String(unico) : null;
+}
+
+/** Texto do veículo pronto para colar no WhatsApp da auto peça.
+ *  Linhas rotuladas (uma por dado) porque o balconista lê batendo o olho,
+ *  e linha vazia nenhuma: campo sem cadastro simplesmente não aparece. */
+export function textoVeiculo(v: VeiculoInfo): string {
+  const titulo = [v.marca, v.modelo, v.motorizacao, v.valvulas]
+    .map((p) => p?.toString().trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const linhas: string[] = [titulo];
+  const ano = anoVeiculo(v);
+  if (ano) linhas.push(`Ano: ${ano}`);
+  const combustivel = labelCombustivel(v.combustivel);
+  if (combustivel) linhas.push(`Combustível: ${combustivel}`);
+  if (v.cor) linhas.push(`Cor: ${v.cor}`);
+  if (v.placa) linhas.push(`Placa: ${v.placa}`);
+  if (v.km) linhas.push(`KM: ${v.km.toLocaleString("pt-BR")}`);
+
+  return linhas.join("\n");
+}
+
 // Momento em que a foto da OS foi tirada.
 // A ordem daqui define a ordem das seções na tela, na impressão e no PDF.
 export const FOTO_TIPOS = [

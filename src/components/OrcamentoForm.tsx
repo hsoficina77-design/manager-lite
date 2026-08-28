@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
@@ -12,6 +12,9 @@ type Veiculo = {
   id: string; marca: string; modelo: string; placa: string | null; ano: number | null;
 };
 export type ItemForm = {
+  /** Item que já existe no banco. O operador não enxerga custo, então é por este id
+   *  que o servidor sabe qual custo preservar ao salvar. Item novo não tem. */
+  id?: string;
   tipo: string; descricao: string; quantidade: string;
   valorUnit: string; custoUnit: string;
 };
@@ -55,9 +58,11 @@ export default function OrcamentoForm({
   const [obs, setObs] = useState(initial?.obs ?? "");
   const [itens, setItens] = useState<ItemForm[]>(initial?.itens ?? []);
   const [itemForm, setItemForm] = useState<ItemForm>({ tipo: "PECA", descricao: "", quantidade: "1", valorUnit: "", custoUnit: "" });
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [itemError, setItemError] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const itemFormRef = useRef<HTMLDivElement>(null);
 
   // Cadastro rápido de cliente (sem sair da tela)
   const [showNovoCliente, setShowNovoCliente] = useState(false);
@@ -162,20 +167,48 @@ export default function OrcamentoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId]);
 
-  function addItem() {
-    setItemError("");
-    setItens([...itens, { ...itemForm }]);
+  function resetItemForm() {
     setItemForm({ tipo: "PECA", descricao: "", quantidade: "1", valorUnit: "", custoUnit: "" });
+    setEditingIdx(null);
+  }
+
+  function saveItem() {
+    setItemError("");
+    if (!itemForm.descricao.trim()) { setItemError("Informe a descrição do item."); return; }
+    if (editingIdx !== null) {
+      setItens(itens.map((it, i) => (i === editingIdx ? { ...itemForm } : it)));
+    } else {
+      setItens([...itens, { ...itemForm }]);
+    }
+    resetItemForm();
+  }
+
+  function startEdit(idx: number) {
+    setItemError("");
+    setEditingIdx(idx);
+    setItemForm({ ...itens[idx] });
+    itemFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   function removeItem(idx: number) {
+    if (editingIdx === idx) resetItemForm();
+    else if (editingIdx !== null && idx < editingIdx) setEditingIdx(editingIdx - 1);
     setItens(itens.filter((_, i) => i !== idx));
   }
 
   const totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + Number(i.quantidade) * Number(i.valorUnit), 0);
   const totalMO = itens.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + Number(i.quantidade) * Number(i.valorUnit), 0);
   const total = totalPecas + totalMO;
+  // Ganho por item: venda - custo (custo só existe em peças; MO/serviço é ganho integral).
+  const ganhoItem = (i: ItemForm) =>
+    Number(i.quantidade) * (Number(i.valorUnit) - (i.tipo === "PECA" ? Number(i.custoUnit || 0) : 0));
+  const custoTotalPecas = itens
+    .filter((i) => i.tipo === "PECA")
+    .reduce((s, i) => s + Number(i.quantidade) * Number(i.custoUnit || 0), 0);
+  const lucroTotal = total - custoTotalPecas;
+  const margemTotal = total > 0 ? (lucroTotal / total) * 100 : 0;
 
+  const itemGanho = ganhoItem(itemForm);
   const itemMargem =
     itemForm.tipo === "PECA" && Number(itemForm.valorUnit) > 0 && itemForm.custoUnit !== ""
       ? ((Number(itemForm.valorUnit) - Number(itemForm.custoUnit)) / Number(itemForm.valorUnit)) * 100
@@ -195,6 +228,7 @@ export default function OrcamentoForm({
     setSaving(true);
     try {
       const itensPayload = itens.map((i) => ({
+        id: i.id,
         tipo: i.tipo,
         descricao: i.descricao,
         quantidade: Number(i.quantidade),
@@ -242,14 +276,24 @@ export default function OrcamentoForm({
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
   const isEdit = mode === "edit";
 
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <Link href={isEdit && orcamentoId ? `/orcamentos/${orcamentoId}` : "/orcamentos"} className="text-sm text-zinc-500 hover:text-zinc-700">← Voltar</Link>
-        <h1 className="text-2xl font-bold text-zinc-900 mt-2">{isEdit ? "Editar Orçamento" : "Novo Orçamento"}</h1>
+    <div className="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <Link
+          href={isEdit && orcamentoId ? `/orcamentos/${orcamentoId}` : "/orcamentos"}
+          aria-label="Voltar"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </Link>
+        <div className="leading-tight">
+          <h1 className="text-xl font-bold text-zinc-900">{isEdit ? "Editar Orçamento" : "Novo Orçamento"}</h1>
+          <p className="text-xs text-zinc-500">Monte a proposta e confira a margem antes de enviar</p>
+        </div>
       </div>
 
       {pendingDraft && (
@@ -264,7 +308,10 @@ export default function OrcamentoForm({
         </div>
       )}
 
-      <form onSubmit={submit} className="space-y-5">
+      <form onSubmit={submit}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          {/* Coluna principal */}
+          <div className="lg:col-span-2 space-y-5">
         {/* Cliente e Veículo */}
         <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
           <h2 className="font-semibold text-zinc-800">Cliente e Veículo</h2>
@@ -345,7 +392,7 @@ export default function OrcamentoForm({
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-zinc-700 mb-1">Descrição do serviço</label>
-              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-y" />
+              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
               <p className="text-xs text-zinc-400 mt-1">Opcional se você já adicionar os itens abaixo.</p>
             </div>
             <div>
@@ -360,13 +407,20 @@ export default function OrcamentoForm({
         </div>
 
         {/* Itens */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-          <h2 className="font-semibold text-zinc-800">Itens</h2>
+        <div ref={itemFormRef} className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-zinc-800">Itens</h2>
+            {editingIdx !== null && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                Editando item {editingIdx + 1}
+              </span>
+            )}
+          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end">
+          <div className={`grid grid-cols-2 sm:grid-cols-12 gap-2 items-end rounded-lg transition-colors ${editingIdx !== null ? "ring-2 ring-amber-300 bg-amber-50/40 p-2 -m-2" : ""}`}>
             <div className="col-span-2 sm:col-span-2">
               <label className="block text-xs text-zinc-500 mb-1">Tipo</label>
-              <select value={itemForm.tipo} onChange={(e) => setItemForm({ ...itemForm, tipo: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+              <select value={itemForm.tipo} onChange={(e) => setItemForm({ ...itemForm, tipo: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="PECA">Peça</option>
                 <option value="MAO_DE_OBRA">M.O.</option>
                 <option value="SERVICO">Serviço</option>
@@ -374,33 +428,49 @@ export default function OrcamentoForm({
             </div>
             <div className={itemForm.tipo === "PECA" ? "col-span-2 sm:col-span-3" : "col-span-2 sm:col-span-5"}>
               <label className="block text-xs text-zinc-500 mb-1">Descrição</label>
-              <input value={itemForm.descricao} onChange={(e) => setItemForm({ ...itemForm, descricao: e.target.value })} placeholder="Ex: Filtro de óleo" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addItem())} />
+              <input value={itemForm.descricao} onChange={(e) => setItemForm({ ...itemForm, descricao: e.target.value })} placeholder="Ex: Filtro de óleo" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
             </div>
             <div className="col-span-1 sm:col-span-1">
               <label className="block text-xs text-zinc-500 mb-1">Qtd</label>
-              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
-            </div>
-            <div className="col-span-1 sm:col-span-2">
-              <label className="block text-xs text-zinc-500 mb-1">V. Unit (R$)</label>
-              <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addItem())} />
+              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={itemForm.quantidade} onChange={(e) => setItemForm({ ...itemForm, quantidade: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
             {itemForm.tipo === "PECA" && (
-              <div className="col-span-2 sm:col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">
-                  Custo unit.
-                  {itemMargem !== null && (
-                    <span className={`ml-1 font-medium ${itemMargem >= 0 ? "text-green-600" : "text-red-500"}`}>
-                      ({itemMargem.toFixed(0)}%)
-                    </span>
-                  )}
-                </label>
-                <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+              <div className="col-span-1 sm:col-span-2">
+                <label className="block text-xs text-zinc-500 mb-1">Custo unit. (R$)</label>
+                <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.custoUnit} onChange={(e) => setItemForm({ ...itemForm, custoUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
               </div>
             )}
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs text-zinc-500 mb-1">
+                Venda unit. (R$)
+                {itemMargem !== null && (
+                  <span className={`ml-1 font-medium ${itemMargem >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    ({itemMargem.toFixed(0)}%)
+                  </span>
+                )}
+              </label>
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={itemForm.valorUnit} onChange={(e) => setItemForm({ ...itemForm, valorUnit: e.target.value })} placeholder="0,00" className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+            </div>
             <div className="col-span-2 sm:col-span-2">
-              <button type="button" onClick={addItem} className="w-full rounded-lg bg-zinc-800 py-2.5 text-sm font-bold text-white hover:bg-zinc-700">+ Adicionar</button>
+              {editingIdx !== null ? (
+                <div className="flex gap-2">
+                  <button type="button" onClick={saveItem} className="flex-1 rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600">Salvar</button>
+                  <button type="button" onClick={resetItemForm} aria-label="Cancelar edição" title="Cancelar" className="shrink-0 rounded-lg border border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">✕</button>
+                </div>
+              ) : (
+                <button type="button" onClick={saveItem} className="w-full rounded-lg bg-zinc-800 py-2.5 text-sm font-bold text-white hover:bg-zinc-700">+ Adicionar</button>
+              )}
             </div>
           </div>
+
+          {Number(itemForm.valorUnit) > 0 && (
+            <p className="text-xs text-zinc-500">
+              Ganho deste item:{" "}
+              <span className={`font-semibold ${itemGanho >= 0 ? "text-green-600" : "text-red-500"}`}>
+                {formatCurrency(itemGanho)}
+              </span>
+            </p>
+          )}
 
           {itemError && <p className="text-xs text-red-500">{itemError}</p>}
 
@@ -412,21 +482,30 @@ export default function OrcamentoForm({
                   <th className="text-left pb-2 font-medium">Tipo</th>
                   <th className="text-left pb-2 font-medium">Descrição</th>
                   <th className="text-right pb-2 font-medium">Qtd</th>
-                  <th className="text-right pb-2 font-medium">Unit</th>
+                  <th className="text-right pb-2 font-medium">Venda</th>
                   <th className="text-right pb-2 font-medium">Total</th>
+                  <th className="text-right pb-2 font-medium">Ganho</th>
                   <th className="pb-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
                 {itens.map((item, idx) => (
-                  <tr key={idx}>
+                  <tr key={idx} className={editingIdx === idx ? "bg-amber-50" : "group"}>
                     <td className="py-1.5 text-zinc-500 text-xs">{item.tipo === "PECA" ? "Peça" : item.tipo === "MAO_DE_OBRA" ? "M.O." : "Serviço"}</td>
                     <td className="py-1.5 text-zinc-800">{item.descricao}</td>
                     <td className="py-1.5 text-right text-zinc-600">{item.quantidade}</td>
                     <td className="py-1.5 text-right text-zinc-600">{formatCurrency(Number(item.valorUnit))}</td>
                     <td className="py-1.5 text-right font-medium text-zinc-900">{formatCurrency(Number(item.quantidade) * Number(item.valorUnit))}</td>
+                    <td className={`py-1.5 text-right font-medium ${ganhoItem(item) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatCurrency(ganhoItem(item))}</td>
                     <td className="py-1.5 pl-2">
-                      <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button type="button" onClick={() => startEdit(idx)} aria-label="Editar item" title="Editar" className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                        </button>
+                        <button type="button" onClick={() => removeItem(idx)} aria-label="Remover item" title="Remover" className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -434,23 +513,41 @@ export default function OrcamentoForm({
             </table>
             </div>
           )}
-
-          {itens.length > 0 && (
-            <div className="border-t border-zinc-100 pt-3 space-y-1 text-sm text-right">
-              {totalPecas > 0 && <div className="flex justify-between text-zinc-500"><span>Peças</span><span>{formatCurrency(totalPecas)}</span></div>}
-              {totalMO > 0 && <div className="flex justify-between text-zinc-500"><span>Mão de obra / Serviços</span><span>{formatCurrency(totalMO)}</span></div>}
-              <div className="flex justify-between font-bold text-zinc-900 text-base pt-1 border-t border-zinc-100">
-                <span>Total</span><span>{formatCurrency(total)}</span>
-              </div>
-            </div>
-          )}
         </div>
+          </div>
 
-        {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+          {/* Resumo */}
+          <aside className="lg:sticky lg:top-6 space-y-4">
+            <div className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+              <div className="flex items-baseline justify-between">
+                <h2 className="font-semibold text-zinc-800">Resumo</h2>
+                <span className="text-xs text-zinc-400">{itens.length} {itens.length === 1 ? "item" : "itens"}</span>
+              </div>
 
-        <button type="submit" disabled={saving} className="w-full rounded-lg bg-red-600 py-3 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
-          {saving ? (isEdit ? "Salvando..." : "Criando orçamento...") : (isEdit ? "Salvar alterações" : "Criar Orçamento")}
-        </button>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between text-zinc-500"><span>Peças</span><span>{formatCurrency(totalPecas)}</span></div>
+                <div className="flex justify-between text-zinc-500"><span>Mão de obra / Serviços</span><span>{formatCurrency(totalMO)}</span></div>
+                <div className="flex justify-between font-bold text-zinc-900 text-lg pt-2 mt-1 border-t border-zinc-100">
+                  <span>Total</span><span>{formatCurrency(total)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1 text-sm rounded-lg bg-zinc-50 p-3">
+                <div className="flex justify-between text-zinc-500"><span>Custo das peças</span><span>{formatCurrency(custoTotalPecas)}</span></div>
+                <div className="flex justify-between font-semibold text-green-700">
+                  <span>Lucro estimado</span>
+                  <span>{formatCurrency(lucroTotal)}{total > 0 ? ` (${margemTotal.toFixed(0)}%)` : ""}</span>
+                </div>
+              </div>
+
+              {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+
+              <button type="submit" disabled={saving} className="w-full rounded-lg bg-brand-600 py-3 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50 transition-colors">
+                {saving ? (isEdit ? "Salvando..." : "Criando orçamento...") : (isEdit ? "Salvar alterações" : "Criar Orçamento")}
+              </button>
+            </div>
+          </aside>
+        </div>
       </form>
 
       {/* Modal de cadastro rápido de cliente */}
@@ -536,7 +633,7 @@ export default function OrcamentoForm({
               {clienteErro && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{clienteErro}</p>}
 
               <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={savingCliente} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                <button type="submit" disabled={savingCliente} className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
                   {savingCliente ? "Salvando..." : "Salvar cliente"}
                 </button>
                 <button type="button" onClick={() => setShowNovoCliente(false)} className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
