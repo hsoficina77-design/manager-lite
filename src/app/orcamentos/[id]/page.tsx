@@ -10,10 +10,12 @@ import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 import { useEhDono } from "@/components/UsuarioProvider";
 
-const OrcamentoPdfButton = dynamic(() => import("@/components/OrcamentoPdfButton"), {
+const BaixarOrcamento = dynamic(() => import("@/components/BaixarOrcamento"), {
   ssr: false,
   loading: () => (
-    <span className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Baixar</span>
+    <span className="inline-block rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">
+      Baixar PDF
+    </span>
   ),
 });
 
@@ -168,7 +170,7 @@ export default function OrcamentoDetailPage() {
           <button onClick={() => window.print()} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
             Imprimir
           </button>
-          <OrcamentoPdfButton orc={orc} />
+          <BaixarOrcamento orc={orc} />
           {convertido && orc.ordem ? (
             <Link
               href={`/os/${orc.ordem.id}`}

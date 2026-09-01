@@ -11,10 +11,12 @@ import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 import { useEhDono } from "@/components/UsuarioProvider";
 
-const OSPdfButton = dynamic(() => import("@/components/OSPdfButton"), {
+const BaixarOS = dynamic(() => import("@/components/BaixarOS"), {
   ssr: false,
   loading: () => (
-    <span className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Baixar</span>
+    <span className="inline-block rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">
+      Baixar PDF
+    </span>
   ),
 });
 
@@ -301,7 +303,7 @@ export default function OSDetailPage() {
               <option key={s} value={s}>{labelStatus(s)}</option>
             ))}
           </select>
-          <OSPdfButton os={os} />
+          <BaixarOS os={os} />
           {/* Excluir apaga faturamento junto — fica com o dono (ver src/lib/permissoes.ts). */}
           {ehDono && (
             <button onClick={deleteOS} disabled={deletingOS} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">

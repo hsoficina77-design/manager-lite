@@ -18,6 +18,9 @@ prisma/*.db-journal
 # Uploads
 public/uploads/
 
+# Cópia do pdfjs-dist feita por scripts/pdfjs-assets.mjs a cada dev/build
+public/pdfjs/
+
 # Claude Code
 .claude/
 
