@@ -4,12 +4,13 @@ import { useCallback } from "react";
 import { pdf } from "@react-pdf/renderer";
 import { carregarConfiguracao } from "@/lib/useConfiguracao";
 import { limparNome } from "@/lib/formato-download";
+import { PRAZO, comPrazo, fetchComPrazo } from "@/lib/tempo-limite";
 import BaixarDocumento from "./BaixarDocumento";
 import { OrcamentoPdfDocument, type OrcamentoForPdf } from "./OrcamentoPdfDocument";
 
 async function toDataUrl(url: string): Promise<string | undefined> {
   try {
-    const res = await fetch(url);
+    const res = await fetchComPrazo(url, PRAZO.imagem);
     if (!res.ok) return undefined;
     const blob = await res.blob();
     return await new Promise((resolve) => {
@@ -39,9 +40,11 @@ export default function BaixarOrcamento({ orc }: { orc: OrcamentoForPdf }) {
     const config = await carregarConfiguracao();
     const logo = config.logoUrl ? await toDataUrl(config.logoUrl) : undefined;
 
-    return await pdf(
-      <OrcamentoPdfDocument orc={orc} logoSrc={logo} config={config} />
-    ).toBlob();
+    return await comPrazo(
+      pdf(<OrcamentoPdfDocument orc={orc} logoSrc={logo} config={config} />).toBlob(),
+      PRAZO.pdf,
+      "Montar o PDF"
+    );
   }, [orc]);
 
   return (

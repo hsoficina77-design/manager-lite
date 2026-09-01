@@ -5,12 +5,13 @@ import { pdf } from "@react-pdf/renderer";
 import { toThumbDataUrl } from "@/lib/image-compress";
 import { carregarConfiguracao } from "@/lib/useConfiguracao";
 import { limparNome } from "@/lib/formato-download";
+import { PRAZO, comPrazo, fetchComPrazo } from "@/lib/tempo-limite";
 import BaixarDocumento from "./BaixarDocumento";
 import { OSPdfDocument, type FotoPdf, type OSForPdf } from "./OSPdfDocument";
 
 async function toDataUrl(url: string): Promise<string | undefined> {
   try {
-    const res = await fetch(url);
+    const res = await fetchComPrazo(url, PRAZO.imagem);
     if (!res.ok) return undefined;
     const blob = await res.blob();
     return await new Promise((resolve) => {
@@ -30,7 +31,7 @@ async function toDataUrl(url: string): Promise<string | undefined> {
  */
 async function toFotoPdf(foto: NonNullable<OSForPdf["fotos"]>[number]): Promise<FotoPdf | null> {
   try {
-    const res = await fetch(foto.url);
+    const res = await fetchComPrazo(foto.url, PRAZO.imagem);
     if (!res.ok) return null;
     const src = await toThumbDataUrl(await res.blob());
     return {
@@ -65,9 +66,11 @@ export default function BaixarOS({ os }: { os: OSForPdf }) {
     const convertidas = await Promise.all((os.fotos ?? []).map(toFotoPdf));
     const fotos = convertidas.filter((f): f is FotoPdf => f !== null);
 
-    return await pdf(
-      <OSPdfDocument os={os} logoSrc={logo} fotos={fotos} config={config} />
-    ).toBlob();
+    return await comPrazo(
+      pdf(<OSPdfDocument os={os} logoSrc={logo} fotos={fotos} config={config} />).toBlob(),
+      PRAZO.pdf,
+      "Montar o PDF"
+    );
   }, [os]);
 
   return <BaixarDocumento gerarPdf={gerarPdf} nomeBase={nomeArquivo(os)} descricao="a OS" />;

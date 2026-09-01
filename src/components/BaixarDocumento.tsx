@@ -8,6 +8,7 @@ import {
   salvarFormato,
   type FormatoDownload,
 } from "@/lib/formato-download";
+import { PRAZO, comPrazo } from "@/lib/tempo-limite";
 
 /**
  * Botão de baixar com escolha de formato — usado pela OS e pelo orçamento.
@@ -36,7 +37,9 @@ export default function BaixarDocumento({
   const [menuAberto, setMenuAberto] = useState(false);
   const [gerando, setGerando] = useState<FormatoDownload | null>(null);
   const [progresso, setProgresso] = useState<string | null>(null);
-  const [erro, setErro] = useState(false);
+  // Guarda a mensagem, não só "deu erro": quando o arquivo não sai, saber em qual
+  // passo travou é a diferença entre relatar o problema e adivinhar.
+  const [erro, setErro] = useState<string | null>(null);
   const caixa = useRef<HTMLDivElement>(null);
 
   // A preferência só é lida no navegador: ler durante a renderização quebraria a
@@ -66,17 +69,21 @@ export default function BaixarDocumento({
       const info = FORMATOS.find((f) => f.valor === alvo)!;
       setGerando(alvo);
       setProgresso(null);
-      setErro(false);
+      setErro(null);
       try {
         let arquivo = await gerarPdf();
 
         if (alvo === "imagem") {
           // Carregado só agora: quem baixa em PDF nunca busca o pdf.js.
           const { pdfParaPng } = await import("@/lib/pdf-para-imagem");
-          arquivo = await pdfParaPng(arquivo, ({ pagina, total }) =>
-            // Só conta as páginas quando há mais de uma — em documento de página
-            // única o "1/1" só faria o botão pular de largura.
-            setProgresso(total > 1 ? `${pagina}/${total}` : null)
+          arquivo = await comPrazo(
+            pdfParaPng(arquivo, ({ pagina, total }) =>
+              // Só conta as páginas quando há mais de uma — em documento de página
+              // única o "1/1" só faria o botão pular de largura.
+              setProgresso(total > 1 ? `${pagina}/${total}` : null)
+            ),
+            PRAZO.pdf,
+            "Converter em imagem"
           );
         }
 
@@ -90,7 +97,7 @@ export default function BaixarDocumento({
         URL.revokeObjectURL(url);
       } catch (err) {
         console.error(err);
-        setErro(true);
+        setErro(err instanceof Error ? err.message : "Falha ao gerar o arquivo");
       } finally {
         setGerando(null);
         setProgresso(null);
@@ -126,11 +133,7 @@ export default function BaixarDocumento({
         <button
           onClick={() => baixar(formato)}
           disabled={ocupado}
-          title={
-            erro
-              ? "Não foi possível gerar o arquivo — tente de novo"
-              : `Salvar ${descricao} em ${atual.label}`
-          }
+          title={erro ? `Não foi possível gerar o arquivo: ${erro}` : `Salvar ${descricao} em ${atual.label}`}
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-60",
             erro ? "text-red-600" : "text-zinc-700"
@@ -156,6 +159,14 @@ export default function BaixarDocumento({
           <IconeSeta className={cn("h-4 w-4 transition-transform", menuAberto && "rotate-180")} />
         </button>
       </div>
+
+      {/* A mensagem fica à vista: quem está no balcão precisa saber se foi a rede
+          ou o próprio documento antes de tentar de novo. */}
+      {erro && (
+        <p role="alert" className="mt-1 max-w-[16rem] text-right text-xs leading-snug text-red-600">
+          {erro}
+        </p>
+      )}
 
       {menuAberto && (
         <div
