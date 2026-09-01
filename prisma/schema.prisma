@@ -344,22 +344,97 @@ model Configuracao {
   updatedAt DateTime @updatedAt
 }
 
-// categoria: ALUGUEL | SALARIO | FORNECEDOR | ENERGIA | AGUA | INTERNET | IMPOSTO | MANUTENCAO | OUTROS
+// ─── Controle de gastos ──────────────────────────────────────────────────────
 //
-// Despesa recorrente (aluguel, salário...): ao marcar como paga, gera automaticamente
-// a próxima ocorrência (mesmo valor, vencimento um mês depois).
-model Despesa {
-  id         String    @id @default(cuid())
-  categoria  String
-  descricao  String
-  valor      Float
-  vencimento DateTime
-  pago       Boolean   @default(false)
-  pagoEm     DateTime?
-  recorrente Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+// Três tabelas porque são três coisas diferentes, e misturá-las foi o que travou a
+// versão anterior:
+//
+//   CategoriaDespesa  — como a oficina organiza os gastos. Editável pelo dono; antes
+//                       era um enum no código e ninguém podia criar "Contador".
+//   DespesaRecorrente — a REGRA ("aluguel, todo dia 5, R$ 3.000"). É daqui que sai o
+//                       custo operacional: um número que existe mesmo com nada pago.
+//   Despesa           — o LANÇAMENTO de um mês. Nasce da regra ou é avulso.
+//
+// Antes só existia o lançamento: a próxima ocorrência do aluguel só era criada quando
+// a anterior fosse marcada como paga, então o mês nunca aparecia inteiro e não havia
+// como perguntar "quanto custa manter a oficina aberta".
 
+model CategoriaDespesa {
+  id        String   @id @default(cuid())
+  nome      String   @unique
+  /// Cor do chip na tela e da barra no gráfico por categoria.
+  cor       String   @default("#71717a")
+  ordem     Int      @default(0)
+  /// Desativada some dos formulários, mas o histórico que a usa continua legível.
+  ativa     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  despesas    Despesa[]
+  recorrentes DespesaRecorrente[]
+
+  @@index([ativa, ordem])
+}
+
+// periodicidade: MENSAL | BIMESTRAL | TRIMESTRAL | SEMESTRAL | ANUAL
+model DespesaRecorrente {
+  id          String  @id @default(cuid())
+  categoriaId String
+  descricao   String
+  /// Valor previsto. O lançamento do mês pode ser pago por outro valor (energia).
+  valor       Float
+  fornecedor  String?
+  /// 1–31. Cai no último dia do mês quando o mês é mais curto.
+  diaVencimento Int
+  periodicidade String  @default("MENSAL")
+  /// Competência (1º dia do mês) em que a regra passa a valer.
+  inicio      DateTime
+  /// Competência do último mês, ou null enquanto a conta não tiver fim previsto.
+  fim         DateTime?
+  ativa       Boolean @default(true)
+  observacao  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoria   CategoriaDespesa @relation(fields: [categoriaId], references: [id])
+  lancamentos Despesa[]
+
+  @@index([ativa])
+  @@index([categoriaId])
+}
+
+model Despesa {
+  id             String    @id @default(cuid())
+  categoriaId    String
+  /// Regra que gerou o lançamento; null quando é um gasto avulso do mês.
+  recorrenteId   String?
+  /// Mês a que o gasto pertence, sempre o 1º dia (meia-noite de Brasília).
+  competencia    DateTime
+  descricao      String
+  /// Previsto.
+  valor          Float
+  /// Realizado. Null enquanto não foi pago; pode diferir do previsto.
+  valorPago      Float?
+  fornecedor     String?
+  vencimento     DateTime
+  pago           Boolean   @default(false)
+  pagoEm         DateTime?
+  formaPagamento String?
+  observacao     String?
+  /// "Não teve este mês". A linha fica de lápide: apagá-la de vez faria a regra
+  /// gerar o lançamento de novo na próxima abertura do mês. Some das somas.
+  cancelado      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  categoria  CategoriaDespesa   @relation(fields: [categoriaId], references: [id])
+  recorrente DespesaRecorrente? @relation(fields: [recorrenteId], references: [id], onDelete: SetNull)
+
+  /// Uma regra só pode ter um lançamento por mês — é o que torna a geração
+  /// sob demanda idempotente sem precisar de trava na aplicação.
+  @@unique([recorrenteId, competencia])
+  @@index([competencia])
   @@index([pago])
   @@index([vencimento])
+  @@index([categoriaId])
 }

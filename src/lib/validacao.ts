@@ -12,6 +12,7 @@
 
 import { NextResponse } from "next/server";
 import { z, type ZodError, type ZodTypeAny } from "zod";
+import { janelaMes } from "@/lib/periodo";
 
 /**
  * Teto do corpo JSON. Uma OS cheia (60 itens, observações longas) não passa de
@@ -245,3 +246,33 @@ export const idNulavel = (rotulo: string) =>
     .union([z.string(), z.null()])
     .transform((v) => (typeof v === "string" ? v.trim() || null : null))
     .pipe(z.string().max(64, `${rotulo} inválido`).nullable());
+
+/**
+ * Mês de competência: chega como "AAAA-MM" e vira o 1º dia do mês.
+ *
+ * Um `<input type="month">` manda só ano e mês. Passar isso por `z.coerce.date()`
+ * daria meia-noite **UTC**, que em Brasília é o dia 30 ou 31 do mês anterior — a
+ * regra que começa em setembro passaria a valer em agosto.
+ */
+const MES = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+const paraCompetencia = (rotulo: string) =>
+  z.string().trim().regex(MES, `${rotulo}: use o formato AAAA-MM`).transform((v) => {
+    const [ano, mes] = v.split("-").map(Number);
+    return janelaMes(ano, mes).inicio;
+  });
+
+export const mesObrigatorio = (rotulo: string) =>
+  z
+    .string({
+      required_error: `${rotulo} é obrigatório`,
+      invalid_type_error: `${rotulo} é obrigatório`,
+    })
+    .pipe(paraCompetencia(rotulo));
+
+/** Mês que pode ser apagado — `""`, null e ausente viram null. */
+export const mesNulavel = (rotulo: string) =>
+  z
+    .union([z.string(), z.null()])
+    .transform((v) => (typeof v === "string" ? v.trim() || null : null))
+    .pipe(paraCompetencia(rotulo).nullable());

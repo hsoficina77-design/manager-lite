@@ -108,6 +108,88 @@ export function janelaMes(ano: number, mes: number): Janela {
   return { inicio, fim, label: `${MESES[mes - 1]}/${ano}` };
 }
 
+/**
+ * Competência de um instante: a meia-noite de Brasília do 1º dia do mês dele.
+ *
+ * É a chave pela qual o controle de gastos agrupa — "o aluguel de agosto" é um só,
+ * ainda que tenha vencido no dia 5 e sido pago no dia 12.
+ */
+export function competenciaDe(instante: Date): Date {
+  const { ano, mes } = camposBR(instante);
+  return brMidnightUTC(ano, mes, 1);
+}
+
+/**
+ * "AAAA-MM-DD" no calendário de Brasília — o formato que `<input type="date">` usa.
+ *
+ * `toISOString().slice(0,10)` não serve: a data é guardada como a meia-noite de
+ * Brasília, que em UTC é 3h da manhã do mesmo dia — mas qualquer instante da noite
+ * volta um dia. Ler pelo calendário de Brasília é o que mantém 05/08 sendo 05/08.
+ */
+export function chaveDia(instante: Date): string {
+  const { ano, mes, dia } = camposBR(instante);
+  return `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** O caminho de volta: "AAAA-MM-DD" vira a meia-noite de Brasília daquele dia. */
+export function diaDaChave(chave: string): Date {
+  const [ano, mes, dia] = chave.split("-").map(Number);
+  return brMidnightUTC(ano, mes - 1, dia);
+}
+
+/** "Dezembro/2026" — o mês por extenso, para texto de tela. */
+export function rotuloMes(instante: Date): string {
+  const { ano, mes } = camposBR(instante);
+  return `${MESES[mes]}/${ano}`;
+}
+
+/** Chave "AAAA-MM" da competência — é o que viaja na URL e no corpo das rotas. */
+export function chaveMes(instante: Date): string {
+  const { ano, mes } = camposBR(instante);
+  return `${ano}-${String(mes + 1).padStart(2, "0")}`;
+}
+
+/** Janela do mês descrito por "AAAA-MM"; chave ausente ou inválida cai no mês atual. */
+export function janelaDaChave(chave: string | undefined, agora = new Date()): Janela {
+  const casa = /^(\d{4})-(\d{2})$/.exec(chave ?? "");
+  if (casa) {
+    const ano = Number(casa[1]);
+    const mes = Number(casa[2]);
+    if (ano >= 2000 && ano <= 2100 && mes >= 1 && mes <= 12) return janelaMes(ano, mes);
+  }
+  const c = camposBR(agora);
+  return janelaMes(c.ano, c.mes + 1);
+}
+
+/** Desloca a chave "AAAA-MM" em `passos` meses. */
+export function chaveMesDeslocada(chave: string, passos: number): string {
+  const j = janelaDaChave(chave);
+  const c = camposBR(j.inicio);
+  return chaveMes(brMidnightUTC(c.ano, c.mes + passos, 1));
+}
+
+/** Quantos meses civis separam duas competências (positivo quando `b` é posterior). */
+export function mesesEntre(a: Date, b: Date): number {
+  const ca = camposBR(a);
+  const cb = camposBR(b);
+  return (cb.ano - ca.ano) * 12 + (cb.mes - ca.mes);
+}
+
+/** Dias do mês civil da competência — o que segura o "todo dia 31" em fevereiro. */
+export function diasNoMes(competencia: Date): number {
+  const c = camposBR(competencia);
+  return Math.round(
+    (brMidnightUTC(c.ano, c.mes + 1, 1).getTime() - brMidnightUTC(c.ano, c.mes, 1).getTime()) /
+      86_400_000
+  );
+}
+
+/** O dia `dia` dentro da competência, limitado ao último dia do mês. */
+export function diaDaCompetencia(competencia: Date, dia: number): Date {
+  const usado = Math.min(Math.max(dia, 1), diasNoMes(competencia));
+  return new Date(competencia.getTime() + (usado - 1) * 86_400_000);
+}
+
 /** O dia corrente no calendário de Brasília. */
 export function janelaHoje(agora = new Date()): Janela {
   const { ano, mes, dia } = camposBR(agora);

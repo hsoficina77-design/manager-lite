@@ -64,7 +64,7 @@ export function Sidebar({
       children: [{ href: "/produtividade", label: "Produtividade", dono: true }],
     },
     { href: "/contas-receber", label: "Contas a Receber", badge: pendingCount, dono: true },
-    { href: "/despesas", label: "Contas a Pagar", dono: true },
+    { href: "/despesas", label: "Controle de Gastos", dono: true },
     { href: "/caixa", label: "Caixa", dono: true },
   ];
 

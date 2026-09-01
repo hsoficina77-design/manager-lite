@@ -15,6 +15,8 @@ import {
   id,
   idNulavel,
   inteiroNulavel,
+  mesNulavel,
+  mesObrigatorio,
   nulavel,
   obrigatorio,
 } from "@/lib/validacao";
@@ -42,17 +44,6 @@ const FORMAS_PAGAMENTO = [
   "TRANSFERENCIA",
 ] as const;
 const STATUS_ORCAMENTO = ["PENDENTE", "APROVADO", "RECUSADO", "CONVERTIDO"] as const;
-const CATEGORIAS_DESPESA = [
-  "ALUGUEL",
-  "SALARIO",
-  "FORNECEDOR",
-  "ENERGIA",
-  "AGUA",
-  "INTERNET",
-  "IMPOSTO",
-  "MANUTENCAO",
-  "OUTROS",
-] as const;
 
 // ── Itens (OS e orçamento usam o mesmo formato) ─────────────────────────────
 
@@ -257,23 +248,97 @@ export const dividaAtualizarSchema = z.object({
   valor: dinheiroPositivo("Valor").optional(),
 });
 
-// ── Despesa ─────────────────────────────────────────────────────────────────
+// ── Controle de gastos ──────────────────────────────────────────────────────
+//
+// Categoria virou tabela: o que chega agora é um id, não mais um dos nove valores
+// fixos. Quem garante que o id existe é a foreign key.
+
+const HEX_COR = /^#[0-9a-fA-F]{6}$/;
+
+export const categoriaDespesaSchema = z.object({
+  nome: obrigatorio("Nome da categoria", LIMITES.nomeCurto),
+  cor: z.string().trim().regex(HEX_COR, "Cor: use o formato #rrggbb").optional(),
+  ordem: z.coerce.number().int().min(0).max(999).optional(),
+  ativa: z.boolean().optional(),
+});
+
+export const categoriaDespesaAtualizarSchema = categoriaDespesaSchema.partial();
+
+const PERIODICIDADES_DESPESA = [
+  "MENSAL",
+  "BIMESTRAL",
+  "TRIMESTRAL",
+  "SEMESTRAL",
+  "ANUAL",
+] as const;
+
+const FORMAS_PAGAMENTO_DESPESA = [
+  "DINHEIRO",
+  "PIX",
+  "BOLETO",
+  "DEBITO_AUTOMATICO",
+  "CARTAO_CREDITO",
+  "CARTAO_DEBITO",
+  "TRANSFERENCIA",
+] as const;
+
+const formaDespesa = (rotulo: string) =>
+  z
+    .union([enumDe(rotulo, FORMAS_PAGAMENTO_DESPESA), z.literal(""), z.null()])
+    .transform((v) => (v === "" ? null : v));
+
+/** Regra da despesa fixa. `inicio`/`fim` chegam como "AAAA-MM" — é mês, não dia. */
+export const despesaRecorrenteCriarSchema = z.object({
+  categoriaId: id("Categoria"),
+  descricao: obrigatorio("Descrição", LIMITES.descricao),
+  valor: dinheiroPositivo("Valor"),
+  fornecedor: nulavel("Fornecedor", LIMITES.nome).optional(),
+  diaVencimento: z.coerce
+    .number({ invalid_type_error: "Dia do vencimento deve ser um número" })
+    .int("Dia do vencimento deve ser um número inteiro")
+    .min(1, "Dia do vencimento: mínimo de 1")
+    .max(31, "Dia do vencimento: máximo de 31"),
+  periodicidade: enumDe("Periodicidade", PERIODICIDADES_DESPESA),
+  inicio: mesObrigatorio("Mês de início"),
+  fim: mesNulavel("Mês final").optional(),
+  ativa: z.boolean().optional(),
+  observacao: nulavel("Observação", LIMITES.observacao).optional(),
+});
+
+export const despesaRecorrenteAtualizarSchema = despesaRecorrenteCriarSchema.partial().extend({
+  /** Replicar o valor novo nos lançamentos futuros ainda não pagos. */
+  propagar: z.boolean().optional(),
+});
 
 export const despesaCriarSchema = z.object({
-  categoria: enumDe("Categoria", CATEGORIAS_DESPESA),
+  categoriaId: id("Categoria"),
   descricao: obrigatorio("Descrição", LIMITES.descricao),
   valor: dinheiroPositivo("Valor"),
   vencimento: dataObrigatoria("Data de vencimento"),
-  recorrente: z.boolean().optional(),
+  fornecedor: nulavel("Fornecedor", LIMITES.nome).optional(),
+  observacao: nulavel("Observação", LIMITES.observacao).optional(),
 });
 
 export const despesaAtualizarSchema = z.object({
-  categoria: enumDe("Categoria", CATEGORIAS_DESPESA).optional(),
+  categoriaId: id("Categoria").optional(),
   descricao: obrigatorio("Descrição", LIMITES.descricao).optional(),
   valor: dinheiroPositivo("Valor").optional(),
   vencimento: dataObrigatoria("Data de vencimento").optional(),
-  recorrente: z.boolean().optional(),
-  pago: z.boolean().optional(),
+  fornecedor: nulavel("Fornecedor", LIMITES.nome).optional(),
+  observacao: nulavel("Observação", LIMITES.observacao).optional(),
+  /** Reativa um lançamento de regra que tinha sido marcado como "não teve". */
+  cancelado: z.boolean().optional(),
+});
+
+/**
+ * Baixa do pagamento. `valorPago` ausente significa "pagou o previsto" — é o caminho
+ * de um clique, que é como a conta é quitada na maioria das vezes.
+ */
+export const despesaPagamentoSchema = z.object({
+  pago: z.boolean(),
+  valorPago: dinheiroNulavel("Valor pago").optional(),
+  pagoEm: dataNulavel("Data do pagamento").optional(),
+  formaPagamento: formaDespesa("Forma de pagamento").optional(),
 });
 
 // ── Configuração da oficina ─────────────────────────────────────────────────

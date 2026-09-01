@@ -14,6 +14,7 @@ import {
   type PeriodoKey,
 } from "@/lib/periodo";
 import { osEntreguesNoPeriodo, osNoPatio, dataProducao, diasParado } from "@/lib/os-periodo";
+import { custoDoIntervalo } from "@/lib/despesas";
 
 // O dashboard responde duas perguntas de naturezas diferentes, e por isso são duas abas:
 //
@@ -258,7 +259,7 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
   // vez de truncar em "hoje" — que era o que quebrava o DRE de qualquer mês fechado.
   const fimDespesas = j.fim < agora ? j.fim : agora;
 
-  const [ordens, ordensAnterior, recebidoOS, recebidoDivida, despesas] = await Promise.all([
+  const [ordens, ordensAnterior, recebidoOS, recebidoDivida, totalDespesas] = await Promise.all([
     prisma.ordemServico.findMany({
       where: osEntreguesNoPeriodo(j),
       include: INCLUDE_LISTA,
@@ -276,17 +277,15 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
       where: { data: { gte: j.inicio, lt: j.fim } },
       _sum: { valor: true },
     }) as Promise<{ _sum: { valor: number | null } }>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).despesa.findMany({
-      where: { vencimento: { gte: j.inicio, lte: fimDespesas } },
-      select: { valor: true },
-    }) as Promise<{ valor: number }[]>,
+    // Passa por `custoDoIntervalo` (e não direto no Prisma) porque é ele que
+    // materializa os lançamentos das despesas fixas do período. Sem isso, o mês que
+    // ninguém abriu em /despesas entraria no DRE sem o aluguel.
+    custoDoIntervalo(j.inicio, fimDespesas),
   ]);
 
   const receita = ordens.reduce((s, o) => s + o.total, 0);
   const custoPecas = ordens.reduce((s, o) => s + o.custoTotalPecas, 0);
   const lucroBruto = ordens.reduce((s, o) => s + o.lucroReal, 0);
-  const totalDespesas = despesas.reduce((s, d) => s + d.valor, 0);
   const lucroLiquido = lucroBruto - totalDespesas;
   const recebido = (recebidoOS._sum.valor ?? 0) + (recebidoDivida._sum.valor ?? 0);
 
@@ -340,7 +339,7 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
             <p className="text-xs text-zinc-500">Mesmas OS listadas abaixo</p>
           </div>
           <Link href="/despesas" className="shrink-0 text-xs text-brand-600 hover:underline">
-            Contas a pagar →
+            Controle de gastos →
           </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
