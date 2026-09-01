@@ -22,7 +22,17 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: ${storage}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${storage}`,
+  // `data:` e `blob:` aqui não são folga: o @react-pdf/renderer carrega a logo e
+  // as fotos com `fetch()` na data URL, não com <img>. Liberar só em `img-src`
+  // deixava a foto aparecer na tela e bloqueava a MESMA imagem ao montar o PDF —
+  // e como o fetch bloqueado nunca resolve, o botão ficava em "Gerando..." para
+  // sempre. Nenhum dos dois esquemas alcança a rede: `data:` é o próprio conteúdo
+  // e `blob:` é da mesma origem, então isto não reabre caminho de exfiltração.
+  `connect-src 'self' data: blob: ${storage}`,
+  // O pdf.js (usado para converter o PDF em imagem) roda num worker criado a
+  // partir de um blob. Sem esta linha o navegador cai no `script-src`, que não
+  // permite `blob:`, e a conversão morre calada.
+  "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
