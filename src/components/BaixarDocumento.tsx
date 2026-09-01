@@ -19,7 +19,8 @@ import { PRAZO, comPrazo } from "@/lib/tempo-limite";
  * clicar de novo.
  *
  * A imagem sai do próprio PDF (ver src/lib/pdf-para-imagem.ts), então os dois
- * formatos mostram exatamente o mesmo documento.
+ * formatos mostram exatamente o mesmo documento. Documento de mais de uma página
+ * baixa uma imagem por página — ver `salvar()`, no fim deste arquivo.
  */
 export default function BaixarDocumento({
   gerarPdf,
@@ -71,13 +72,14 @@ export default function BaixarDocumento({
       setProgresso(null);
       setErro(null);
       try {
-        let arquivo = await gerarPdf();
+        const pdfBlob = await gerarPdf();
+        let arquivos = [pdfBlob];
 
         if (alvo === "imagem") {
           // Carregado só agora: quem baixa em PDF nunca busca o pdf.js.
-          const { pdfParaPng } = await import("@/lib/pdf-para-imagem");
-          arquivo = await comPrazo(
-            pdfParaPng(arquivo, ({ pagina, total }) =>
+          const { pdfParaPngs } = await import("@/lib/pdf-para-imagem");
+          arquivos = await comPrazo(
+            pdfParaPngs(pdfBlob, ({ pagina, total }) =>
               // Só conta as páginas quando há mais de uma — em documento de página
               // única o "1/1" só faria o botão pular de largura.
               setProgresso(total > 1 ? `${pagina}/${total}` : null)
@@ -87,14 +89,7 @@ export default function BaixarDocumento({
           );
         }
 
-        const url = URL.createObjectURL(arquivo);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${nomeBase}.${info.extensao}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        await salvar(arquivos, nomeBase, info.extensao);
       } catch (err) {
         console.error(err);
         setErro(err instanceof Error ? err.message : "Falha ao gerar o arquivo");
@@ -209,6 +204,38 @@ export default function BaixarDocumento({
       )}
     </div>
   );
+}
+
+/**
+ * Salva os arquivos gerados, um por vez.
+ *
+ * Documento de uma página sai com o nome limpo, como sempre. Com mais de uma, cada
+ * página vira um arquivo numerado — é o que se manda no WhatsApp, onde uma folha
+ * empilhada chegaria comprida e ilegível. O número é preenchido com zero à esquerda
+ * para que 10 não apareça antes de 2 na pasta de downloads.
+ *
+ * O clique é espaçado e a URL só é liberada depois: revogar no mesmo instante
+ * cancela o download que ainda nem começou, e disparar tudo junto faz o navegador
+ * descartar os arquivos seguintes.
+ */
+async function salvar(arquivos: Blob[], nomeBase: string, extensao: string) {
+  const largura = String(arquivos.length).length;
+
+  for (let i = 0; i < arquivos.length; i++) {
+    const sufixo =
+      arquivos.length > 1 ? ` - pagina ${String(i + 1).padStart(largura, "0")}` : "";
+
+    const url = URL.createObjectURL(arquivos[i]);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${nomeBase}${sufixo}.${extensao}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+    if (i < arquivos.length - 1) await new Promise((r) => setTimeout(r, 350));
+  }
 }
 
 function IconeDownload({ className }: { className?: string }) {

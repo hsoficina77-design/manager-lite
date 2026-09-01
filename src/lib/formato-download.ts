@@ -25,7 +25,7 @@ export const FORMATOS: {
     valor: "imagem",
     label: "Imagem",
     extensao: "png",
-    descricao: "Abre direto na conversa — bom para mandar no WhatsApp.",
+    descricao: "Abre direto na conversa. Documento longo vem uma imagem por página.",
   },
 ];
 

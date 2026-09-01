@@ -1,10 +1,15 @@
-// Converte o PDF já montado (ver OSPdfDocument / OrcamentoPdfDocument) em uma
-// única imagem PNG, com as páginas empilhadas na vertical.
+// Converte o PDF já montado (ver OSPdfDocument / OrcamentoPdfDocument) em imagens
+// PNG — uma por página.
 //
 // A imagem sai do próprio PDF em vez de um HTML paralelo: assim existe um só
 // layout para manter, e o que o cliente vê na imagem é exatamente o que sairia
 // impresso. O pdfjs-dist só é baixado quando alguém escolhe imagem — quem baixa
 // em PDF não paga por ele.
+//
+// Uma imagem por página, e não uma folha empilhada: empilhando, o limite de
+// canvas do navegador é dividido entre todas as páginas, então uma OS com fotos
+// borrava também o texto da primeira folha. Separadas, cada página usa o limite
+// inteiro e sai na resolução cheia — que é o que se lê no WhatsApp.
 //
 // Os arquivos que o pdf.js busca em `/pdfjs/` são colocados lá por
 // scripts/pdfjs-assets.mjs.
@@ -12,9 +17,10 @@
 const WORKER_URL = "/pdfjs/pdf.worker.min.mjs";
 const FONTES_URL = "/pdfjs/standard_fonts/";
 
-// 2x ≈ 150 DPI: o texto aguenta o zoom de quem abre a foto no celular sem que o
-// arquivo fique pesado demais para mandar no WhatsApp.
-const ESCALA_ALVO = 2;
+// 3x ≈ 220 DPI numa folha A4. Dá para dar zoom no número da peça sem embaçar, e
+// o WhatsApp recomprime na hora de enviar — mandar pixel a mais é barato, e a
+// nitidez perdida numa origem pequena não volta.
+const ESCALA_ALVO = 3;
 const ESCALA_MINIMA = 0.75;
 
 // Canvas grande demais volta em branco em alguns celulares, sem erro nenhum.
@@ -23,22 +29,20 @@ const ESCALA_MINIMA = 0.75;
 const LADO_MAXIMO = 10000;
 const AREA_MAXIMA = 16_000_000;
 
-const ESPACO_ENTRE_PAGINAS = 24;
-const COR_FUNDO = "#e4e4e7"; // cinza atrás das folhas, para separar as páginas
 const COR_PAGINA = "#ffffff";
 
 export type ProgressoImagem = { pagina: number; total: number };
 
 /**
- * Rasteriza todas as páginas do PDF em um PNG só.
+ * Rasteriza o PDF em um PNG por página, na ordem do documento.
  *
  * @param onProgresso chamado a cada página desenhada — o botão usa para avisar
  *   que documentos com muitas fotos demoram mais.
  */
-export async function pdfParaPng(
+export async function pdfParaPngs(
   pdfBlob: Blob,
   onProgresso?: (p: ProgressoImagem) => void
-): Promise<Blob> {
+): Promise<Blob[]> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = WORKER_URL;
 
@@ -49,53 +53,35 @@ export async function pdfParaPng(
 
   try {
     const doc = await tarefa.promise;
-    const paginas = [];
-    for (let n = 1; n <= doc.numPages; n++) paginas.push(await doc.getPage(n));
+    const total = doc.numPages;
 
-    const medidas = paginas.map((p) => p.getViewport({ scale: 1 }));
-    const escala = escalaQueCabe(medidas);
+    // O mesmo canvas serve a todas as páginas: redimensionar já limpa o que
+    // havia, e criar um por página deixaria vários bitmaps grandes vivos ao
+    // mesmo tempo — que é justamente o que faz o celular devolver folha branca.
+    const canvas = document.createElement("canvas");
+    if (!canvas.getContext("2d")) throw new Error("Navegador sem suporte a canvas");
 
-    const largura = Math.ceil(Math.max(...medidas.map((v) => v.width)) * escala);
-    const altura =
-      Math.ceil(medidas.reduce((soma, v) => soma + v.height * escala, 0)) +
-      ESPACO_ENTRE_PAGINAS * (paginas.length - 1);
+    const pngs: Blob[] = [];
+    for (let n = 1; n <= total; n++) {
+      const pagina = await doc.getPage(n);
+      const viewport = pagina.getViewport({ scale: escalaQueCabe(pagina.getViewport({ scale: 1 })) });
 
-    const folha = document.createElement("canvas");
-    folha.width = largura;
-    folha.height = altura;
-    const ctx = folha.getContext("2d");
-    if (!ctx) throw new Error("Navegador sem suporte a canvas");
-    ctx.fillStyle = COR_FUNDO;
-    ctx.fillRect(0, 0, largura, altura);
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      await pagina.render({ canvas, viewport, background: COR_PAGINA }).promise;
 
-    // Uma página é desenhada por vez em um canvas avulso e depois colada na
-    // folha final: o pdf.js pinta o fundo do canvas inteiro a cada render e
-    // apagaria as páginas já desenhadas se fossem todas no mesmo canvas.
-    const pagina = document.createElement("canvas");
-    const ctxPagina = pagina.getContext("2d");
-    if (!ctxPagina) throw new Error("Navegador sem suporte a canvas");
+      const png = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+      if (!png) throw new Error(`Não foi possível gerar a imagem da página ${n}`);
+      pngs.push(png);
 
-    let topo = 0;
-    for (let i = 0; i < paginas.length; i++) {
-      const viewport = paginas[i].getViewport({ scale: escala });
-      pagina.width = Math.ceil(viewport.width);
-      pagina.height = Math.ceil(viewport.height);
-
-      await paginas[i].render({ canvas: pagina, viewport, background: COR_PAGINA })
-        .promise;
-
-      // Páginas mais estreitas que a maior ficam centralizadas.
-      ctx.drawImage(pagina, Math.round((largura - pagina.width) / 2), topo);
-      topo += pagina.height + ESPACO_ENTRE_PAGINAS;
-
-      onProgresso?.({ pagina: i + 1, total: paginas.length });
+      // Libera o bitmap antes da próxima página, em vez de esperar o coletor.
+      pagina.cleanup();
+      onProgresso?.({ pagina: n, total });
     }
 
-    const png = await new Promise<Blob | null>((resolve) =>
-      folha.toBlob(resolve, "image/png")
-    );
-    if (!png) throw new Error("Não foi possível gerar a imagem");
-    return png;
+    return pngs;
   } finally {
     // Encerra o worker: sem isso ele fica vivo até a aba fechar.
     await tarefa.destroy();
@@ -103,15 +89,13 @@ export async function pdfParaPng(
 }
 
 /**
- * Maior escala que ainda cabe nos limites de canvas do navegador. Documento de
- * uma página sai em ESCALA_ALVO; um com muitas fotos vai reduzindo até caber.
+ * Maior escala que ainda cabe nos limites de canvas do navegador, para UMA
+ * página. A4 em ESCALA_ALVO dá ~1785x2525px, bem dentro do limite — a conta só
+ * age em página fora do comum.
  */
-function escalaQueCabe(medidas: { width: number; height: number }[]): number {
-  const larguraBase = Math.max(...medidas.map((v) => v.width));
-  const alturaBase = medidas.reduce((soma, v) => soma + v.height, 0);
-
-  const limiteLado = Math.min(LADO_MAXIMO / larguraBase, LADO_MAXIMO / alturaBase);
-  const limiteArea = Math.sqrt(AREA_MAXIMA / (larguraBase * alturaBase));
+function escalaQueCabe({ width, height }: { width: number; height: number }): number {
+  const limiteLado = Math.min(LADO_MAXIMO / width, LADO_MAXIMO / height);
+  const limiteArea = Math.sqrt(AREA_MAXIMA / (width * height));
 
   return Math.max(ESCALA_MINIMA, Math.min(ESCALA_ALVO, limiteLado, limiteArea));
 }
