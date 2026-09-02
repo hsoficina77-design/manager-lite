@@ -1,14 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Aviso, Botao, Entrada, Modal } from "./campos";
+import { Aviso, Botao, CORES, Entrada, Modal, PaletaCor, corSeguinte } from "./campos";
 import { enviar, mensagemDoErro } from "./api";
 import type { Categoria } from "./tipos";
-
-const CORES = [
-  "#6366f1", "#0ea5e9", "#14b8a6", "#22c55e", "#84cc16",
-  "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#8b5cf6", "#71717a",
-];
 
 /**
  * Como a oficina organiza os próprios gastos.
@@ -50,7 +45,7 @@ export function ModalCategorias({
     if (!nova.nome.trim()) return;
     await acao(async () => {
       await enviar("/api/despesas/categorias", "POST", nova);
-      setNova({ nome: "", cor: CORES[(categorias.length + 1) % CORES.length] });
+      setNova({ nome: "", cor: corSeguinte(categorias.length + 1) });
     });
   }
 
@@ -173,37 +168,5 @@ export function ModalCategorias({
         </p>
       </div>
     </Modal>
-  );
-}
-
-function PaletaCor({ valor, onMudar }: { valor: string; onMudar: (cor: string) => void }) {
-  const [aberta, setAberta] = useState(false);
-  return (
-    <div className="relative shrink-0">
-      <button
-        type="button"
-        aria-label="Escolher cor"
-        onClick={() => setAberta((v) => !v)}
-        className="h-9 w-9 rounded-lg border border-zinc-300"
-        style={{ backgroundColor: valor }}
-      />
-      {aberta && (
-        <div className="absolute left-0 top-11 z-10 grid w-40 grid-cols-6 gap-1.5 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
-          {CORES.map((cor) => (
-            <button
-              key={cor}
-              type="button"
-              aria-label={`Cor ${cor}`}
-              onClick={() => {
-                onMudar(cor);
-                setAberta(false);
-              }}
-              className="h-5 w-5 rounded-full ring-offset-1 hover:ring-2 hover:ring-zinc-300"
-              style={{ backgroundColor: cor }}
-            />
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

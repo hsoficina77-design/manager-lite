@@ -13,9 +13,10 @@ import {
   valorEfetivo,
   type Situacao,
 } from "@/lib/despesas-comum";
-import { Botao, ChipCategoria } from "./campos";
+import { Aviso, Botao, ChipCategoria, Selecao } from "./campos";
 import { enviar, mensagemDoErro } from "./api";
 import { ModalCategorias } from "./ModalCategorias";
+import { ModalFixar } from "./ModalFixar";
 import { ModalFixas } from "./ModalFixas";
 import { ModalGasto } from "./ModalGasto";
 import { ModalPagamento } from "./ModalPagamento";
@@ -63,6 +64,7 @@ export function ControleDeGastos({
   const [modal, setModal] = useState<
     | { tipo: "gasto"; gasto: Lancamento | null }
     | { tipo: "pagamento"; gasto: Lancamento }
+    | { tipo: "fixar"; gasto: Lancamento }
     | { tipo: "fixas" }
     | { tipo: "categorias" }
     | null
@@ -72,6 +74,10 @@ export function ControleDeGastos({
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // Reclassificar é um modo, não o padrão: as caixas de seleção em toda linha deixariam
+  // a lista mais pesada no celular para uma tarefa que se faz de vez em quando.
+  const [reclassificando, setReclassificando] = useState(false);
+  const [selecionados, setSelecionados] = useState<string[]>([]);
 
   const resumo = useMemo(() => resumirMes(lancamentos), [lancamentos]);
   const custoOperacional = useMemo(() => custoOperacionalMensal(regras), [regras]);
@@ -94,6 +100,31 @@ export function ControleDeGastos({
   const totalListado = listadas.reduce((s, d) => s + valorEfetivo(d), 0);
   const emAberto = lancamentos.filter((d) => !d.pago).length;
   const fixasAtivas = regras.filter((r) => r.ativa).length;
+
+  // A seleção sobrevive a mudar o filtro — dá para juntar o resultado de várias buscas.
+  // O recorte para o mês em tela é o que importa: navegar de mês preserva o estado do
+  // componente, e sem isto o "Mover" levaria junto o que ficou marcado no mês anterior,
+  // sem ninguém ver. Tudo daqui para baixo usa `marcados`, nunca `selecionados`.
+  const marcados = selecionados.filter((id) => lancamentos.some((d) => d.id === id));
+
+  function alternarSelecao(id: string) {
+    setSelecionados((atuais) =>
+      atuais.includes(id) ? atuais.filter((x) => x !== id) : [...atuais, id]
+    );
+  }
+
+  function sairDaReclassificacao() {
+    setReclassificando(false);
+    setSelecionados([]);
+  }
+
+  /** Abre a reclassificação já filtrada por uma categoria — o caminho vindo do gráfico. */
+  function reclassificarCategoria(categoriaId: string) {
+    setCategoriaFiltro(categoriaId);
+    setFiltro("todos");
+    setSelecionados([]);
+    setReclassificando(true);
+  }
 
   function fechar() {
     setModal(null);
@@ -122,10 +153,14 @@ export function ControleDeGastos({
           mesPadrao={ehMesAtual ? new Date() : competencia}
           onFechar={() => setModal(null)}
           onSalvo={fechar}
+          onFixar={(gasto) => setModal({ tipo: "fixar", gasto })}
         />
       )}
       {modal?.tipo === "pagamento" && (
         <ModalPagamento gasto={modal.gasto} onFechar={() => setModal(null)} onSalvo={fechar} />
+      )}
+      {modal?.tipo === "fixar" && (
+        <ModalFixar gasto={modal.gasto} onFechar={() => setModal(null)} onSalvo={fechar} />
       )}
       {modal?.tipo === "fixas" && (
         <ModalFixas
@@ -152,6 +187,15 @@ export function ControleDeGastos({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {lancamentos.length > 0 && (
+            <Botao
+              variante="secundario"
+              onClick={() => (reclassificando ? sairDaReclassificacao() : setReclassificando(true))}
+              title="Trocar a categoria de vários gastos de uma vez"
+            >
+              {reclassificando ? "Sair da reclassificação" : "Reclassificar"}
+            </Botao>
+          )}
           <Botao variante="secundario" onClick={() => setModal({ tipo: "categorias" })}>
             Categorias
           </Botao>
@@ -212,7 +256,11 @@ export function ControleDeGastos({
           fixo={resumo.fixo}
           avulso={resumo.avulso}
         />
-        <PorCategoria itens={resumo.porCategoria} total={resumo.total} />
+        <PorCategoria
+          itens={resumo.porCategoria}
+          total={resumo.total}
+          onReclassificar={reclassificarCategoria}
+        />
       </div>
 
       {/* Filtros */}
@@ -289,6 +337,9 @@ export function ControleDeGastos({
                 key={d.id}
                 gasto={d}
                 ocupado={ocupado === d.id}
+                selecionavel={reclassificando}
+                selecionado={marcados.includes(d.id)}
+                onSelecionar={() => alternarSelecao(d.id)}
                 onPagar={() => setModal({ tipo: "pagamento", gasto: d })}
                 onEditar={() => setModal({ tipo: "gasto", gasto: d })}
                 onEstornar={() =>
@@ -306,13 +357,45 @@ export function ControleDeGastos({
               />
             ))}
           </ul>
-          <div className="flex items-center justify-between border-t border-zinc-100 bg-zinc-50 px-4 py-2.5 text-sm">
-            <span className="text-zinc-500">
-              {`${listadas.length} de ${lancamentos.length} ${plural(lancamentos.length, "lançamento")}`}
-            </span>
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50 px-4 py-2.5 text-sm">
+            {reclassificando ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setSelecionados(
+                    listadas.every((d) => marcados.includes(d.id))
+                      ? marcados.filter((id) => !listadas.some((d) => d.id === id))
+                      : [...new Set([...marcados, ...listadas.map((d) => d.id)])]
+                  )
+                }
+                className="min-h-11 text-brand-600 hover:underline"
+              >
+                {listadas.every((d) => marcados.includes(d.id))
+                  ? "Desmarcar os da lista"
+                  : "Selecionar os da lista"}
+              </button>
+            ) : (
+              <span className="text-zinc-500">
+                {`${listadas.length} de ${lancamentos.length} ${plural(lancamentos.length, "lançamento")}`}
+              </span>
+            )}
             <span className="font-semibold text-zinc-900">{formatCurrency(totalListado)}</span>
           </div>
         </div>
+      )}
+
+      {reclassificando && (
+        <BarraReclassificar
+          selecionados={marcados}
+          lancamentos={lancamentos}
+          categorias={categorias}
+          onLimpar={() => setSelecionados([])}
+          onSair={sairDaReclassificacao}
+          onPronto={() => {
+            setSelecionados([]);
+            router.refresh();
+          }}
+        />
       )}
 
       {cancelados.length > 0 && (
@@ -531,12 +614,20 @@ function Metrica({
   );
 }
 
+/**
+ * Gasto por categoria — e a porta de entrada para consertar a classificação.
+ *
+ * Quem olha isto e vê "Outros: R$ 3.200" já está fazendo a pergunta certa; tocar na
+ * barra abre a lista filtrada por essa categoria, em modo de reclassificação.
+ */
 function PorCategoria({
   itens,
   total,
+  onReclassificar,
 }: {
-  itens: { nome: string; cor: string; valor: number }[];
+  itens: { id: string; nome: string; cor: string; valor: number }[];
   total: number;
+  onReclassificar: (categoriaId: string) => void;
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -544,27 +635,148 @@ function PorCategoria({
       {itens.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-400">Nada lançado neste mês.</p>
       ) : (
-        <ul className="mt-3 space-y-2.5">
-          {itens.map((c) => (
-            <li key={c.nome}>
-              <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="min-w-0 truncate text-zinc-600">{c.nome}</span>
-                <span className="shrink-0 font-medium tabular-nums text-zinc-900">
-                  {formatCurrency(c.valor)}
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${total > 0 ? (c.valor / total) * 100 : 0}%`,
-                    backgroundColor: c.cor,
-                  }}
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-3 space-y-1">
+            {itens.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onReclassificar(c.id)}
+                  title={`Ver e reclassificar os gastos de ${c.nome}`}
+                  className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-zinc-50"
+                >
+                  <span className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="min-w-0 truncate text-zinc-600">{c.nome}</span>
+                    <span className="shrink-0 font-medium tabular-nums text-zinc-900">
+                      {formatCurrency(c.valor)}
+                    </span>
+                  </span>
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                    <span
+                      className="block h-full rounded-full"
+                      style={{
+                        width: `${total > 0 ? (c.valor / total) * 100 : 0}%`,
+                        backgroundColor: c.cor,
+                      }}
+                    />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[11px] leading-snug text-zinc-400">
+            Toque numa categoria para ver o que caiu nela e trocar em lote — é o jeito de
+            esvaziar o “Outros” sem abrir gasto por gasto.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A barra do modo reclassificar.
+ *
+ * Fica grudada no rodapé: no celular a seleção acontece rolando a lista, e um botão de
+ * aplicar lá no topo obrigaria a rolar de volta a cada lote.
+ */
+function BarraReclassificar({
+  selecionados,
+  lancamentos,
+  categorias,
+  onLimpar,
+  onSair,
+  onPronto,
+}: {
+  selecionados: string[];
+  lancamentos: Lancamento[];
+  categorias: Categoria[];
+  onLimpar: () => void;
+  onSair: () => void;
+  onPronto: () => void;
+}) {
+  const [categoriaId, setCategoriaId] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const escolhidos = lancamentos.filter((d) => selecionados.includes(d.id));
+  const deRegra = escolhidos.filter((d) => d.recorrenteId).length;
+  const ativas = categorias.filter((c) => c.ativa);
+
+  async function mover() {
+    if (!categoriaId || selecionados.length === 0) return;
+    setErro(null);
+    setSalvando(true);
+    try {
+      await enviar("/api/despesas/reclassificar", "PUT", { ids: selecionados, categoriaId });
+      setCategoriaId("");
+      onPronto();
+    } catch (err) {
+      setErro(mensagemDoErro(err));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="sticky bottom-0 z-10 -mx-4 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.07)] backdrop-blur sm:-mx-6 sm:px-6">
+      {selecionados.length === 0 ? (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-zinc-500">Marque os gastos que foram para a categoria errada.</span>
+          <Botao variante="secundario" className="shrink-0" onClick={onSair}>
+            Sair
+          </Botao>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+            <span className="font-medium text-zinc-800">
+              {selecionados.length}{" "}
+              {selecionados.length === 1 ? "gasto selecionado" : "gastos selecionados"}
+            </span>
+            <button
+              type="button"
+              onClick={onLimpar}
+              className="text-xs text-zinc-500 hover:text-zinc-700"
+            >
+              Limpar seleção
+            </button>
+          </div>
+
+          <div className="flex gap-2">
+            <Selecao
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
+              className="min-w-0 flex-1"
+              aria-label="Categoria de destino"
+            >
+              <option value="">Mover para...</option>
+              {ativas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </Selecao>
+            <Botao
+              className="shrink-0"
+              disabled={salvando || !categoriaId}
+              onClick={mover}
+            >
+              {salvando ? "Movendo..." : "Mover"}
+            </Botao>
+          </div>
+
+          {deRegra > 0 && (
+            <p className="text-[11px] leading-snug text-amber-700">
+              {deRegra === 1
+                ? "1 dos selecionados vem de despesa fixa: a troca vale só para este mês."
+                : `${deRegra} dos selecionados vêm de despesa fixa: a troca vale só para este mês.`}{" "}
+              Para mudar de vez, edite a despesa fixa.
+            </p>
+          )}
+
+          <Aviso>{erro}</Aviso>
+        </div>
       )}
     </div>
   );
@@ -573,6 +785,9 @@ function PorCategoria({
 function Linha({
   gasto: d,
   ocupado,
+  selecionavel,
+  selecionado,
+  onSelecionar,
   onPagar,
   onEditar,
   onEstornar,
@@ -580,6 +795,10 @@ function Linha({
 }: {
   gasto: Lancamento;
   ocupado: boolean;
+  /** Modo reclassificar: a linha vira caixa de seleção e as ações saem de cena. */
+  selecionavel: boolean;
+  selecionado: boolean;
+  onSelecionar: () => void;
   onPagar: () => void;
   onEditar: () => void;
   onEstornar: () => void;
@@ -588,50 +807,76 @@ function Linha({
   const situacao = situacaoDe(d);
   const diferenca = d.pago && d.valorPago !== null ? d.valorPago - d.valor : 0;
 
+  const info = (
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium text-zinc-900">{d.descricao}</span>
+        <ChipCategoria nome={d.categoria.nome} cor={d.categoria.cor} />
+        {d.recorrenteId && (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Fixa</span>
+        )}
+        <span
+          className={cn("rounded-full px-2 py-0.5 text-xs font-medium", SITUACOES[situacao].chip)}
+        >
+          {SITUACOES[situacao].label}
+        </span>
+      </div>
+      <p className="mt-0.5 text-xs text-zinc-400">
+        {d.pago && d.pagoEm
+          ? `Pago em ${formatDate(d.pagoEm)}${
+              labelFormaPagamento(d.formaPagamento)
+                ? ` · ${labelFormaPagamento(d.formaPagamento)}`
+                : ""
+            }`
+          : `Vence em ${formatDate(d.vencimento)}`}
+        {d.fornecedor ? ` · ${d.fornecedor}` : ""}
+      </p>
+    </div>
+  );
+
+  const valor = (
+    <span className="w-24 text-right font-semibold tabular-nums text-zinc-900">
+      {formatCurrency(valorEfetivo(d))}
+      {Math.abs(diferenca) >= 0.01 && (
+        <span
+          className={cn(
+            "block text-[11px] font-normal",
+            diferenca > 0 ? "text-red-500" : "text-green-600"
+          )}
+        >
+          previsto {formatCurrency(d.valor)}
+        </span>
+      )}
+    </span>
+  );
+
+  // A linha inteira é o alvo do toque — um <label> alterna a caixa uma vez só, e no
+  // celular acertar 20 quadradinhos de 20px seguidos não seria reclassificar nada.
+  if (selecionavel) {
+    return (
+      <li className={cn("transition-colors", selecionado && "bg-brand-50")}>
+        <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
+          <input
+            type="checkbox"
+            checked={selecionado}
+            onChange={onSelecionar}
+            className="mt-0.5 h-5 w-5 shrink-0 rounded border-zinc-300 accent-brand-600"
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            {info}
+            <div className="shrink-0">{valor}</div>
+          </div>
+        </label>
+      </li>
+    );
+  }
+
   return (
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-zinc-900">{d.descricao}</span>
-          <ChipCategoria nome={d.categoria.nome} cor={d.categoria.cor} />
-          {d.recorrenteId && (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Fixa</span>
-          )}
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-xs font-medium",
-              SITUACOES[situacao].chip
-            )}
-          >
-            {SITUACOES[situacao].label}
-          </span>
-        </div>
-        <p className="mt-0.5 text-xs text-zinc-400">
-          {d.pago && d.pagoEm
-            ? `Pago em ${formatDate(d.pagoEm)}${
-                labelFormaPagamento(d.formaPagamento)
-                  ? ` · ${labelFormaPagamento(d.formaPagamento)}`
-                  : ""
-              }`
-            : `Vence em ${formatDate(d.vencimento)}`}
-          {d.fornecedor ? ` · ${d.fornecedor}` : ""}
-        </p>
-      </div>
+      {info}
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <span className="w-24 text-right font-semibold tabular-nums text-zinc-900">
-          {formatCurrency(valorEfetivo(d))}
-          {Math.abs(diferenca) >= 0.01 && (
-            <span
-              className={cn(
-                "block text-[11px] font-normal",
-                diferenca > 0 ? "text-red-500" : "text-green-600"
-              )}
-            >
-              previsto {formatCurrency(d.valor)}
-            </span>
-          )}
-        </span>
+        {valor}
 
         {d.pago ? (
           <button

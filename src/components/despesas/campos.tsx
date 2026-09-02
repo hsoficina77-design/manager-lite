@@ -4,6 +4,7 @@
 // modais e uma lista, e sem isto a mesma linha de classes do Tailwind apareceria umas
 // quarenta vezes — que foi como a tela antiga acabou difícil de mexer.
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const BASE_CAMPO =
@@ -132,6 +133,49 @@ export function Aviso({ children }: { children: React.ReactNode }) {
     <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
       {children}
     </p>
+  );
+}
+
+/** Paleta das categorias. Cores distinguíveis entre si no gráfico do mês. */
+export const CORES = [
+  "#6366f1", "#0ea5e9", "#14b8a6", "#22c55e", "#84cc16",
+  "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#8b5cf6", "#71717a",
+];
+
+/** Sorteia a próxima cor da paleta, para duas categorias novas não saírem iguais. */
+export function corSeguinte(usadas: number): string {
+  return CORES[usadas % CORES.length];
+}
+
+export function PaletaCor({ valor, onMudar }: { valor: string; onMudar: (cor: string) => void }) {
+  const [aberta, setAberta] = useState(false);
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        aria-label="Escolher cor"
+        onClick={() => setAberta((v) => !v)}
+        className="h-11 w-11 rounded-lg border border-zinc-300"
+        style={{ backgroundColor: valor }}
+      />
+      {aberta && (
+        <div className="absolute left-0 top-12 z-10 grid w-44 grid-cols-6 gap-1.5 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
+          {CORES.map((cor) => (
+            <button
+              key={cor}
+              type="button"
+              aria-label={`Cor ${cor}`}
+              onClick={() => {
+                onMudar(cor);
+                setAberta(false);
+              }}
+              className="h-6 w-6 rounded-full ring-offset-1 hover:ring-2 hover:ring-zinc-300"
+              style={{ backgroundColor: cor }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

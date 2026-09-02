@@ -55,17 +55,26 @@ type RegraGeradora = {
 };
 
 /**
- * A regra produz lançamento neste mês?
+ * O mês cai no passo da periodicidade, contado a partir do início?
  *
- * O passo é contado a partir do mês de início, não do mês de janeiro: um IPVA que
- * começa em março cai em março do ano seguinte, e não em janeiro.
+ * O passo conta desde o mês de início, não desde janeiro: um IPVA que começa em março
+ * cai em março do ano seguinte, e não em janeiro.
+ *
+ * Separado de `regraValeNoMes` porque a tela precisa responder isso para uma regra que
+ * ainda não existe — ao transformar um gasto avulso em despesa fixa, é o que diz quais
+ * lançamentos dos meses seguintes a regra vai cobrir.
  */
+export function mesNoPasso(inicio: Date, periodicidade: string, competencia: Date): boolean {
+  const desdeInicio = mesesEntre(competenciaDe(inicio), competencia);
+  if (desdeInicio < 0) return false;
+  return desdeInicio % passoDe(periodicidade) === 0;
+}
+
+/** A regra produz lançamento neste mês? */
 export function regraValeNoMes(regra: RegraGeradora, competencia: Date): boolean {
   if (!regra.ativa) return false;
-  const desdeInicio = mesesEntre(competenciaDe(regra.inicio), competencia);
-  if (desdeInicio < 0) return false;
   if (regra.fim && mesesEntre(competenciaDe(regra.fim), competencia) > 0) return false;
-  return desdeInicio % passoDe(regra.periodicidade) === 0;
+  return mesNoPasso(regra.inicio, regra.periodicidade, competencia);
 }
 
 /** Todas as competências (1º dia de cada mês) tocadas por um intervalo. */
@@ -120,7 +129,9 @@ export function resumirMes(lancamentos: LancamentoResumivel[], agora = new Date(
   let fixo = 0;
   let avulso = 0;
 
-  const porCategoria = new Map<string, { nome: string; cor: string; valor: number }>();
+  // O id vai junto porque a tela filtra por categoria a partir daqui — é o caminho de
+  // quem olha "Outros: R$ 3.200" no gráfico e quer ver e corrigir o que caiu ali.
+  const porCategoria = new Map<string, { id: string; nome: string; cor: string; valor: number }>();
 
   for (const d of lancamentos) {
     const efetivo = valorEfetivo(d);

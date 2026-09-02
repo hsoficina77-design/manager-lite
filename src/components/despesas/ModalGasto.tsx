@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { chaveDia, diaDaChave } from "@/lib/periodo";
-import { Area, Aviso, Botao, Campo, Entrada, EntradaValor, Modal, Selecao } from "./campos";
+import { Area, Aviso, Botao, Campo, Entrada, EntradaValor, Modal } from "./campos";
+import { SeletorCategoria } from "./SeletorCategoria";
 import { enviar, mensagemDoErro } from "./api";
 import type { Categoria, Lancamento } from "./tipos";
 
@@ -20,6 +21,7 @@ export function ModalGasto({
   mesPadrao,
   onFechar,
   onSalvo,
+  onFixar,
 }: {
   gasto: Lancamento | null;
   categorias: Categoria[];
@@ -27,6 +29,8 @@ export function ModalGasto({
   mesPadrao: Date;
   onFechar: () => void;
   onSalvo: () => void;
+  /** Abre a transformação em despesa fixa. Só chega aqui para gasto avulso. */
+  onFixar: (gasto: Lancamento) => void;
 }) {
   const disponiveis = categorias.filter((c) => c.ativa || c.id === gasto?.categoriaId);
 
@@ -66,19 +70,6 @@ export function ModalGasto({
     }
   }
 
-  if (disponiveis.length === 0) {
-    return (
-      <Modal titulo="Nenhuma categoria ativa" onFechar={onFechar}>
-        <p className="text-sm text-zinc-600">
-          Crie ou reative uma categoria em <strong>Categorias</strong> antes de lançar um gasto.
-        </p>
-        <Botao variante="secundario" className="mt-4 w-full" onClick={onFechar}>
-          Entendi
-        </Botao>
-      </Modal>
-    );
-  }
-
   return (
     <Modal
       titulo={editando ? "Editar gasto" : "Lançar gasto"}
@@ -97,20 +88,11 @@ export function ModalGasto({
           </p>
         )}
 
-        <Campo rotulo="Categoria">
-          <Selecao
-            value={form.categoriaId}
-            onChange={(e) => setForm({ ...form, categoriaId: e.target.value })}
-            required
-          >
-            {disponiveis.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-                {c.ativa ? "" : " (inativa)"}
-              </option>
-            ))}
-          </Selecao>
-        </Campo>
+        <SeletorCategoria
+          categorias={categorias}
+          valor={form.categoriaId}
+          onMudar={(categoriaId) => setForm({ ...form, categoriaId })}
+        />
 
         <Campo rotulo="Descrição *">
           <Entrada
@@ -174,6 +156,28 @@ export function ModalGasto({
             Cancelar
           </Botao>
         </div>
+
+        {/* "Isto na verdade é uma conta fixa" — a correção que antes exigia cadastrar a
+            regra e apagar os lançamentos avulsos na mão, mês a mês. */}
+        {editando && !deRegra && (
+          <div className="border-t border-zinc-100 pt-3">
+            <button
+              type="button"
+              onClick={() => onFixar(gasto)}
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-brand-700 hover:bg-brand-50"
+            >
+              <span>
+                Esta conta se repete todo mês?
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  Transformar em despesa fixa — ela passa a se lançar sozinha.
+                </span>
+              </span>
+              <span aria-hidden className="shrink-0 text-zinc-400">
+                →
+              </span>
+            </button>
+          </div>
+        )}
       </form>
     </Modal>
   );

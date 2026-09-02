@@ -287,17 +287,19 @@ const formaDespesa = (rotulo: string) =>
     .union([enumDe(rotulo, FORMAS_PAGAMENTO_DESPESA), z.literal(""), z.null()])
     .transform((v) => (v === "" ? null : v));
 
+const diaDoVencimento = z.coerce
+  .number({ invalid_type_error: "Dia do vencimento deve ser um número" })
+  .int("Dia do vencimento deve ser um número inteiro")
+  .min(1, "Dia do vencimento: mínimo de 1")
+  .max(31, "Dia do vencimento: máximo de 31");
+
 /** Regra da despesa fixa. `inicio`/`fim` chegam como "AAAA-MM" — é mês, não dia. */
 export const despesaRecorrenteCriarSchema = z.object({
   categoriaId: id("Categoria"),
   descricao: obrigatorio("Descrição", LIMITES.descricao),
   valor: dinheiroPositivo("Valor"),
   fornecedor: nulavel("Fornecedor", LIMITES.nome).optional(),
-  diaVencimento: z.coerce
-    .number({ invalid_type_error: "Dia do vencimento deve ser um número" })
-    .int("Dia do vencimento deve ser um número inteiro")
-    .min(1, "Dia do vencimento: mínimo de 1")
-    .max(31, "Dia do vencimento: máximo de 31"),
+  diaVencimento: diaDoVencimento,
   periodicidade: enumDe("Periodicidade", PERIODICIDADES_DESPESA),
   inicio: mesObrigatorio("Mês de início"),
   fim: mesNulavel("Mês final").optional(),
@@ -328,6 +330,32 @@ export const despesaAtualizarSchema = z.object({
   observacao: nulavel("Observação", LIMITES.observacao).optional(),
   /** Reativa um lançamento de regra que tinha sido marcado como "não teve". */
   cancelado: z.boolean().optional(),
+});
+
+/**
+ * Promove um gasto avulso a despesa fixa.
+ *
+ * `inicio` não vem do formulário de propósito: a regra passa a valer no mês do próprio
+ * lançamento. Deixar escolher um mês anterior faria meses já fechados ganharem a conta
+ * na próxima vez que fossem abertos, e o DRE de um mês passado mudaria sozinho.
+ */
+export const despesaFixarSchema = z.object({
+  /** Valor previsto da regra. Ausente = o mesmo do lançamento que deu origem. */
+  valor: dinheiroPositivo("Valor previsto").optional(),
+  diaVencimento: diaDoVencimento,
+  periodicidade: enumDe("Periodicidade", PERIODICIDADES_DESPESA),
+  fim: mesNulavel("Mês final").optional(),
+  /** Ligar à regra os avulsos iguais dos meses seguintes, em vez de deixá-los duplicar. */
+  adotarSemelhantes: z.boolean().optional(),
+});
+
+/** Troca a categoria de vários lançamentos de uma vez — o conserto do balaio "Outros". */
+export const despesaReclassificarSchema = z.object({
+  ids: z
+    .array(id("Gasto"))
+    .min(1, "Selecione ao menos um gasto")
+    .max(200, "No máximo 200 gastos por vez"),
+  categoriaId: id("Categoria"),
 });
 
 /**

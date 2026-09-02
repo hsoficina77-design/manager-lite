@@ -15,6 +15,7 @@ import {
   Modal,
   Selecao,
 } from "./campos";
+import { SeletorCategoria } from "./SeletorCategoria";
 import { enviar, mensagemDoErro } from "./api";
 import type { Categoria, Regra } from "./tipos";
 
@@ -237,19 +238,11 @@ function FormularioFixa({
       onFechar={onCancelar}
     >
       <form onSubmit={salvar} className="space-y-3">
-        <Campo rotulo="Categoria">
-          <Selecao
-            value={form.categoriaId}
-            onChange={(e) => setForm({ ...form, categoriaId: e.target.value })}
-            required
-          >
-            {disponiveis.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </Selecao>
-        </Campo>
+        <SeletorCategoria
+          categorias={categorias}
+          valor={form.categoriaId}
+          onMudar={(categoriaId) => setForm({ ...form, categoriaId })}
+        />
 
         <Campo rotulo="Descrição *">
           <Entrada
