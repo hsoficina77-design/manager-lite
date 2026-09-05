@@ -126,6 +126,29 @@ export function ControleDeGastos({
     setReclassificando(true);
   }
 
+  /**
+   * A lista sai em dois blocos, e não numa lista só com um chip "Fixa" no meio da linha.
+   *
+   * São duas naturezas de dinheiro e a decisão sobre cada uma é diferente: o fixo é o
+   * custo de manter a oficina aberta (só muda renegociando ou cortando a conta), o
+   * variável é o gasto daquele mês. Misturados, a única forma de saber quanto era de
+   * cada tipo era somar linha a linha.
+   */
+  const grupos = [
+    {
+      chave: "fixos",
+      label: "Gastos fixos",
+      ajuda: "Voltam todo mês — é o custo de manter a oficina aberta",
+      itens: listadas.filter((d) => d.recorrenteId),
+    },
+    {
+      chave: "variaveis",
+      label: "Gastos variáveis",
+      ajuda: "Aconteceram só neste mês",
+      itens: listadas.filter((d) => !d.recorrenteId),
+    },
+  ].filter((g) => g.itens.length > 0);
+
   function fechar() {
     setModal(null);
     router.refresh();
@@ -330,34 +353,53 @@ export function ControleDeGastos({
       ) : listadas.length === 0 ? (
         <Vazio titulo="Nada com esse filtro" texto="Ajuste a busca ou volte para “Todos”." />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-          <ul className="divide-y divide-zinc-100">
-            {listadas.map((d) => (
-              <Linha
-                key={d.id}
-                gasto={d}
-                ocupado={ocupado === d.id}
-                selecionavel={reclassificando}
-                selecionado={marcados.includes(d.id)}
-                onSelecionar={() => alternarSelecao(d.id)}
-                onPagar={() => setModal({ tipo: "pagamento", gasto: d })}
-                onEditar={() => setModal({ tipo: "gasto", gasto: d })}
-                onEstornar={() =>
-                  comAcao(d.id, () =>
-                    enviar(`/api/despesas/${d.id}/pagamento`, "PUT", { pago: false })
-                  )
-                }
-                onRemover={() => {
-                  const pergunta = d.recorrenteId
-                    ? `Marcar "${d.descricao}" como não cobrada em ${rotuloMes}?\n\nA despesa fixa continua valendo nos outros meses.`
-                    : `Excluir "${d.descricao}"?`;
-                  if (!confirm(pergunta)) return;
-                  comAcao(d.id, () => enviar(`/api/despesas/${d.id}`, "DELETE"));
-                }}
-              />
-            ))}
-          </ul>
-          <div className="flex items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50 px-4 py-2.5 text-sm">
+        <div className="space-y-4">
+          {grupos.map((grupo) => (
+            <div key={grupo.chave}>
+              <div className="flex items-start justify-between gap-3 rounded-t-xl border border-zinc-200 bg-zinc-100 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-zinc-700">
+                    {grupo.label}
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                      {grupo.itens.length}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{grupo.ajuda}</p>
+                </div>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-800">
+                  {formatCurrency(grupo.itens.reduce((s, d) => s + valorEfetivo(d), 0))}
+                </span>
+              </div>
+              <ul className="divide-y divide-zinc-100 overflow-hidden rounded-b-xl border border-t-0 border-zinc-200 bg-white">
+                {grupo.itens.map((d) => (
+                  <Linha
+                    key={d.id}
+                    gasto={d}
+                    ocupado={ocupado === d.id}
+                    selecionavel={reclassificando}
+                    selecionado={marcados.includes(d.id)}
+                    onSelecionar={() => alternarSelecao(d.id)}
+                    onPagar={() => setModal({ tipo: "pagamento", gasto: d })}
+                    onEditar={() => setModal({ tipo: "gasto", gasto: d })}
+                    onEstornar={() =>
+                      comAcao(d.id, () =>
+                        enviar(`/api/despesas/${d.id}/pagamento`, "PUT", { pago: false })
+                      )
+                    }
+                    onRemover={() => {
+                      const pergunta = d.recorrenteId
+                        ? `Marcar "${d.descricao}" como não cobrada em ${rotuloMes}?\n\nA despesa fixa continua valendo nos outros meses.`
+                        : `Excluir "${d.descricao}"?`;
+                      if (!confirm(pergunta)) return;
+                      comAcao(d.id, () => enviar(`/api/despesas/${d.id}`, "DELETE"));
+                    }}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm">
             {reclassificando ? (
               <button
                 type="button"
@@ -581,8 +623,10 @@ function PainelEquilibrio({
       )}
 
       <div className="mt-4 grid grid-cols-2 gap-4 border-t border-zinc-100 pt-3 text-sm sm:grid-cols-3">
+        {/* Mesmas palavras dos dois blocos da lista — "avulso" e "variável" para a mesma
+            coisa faria parecer que são dois números diferentes. */}
         <Metrica rotulo="Gastos fixos" valor={formatCurrency(fixo)} />
-        <Metrica rotulo="Gastos avulsos" valor={formatCurrency(avulso)} />
+        <Metrica rotulo="Gastos variáveis" valor={formatCurrency(avulso)} />
         <Metrica
           rotulo="Resultado do mês"
           valor={formatCurrency(e.resultado)}
@@ -812,9 +856,8 @@ function Linha({
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-zinc-900">{d.descricao}</span>
         <ChipCategoria nome={d.categoria.nome} cor={d.categoria.cor} />
-        {d.recorrenteId && (
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Fixa</span>
-        )}
+        {/* O antigo chip "Fixa" saiu daqui: agora quem diz isso é o bloco em que a
+            linha está, e repetir em toda linha só engordava a lista no celular. */}
         <span
           className={cn("rounded-full px-2 py-0.5 text-xs font-medium", SITUACOES[situacao].chip)}
         >
