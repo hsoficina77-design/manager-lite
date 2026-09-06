@@ -21,7 +21,7 @@ export default function TelaDeEntrada({
   const inicial = nome.trim().charAt(0).toUpperCase() || "O";
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-gray-100 px-4 py-10 sm:items-center sm:py-12">
+    <div className="flex min-h-screen items-start justify-center bg-fundo px-4 py-10 sm:items-center sm:py-12">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           {logoUrl ? (
@@ -32,16 +32,16 @@ export default function TelaDeEntrada({
               {inicial}
             </span>
           )}
-          <h1 className="mt-3 text-lg font-bold tracking-tight text-zinc-900">{nome}</h1>
+          <h1 className="mt-3 text-lg font-bold tracking-tight text-tinta">{nome}</h1>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-zinc-900">{titulo}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{descricao}</p>
+        <div className="rounded-2xl border border-linha bg-superficie p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-tinta">{titulo}</h2>
+          <p className="mt-1 text-sm text-tinta-3">{descricao}</p>
           <div className="mt-5">{children}</div>
         </div>
 
-        {rodape && <div className="mt-4 text-center text-xs text-zinc-500">{rodape}</div>}
+        {rodape && <div className="mt-4 text-center text-xs text-tinta-3">{rodape}</div>}
       </div>
     </div>
   );

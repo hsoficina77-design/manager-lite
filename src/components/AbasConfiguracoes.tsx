@@ -14,7 +14,7 @@ export default function AbasConfiguracoes() {
   const pathname = usePathname();
 
   return (
-    <div className="mb-6 flex gap-1 border-b border-zinc-200">
+    <div className="mb-6 flex gap-1 border-b border-linha">
       {ABAS.map((aba) => {
         const ativa = pathname === aba.href;
         return (
@@ -25,7 +25,7 @@ export default function AbasConfiguracoes() {
               "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
               ativa
                 ? "border-brand-600 text-brand-700"
-                : "border-transparent text-zinc-500 hover:text-zinc-800"
+                : "border-transparent text-tinta-3 hover:text-tinta"
             )}
           >
             {aba.label}

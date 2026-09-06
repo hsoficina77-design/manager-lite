@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ORIGENS } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDeRascunho } from "@/components/VeiculoCampos";
+import { Fechar, Voltar } from "@/components/ui/Icones";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -79,35 +80,40 @@ export default function NovoClientePage() {
     }
   }
 
-  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  const inputCls = "w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <div className="mb-6">
-        <Link href="/clientes" className="text-sm text-zinc-500 hover:text-zinc-700">← Voltar</Link>
-        <h1 className="text-2xl font-bold text-zinc-900 mt-2">Novo Cliente</h1>
+        <Link
+          href="/clientes"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-tinta-3 hover:text-tinta-2"
+        >
+          <Voltar tamanho={16} /> Clientes
+        </Link>
+        <h1 className="mt-2 text-2xl font-bold text-tinta">Novo cliente</h1>
       </div>
 
       {pendingDraft && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm text-amber-800">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-atencao-linha bg-atencao-fraco px-4 py-3">
+          <p className="text-sm text-atencao">
             Você tinha um rascunho não salvo{pendingSavedAt ? ` de ${formatDraftAge(pendingSavedAt)}` : ""}.
           </p>
           <div className="flex gap-2">
-            <button type="button" onClick={discardPending} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">Descartar</button>
-            <button type="button" onClick={restoreDraft} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">Restaurar rascunho</button>
+            <button type="button" onClick={discardPending} className="rounded-lg border border-atencao-linha px-3 py-1.5 text-xs font-medium text-atencao hover:bg-atencao-fraco">Descartar</button>
+            <button type="button" onClick={restoreDraft} className="rounded-lg bg-atencao px-3 py-1.5 text-xs font-bold text-white hover:bg-atencao">Restaurar rascunho</button>
           </div>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Dados do cliente */}
-        <section className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
-          <h2 className="font-semibold text-zinc-800">Dados do Cliente</h2>
+        <section className="bg-superficie rounded-xl border border-linha p-5 space-y-4">
+          <h2 className="font-semibold text-tinta">Dados do Cliente</h2>
           <div className="grid grid-cols-2 gap-3">
             {/* 1. Nome */}
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Nome *</label>
+              <label className="block text-sm font-medium text-tinta-2 mb-1">Nome *</label>
               <input
                 required
                 autoFocus
@@ -119,7 +125,7 @@ export default function NovoClientePage() {
 
             {/* 2. Telefone */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Telefone *</label>
+              <label className="block text-sm font-medium text-tinta-2 mb-1">Telefone *</label>
               <input
                 required
                 type="tel"
@@ -132,7 +138,7 @@ export default function NovoClientePage() {
 
             {/* 3. Profissão */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Profissão</label>
+              <label className="block text-sm font-medium text-tinta-2 mb-1">Profissão</label>
               <input
                 value={form.profissao}
                 onChange={(e) => setField("profissao", e.target.value)}
@@ -142,7 +148,7 @@ export default function NovoClientePage() {
 
             {/* 4. Origem */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Origem</label>
+              <label className="block text-sm font-medium text-tinta-2 mb-1">Origem</label>
               <select
                 value={form.origem}
                 onChange={(e) => setField("origem", e.target.value)}
@@ -157,7 +163,7 @@ export default function NovoClientePage() {
 
             {/* Apelido */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Apelido</label>
+              <label className="block text-sm font-medium text-tinta-2 mb-1">Apelido</label>
               <input
                 value={form.apelido}
                 onChange={(e) => setField("apelido", e.target.value)}
@@ -180,9 +186,10 @@ export default function NovoClientePage() {
                 <button
                   type="button"
                   onClick={() => removeTelefone(i)}
-                  className="text-red-400 hover:text-red-600 text-sm px-2"
+                  aria-label={`Remover telefone extra ${i + 1}`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-perigo hover:bg-perigo-fraco"
                 >
-                  ✕
+                  <Fechar tamanho={16} />
                 </button>
               </div>
             ))}
@@ -199,27 +206,27 @@ export default function NovoClientePage() {
 
           {/* 5. Observação */}
           <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">Observação</label>
+            <label className="block text-sm font-medium text-tinta-2 mb-1">Observação</label>
             <textarea
               value={form.obs}
               onChange={(e) => setField("obs", e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              className="w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
             />
           </div>
         </section>
 
         {/* Veículo */}
-        <section className="bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+        <section className="bg-superficie rounded-xl border border-linha p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-zinc-800">Veículo</h2>
+            <h2 className="font-semibold text-tinta">Veículo</h2>
             <button
               type="button"
               onClick={() => setAddVeiculo(!addVeiculo)}
               className={`text-sm px-3 py-1 rounded-lg border transition-colors ${
                 addVeiculo
-                  ? "border-red-200 bg-red-50 text-red-600"
-                  : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                  ? "border-perigo-linha bg-perigo-fraco text-perigo"
+                  : "border-linha-forte text-tinta-2 hover:bg-superficie-2"
               }`}
             >
               {addVeiculo ? "Remover veículo" : "+ Adicionar veículo"}
@@ -232,7 +239,7 @@ export default function NovoClientePage() {
         </section>
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          <p className="text-sm text-perigo bg-perigo-fraco rounded-lg px-3 py-2">{error}</p>
         )}
 
         <button

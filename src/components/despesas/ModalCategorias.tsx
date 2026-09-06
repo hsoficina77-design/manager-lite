@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Aviso, Botao, CORES, Entrada, Modal, PaletaCor, corSeguinte } from "./campos";
 import { enviar, mensagemDoErro } from "./api";
+import { useConfirmar } from "@/components/ui/Avisos";
 import type { Categoria } from "./tipos";
 
 /**
@@ -26,6 +27,7 @@ export function ModalCategorias({
   const [rascunho, setRascunho] = useState({ nome: "", cor: "" });
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const confirmar = useConfirmar();
 
   async function acao(fn: () => Promise<unknown>) {
     setErro(null);
@@ -72,7 +74,7 @@ export function ModalCategorias({
 
         <Aviso>{erro}</Aviso>
 
-        <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+        <ul className="divide-y divide-linha rounded-xl border border-linha">
           {categorias.map((c) => {
             const emEdicao = editando === c.id;
             return (
@@ -117,7 +119,7 @@ export function ModalCategorias({
                       style={{ backgroundColor: c.cor }}
                     />
                     <span
-                      className={`min-w-0 flex-1 truncate text-sm ${c.ativa ? "text-zinc-900" : "text-zinc-400 line-through"}`}
+                      className={`min-w-0 flex-1 truncate text-sm ${c.ativa ? "text-tinta" : "text-tinta-3 line-through"}`}
                     >
                       {c.nome}
                     </span>
@@ -128,7 +130,7 @@ export function ModalCategorias({
                         setEditando(c.id);
                         setRascunho({ nome: c.nome, cor: c.cor });
                       }}
-                      className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
+                      className="shrink-0 rounded-md px-2 py-1 text-xs text-tinta-3 hover:bg-superficie-3 hover:text-tinta-2 disabled:opacity-50"
                     >
                       Editar
                     </button>
@@ -140,18 +142,25 @@ export function ModalCategorias({
                           enviar(`/api/despesas/categorias/${c.id}`, "PUT", { ativa: !c.ativa })
                         )
                       }
-                      className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
+                      className="shrink-0 rounded-md px-2 py-1 text-xs text-tinta-3 hover:bg-superficie-3 hover:text-tinta-2 disabled:opacity-50"
                     >
                       {c.ativa ? "Desativar" : "Reativar"}
                     </button>
                     <button
                       type="button"
                       disabled={ocupado}
-                      onClick={() => {
-                        if (!confirm(`Excluir a categoria "${c.nome}"?`)) return;
+                      onClick={async () => {
+                        const ok = await confirmar({
+                          titulo: `Excluir a categoria “${c.nome}”?`,
+                          texto:
+                            "Categoria com gastos lançados não pode ser excluída — nesse caso, desative em vez disso.",
+                          acao: "Excluir categoria",
+                          perigo: true,
+                        });
+                        if (!ok) return;
                         acao(() => enviar(`/api/despesas/categorias/${c.id}`, "DELETE"));
                       }}
-                      className="shrink-0 rounded-md px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+                      className="min-h-11 shrink-0 rounded-md px-2 text-xs text-perigo hover:bg-perigo-fraco disabled:opacity-50 sm:min-h-9"
                     >
                       Excluir
                     </button>
@@ -162,7 +171,7 @@ export function ModalCategorias({
           })}
         </ul>
 
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-tinta-3">
           Categoria já usada em algum gasto não pode ser excluída — desative para parar de
           usá-la sem apagar o histórico.
         </p>

@@ -66,8 +66,8 @@ export default function CopiarVeiculo({
         className={cn(
           "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
           estado === "copiado"
-            ? "border-green-300 bg-green-50 text-green-700"
-            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+            ? "border-ok-linha bg-ok-fraco text-ok"
+            : "border-linha-forte text-tinta-2 hover:bg-superficie-2"
         )}
       >
         {estado === "copiado" ? <CheckIcon /> : <CopyIcon />}
@@ -76,7 +76,7 @@ export default function CopiarVeiculo({
 
       {estado === "falhou" && (
         <div className="w-full max-w-xs">
-          <p className="mb-1 text-xs text-amber-600">
+          <p className="mb-1 text-xs text-atencao">
             O navegador bloqueou a cópia — selecione o texto abaixo e copie.
           </p>
           <textarea
@@ -85,7 +85,7 @@ export default function CopiarVeiculo({
             onFocus={(e) => e.currentTarget.select()}
             value={texto}
             rows={texto.split("\n").length}
-            className="w-full resize-none rounded-lg border border-zinc-300 px-2 py-1.5 text-xs text-zinc-700"
+            className="w-full resize-none rounded-lg border border-linha-forte px-2 py-1.5 text-xs text-tinta-2"
           />
         </div>
       )}

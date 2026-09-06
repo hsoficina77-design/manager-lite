@@ -122,7 +122,7 @@ export default function BaixarDocumento({
       <div
         className={cn(
           "flex items-stretch overflow-hidden rounded-lg border",
-          erro ? "border-red-300" : "border-zinc-300"
+          erro ? "border-perigo-linha" : "border-linha-forte"
         )}
       >
         <button
@@ -130,8 +130,8 @@ export default function BaixarDocumento({
           disabled={ocupado}
           title={erro ? `Não foi possível gerar o arquivo: ${erro}` : `Salvar ${descricao} em ${atual.label}`}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-60",
-            erro ? "text-red-600" : "text-zinc-700"
+            "flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-superficie-2 disabled:opacity-60",
+            erro ? "text-perigo" : "text-tinta-2"
           )}
         >
           <IconeDownload className="h-4 w-4 shrink-0" />
@@ -146,9 +146,9 @@ export default function BaixarDocumento({
           aria-label="Escolher o formato do download"
           title="Escolher o formato: PDF ou imagem"
           className={cn(
-            "border-l px-2 text-zinc-500 hover:bg-zinc-50 disabled:opacity-60",
-            erro ? "border-red-300" : "border-zinc-300",
-            menuAberto && "bg-zinc-100"
+            "border-l px-2 text-tinta-3 hover:bg-superficie-2 disabled:opacity-60",
+            erro ? "border-perigo-linha" : "border-linha-forte",
+            menuAberto && "bg-superficie-3"
           )}
         >
           <IconeSeta className={cn("h-4 w-4 transition-transform", menuAberto && "rotate-180")} />
@@ -158,7 +158,7 @@ export default function BaixarDocumento({
       {/* A mensagem fica à vista: quem está no balcão precisa saber se foi a rede
           ou o próprio documento antes de tentar de novo. */}
       {erro && (
-        <p role="alert" className="mt-1 max-w-[16rem] text-right text-xs leading-snug text-red-600">
+        <p role="alert" className="mt-1 max-w-[16rem] text-right text-xs leading-snug text-perigo">
           {erro}
         </p>
       )}
@@ -166,9 +166,9 @@ export default function BaixarDocumento({
       {menuAberto && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+          className="absolute right-0 z-20 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-linha bg-superficie shadow-lg"
         >
-          <p className="border-b border-zinc-100 px-3 py-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="border-b border-linha px-3 py-2 text-xs font-medium uppercase tracking-wide text-tinta-3">
             Baixar como
           </p>
           {FORMATOS.map((f) => {
@@ -179,23 +179,23 @@ export default function BaixarDocumento({
                 role="menuitemradio"
                 aria-checked={selecionado}
                 onClick={() => escolher(f.valor)}
-                className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50"
+                className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-superficie-2"
               >
                 <span
                   aria-hidden
                   className={cn(
                     "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                    selecionado ? "border-brand-500 bg-brand-500" : "border-zinc-300"
+                    selecionado ? "border-brand-500 bg-brand-500" : "border-linha-forte"
                   )}
                 >
-                  {selecionado && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                  {selecionado && <span className="h-1.5 w-1.5 rounded-full bg-superficie" />}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium text-zinc-800">
+                  <span className="block text-sm font-medium text-tinta">
                     {f.label}
-                    <span className="ml-1 font-normal text-zinc-400">.{f.extensao}</span>
+                    <span className="ml-1 font-normal text-tinta-3">.{f.extensao}</span>
                   </span>
-                  <span className="block text-xs leading-snug text-zinc-500">{f.descricao}</span>
+                  <span className="block text-xs leading-snug text-tinta-3">{f.descricao}</span>
                 </span>
               </button>
             );

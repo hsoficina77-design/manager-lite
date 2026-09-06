@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import OSForm, { type OSFormInitial } from "@/components/OSForm";
+import { Esqueleto } from "@/components/ui/Dados";
 
 export default function EditarOSPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,8 +41,14 @@ export default function EditarOSPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <div className="p-6 text-sm text-zinc-400">Carregando...</div>;
-  if (erro || !initial) return <div className="p-6 text-sm text-zinc-400">OS não encontrada.</div>;
+  if (loading)
+    return (
+      <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6">
+        <Esqueleto className="h-9 w-40" />
+        <Esqueleto className="h-64 w-full" />
+      </div>
+    );
+  if (erro || !initial) return <div className="p-6 text-sm text-tinta-3">OS não encontrada.</div>;
 
   return (
     <Suspense>

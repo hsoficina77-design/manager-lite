@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import { corValida } from "@/lib/tema";
 
 export const inputCls =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 " +
-  "placeholder:text-zinc-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
+  "w-full rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm text-tinta " +
+  "placeholder:text-tinta-3 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30";
 
 /** Cartão branco que agrupa campos. Título é opcional: a seção já se apresenta no topo. */
 export function Cartao({
@@ -24,11 +24,11 @@ export function Cartao({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-xl border border-zinc-200 bg-white p-4 sm:p-5", className)}>
+    <section className={cn("rounded-xl border border-linha bg-superficie p-4 sm:p-5", className)}>
       {titulo && (
         <div className="mb-4">
-          <h3 className="font-semibold text-zinc-800">{titulo}</h3>
-          {ajuda && <p className="mt-0.5 text-xs text-zinc-500">{ajuda}</p>}
+          <h3 className="font-semibold text-tinta">{titulo}</h3>
+          {ajuda && <p className="mt-0.5 text-xs text-tinta-3">{ajuda}</p>}
         </div>
       )}
       {children}
@@ -69,13 +69,13 @@ export function Campo({
   return (
     <div className={span}>
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-zinc-700">
+        <span className="mb-1 block text-sm font-medium text-tinta-2">
           {label}
           {obrigatorio && <span className="text-brand-600"> *</span>}
         </span>
         {children}
       </label>
-      {ajuda && <p className="mt-1 text-xs text-zinc-500">{ajuda}</p>}
+      {ajuda && <p className="mt-1 text-xs text-tinta-3">{ajuda}</p>}
     </div>
   );
 }
@@ -103,13 +103,13 @@ export function SeletorDeCor({
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-sm font-medium text-zinc-700">{titulo}</span>
-        <span className="text-xs text-zinc-500">{ajuda}</span>
+        <span className="text-sm font-medium text-tinta-2">{titulo}</span>
+        <span className="text-xs text-tinta-3">{ajuda}</span>
         {valor.toLowerCase() !== padrao && (
           <button
             type="button"
             onClick={() => onChange(padrao)}
-            className="ml-auto text-xs text-zinc-400 underline hover:text-zinc-600"
+            className="ml-auto text-xs text-tinta-3 underline hover:text-tinta-2"
           >
             Restaurar padrão
           </button>
@@ -122,7 +122,7 @@ export function SeletorDeCor({
           value={valor}
           onChange={(e) => onChange(e.target.value)}
           aria-label={titulo}
-          className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-300 bg-white p-1"
+          className="h-10 w-14 cursor-pointer rounded-lg border border-linha-forte bg-superficie p-1"
         />
         <input
           value={texto}
@@ -147,8 +147,8 @@ export function SeletorDeCor({
               className={cn(
                 "h-8 w-8 rounded-full border transition-transform hover:scale-110",
                 valor.toLowerCase() === s.cor
-                  ? "border-zinc-900 ring-2 ring-zinc-300"
-                  : "border-zinc-200"
+                  ? "border-contraste ring-2 ring-linha-forte"
+                  : "border-linha"
               )}
             />
           ))}

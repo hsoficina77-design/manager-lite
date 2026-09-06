@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const inputCls =
-  "w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  "w-full rounded-lg border border-linha-forte px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 export default function LoginForm({ destino }: { destino: string }) {
   const router = useRouter();
@@ -43,13 +43,13 @@ export default function LoginForm({ destino }: { destino: string }) {
   return (
     <form onSubmit={entrar} className="space-y-4">
       {erro && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
+        <p className="rounded-lg bg-perigo-fraco px-3 py-2 text-sm text-perigo" role="alert">
           {erro}
         </p>
       )}
 
       <div>
-        <label htmlFor="email" className="mb-1 block text-sm font-medium text-zinc-700">
+        <label htmlFor="email" className="mb-1 block text-sm font-medium text-tinta-2">
           E-mail
         </label>
         <input
@@ -66,7 +66,7 @@ export default function LoginForm({ destino }: { destino: string }) {
       </div>
 
       <div>
-        <label htmlFor="senha" className="mb-1 block text-sm font-medium text-zinc-700">
+        <label htmlFor="senha" className="mb-1 block text-sm font-medium text-tinta-2">
           Senha
         </label>
         <div className="relative">
@@ -82,7 +82,7 @@ export default function LoginForm({ destino }: { destino: string }) {
           <button
             type="button"
             onClick={() => setMostrarSenha((v) => !v)}
-            className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-zinc-500 hover:text-zinc-800"
+            className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-tinta-3 hover:text-tinta"
           >
             {mostrarSenha ? "Ocultar" : "Mostrar"}
           </button>

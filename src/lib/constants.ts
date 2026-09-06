@@ -8,12 +8,26 @@
 // "terminei mas ainda não recebi" num campo que não é sobre dinheiro. Recebimento
 // já é um eixo separado (`pago` / `valorPago`), então OS entregue e não paga é
 // representável sem precisar de status próprio.
+// A cor é uma escala de significado, não degraus de um cinza só. Antes os quatro
+// status vivos eram zinc-100/200/300 e um preto: distinguir o carro travado
+// esperando peça do carro já entregue exigia ler pílula por pílula, que é
+// exatamente o trabalho que a cor deveria poupar numa lista de vinte OS.
+//
+// Agora cada estado tem matiz próprio, e o peso segue a urgência:
+//   Ag. Peça    âmbar com anel saturado — é o único bloqueado, esperando decisão
+//   Em Andamento azul — trabalho acontecendo, estado normal do pátio
+//   Aberta      neutro — chegou, ninguém pôs a mão ainda
+//   Entregue    verde discreto — encerrado, deve recuar
+//   Cancelada   apagado — existe, mas não é trabalho
+//
+// As classes moram em globals.css porque cada uma precisa de um valor no tema
+// claro e outro no escuro.
 export const OS_STATUS = [
-  { value: "ABERTA", label: "Aberta", cor: "bg-zinc-200 text-zinc-700" },
-  { value: "EM_ANDAMENTO", label: "Em Andamento", cor: "bg-zinc-800 text-zinc-100" },
-  { value: "AGUARDANDO_PECA", label: "Ag. Peça", cor: "bg-zinc-300 text-zinc-800" },
-  { value: "ENTREGUE", label: "Entregue", cor: "bg-zinc-100 text-zinc-500" },
-  { value: "CANCELADA", label: "Cancelada", cor: "bg-red-100 text-red-700" },
+  { value: "ABERTA", label: "Aberta", cor: "status status-aberta" },
+  { value: "EM_ANDAMENTO", label: "Em andamento", cor: "status status-andamento" },
+  { value: "AGUARDANDO_PECA", label: "Ag. peça", cor: "status status-peca" },
+  { value: "ENTREGUE", label: "Entregue", cor: "status status-entregue" },
+  { value: "CANCELADA", label: "Cancelada", cor: "status status-inerte" },
 ] as const;
 
 export type OSStatus = (typeof OS_STATUS)[number]["value"];
@@ -38,7 +52,42 @@ export function labelStatus(status: string): string {
 }
 
 export function corStatus(status: string): string {
-  return OS_STATUS.find((s) => s.value === status)?.cor ?? "bg-zinc-600 text-white";
+  return OS_STATUS.find((s) => s.value === status)?.cor ?? "status status-inerte";
+}
+
+// Status do orçamento — mesma gramática de cor da OS, para o olho não ter que
+// aprender duas escalas. Pendente aguarda o cliente, aprovado é sinal verde,
+// recusado e convertido são estados encerrados.
+export const ORCAMENTO_STATUS = [
+  { value: "PENDENTE", label: "Pendente", cor: "status status-aberta" },
+  { value: "APROVADO", label: "Aprovado", cor: "status status-entregue" },
+  { value: "RECUSADO", label: "Recusado", cor: "status status-inerte" },
+  { value: "CONVERTIDO", label: "Convertido", cor: "status status-andamento" },
+] as const;
+
+export function labelStatusOrcamento(status: string): string {
+  return ORCAMENTO_STATUS.find((s) => s.value === status)?.label ?? status;
+}
+
+export function corStatusOrcamento(status: string): string {
+  return ORCAMENTO_STATUS.find((s) => s.value === status)?.cor ?? "status status-inerte";
+}
+
+// Formas de pagamento. Ficavam redeclaradas em cinco telas, e por isso já
+// divergiam entre si — a de contas a receber não tinha as mesmas opções da OS.
+export const FORMAS_PAGAMENTO = [
+  { value: "DINHEIRO", label: "Dinheiro" },
+  { value: "PIX", label: "PIX" },
+  { value: "CARTAO_CREDITO", label: "Cartão de crédito" },
+  { value: "CARTAO_DEBITO", label: "Cartão de débito" },
+  { value: "TRANSFERENCIA", label: "Transferência" },
+] as const;
+
+export const FORMAS_PAGAMENTO_VALUES: string[] = FORMAS_PAGAMENTO.map((f) => f.value);
+
+export function labelFormaPagamento(valor: string | null | undefined): string {
+  if (!valor) return "";
+  return FORMAS_PAGAMENTO.find((f) => f.value === valor)?.label ?? valor;
 }
 
 /** Margem de lucro da OS, ou null quando não há faturamento para comparar. */
@@ -49,10 +98,10 @@ export function margemOS(os: { total: number; lucroReal: number }): number | nul
 /** Faixas de margem das listas: verde saudável, âmbar apertada, vermelha no vermelho.
  *  Mesma escala em todas as telas para o olho aprender uma cor só. */
 export function corMargem(margem: number | null): string {
-  if (margem === null) return "text-zinc-400";
-  if (margem >= 40) return "text-green-600";
-  if (margem >= 20) return "text-amber-600";
-  return "text-red-500";
+  if (margem === null) return "text-tinta-3";
+  if (margem >= 40) return "text-ok";
+  if (margem >= 20) return "text-atencao";
+  return "text-perigo";
 }
 
 export const ORIGENS = [

@@ -6,6 +6,7 @@ import { chaveDia, diaDaChave } from "@/lib/periodo";
 import { Area, Aviso, Botao, Campo, Entrada, EntradaValor, Modal } from "./campos";
 import { SeletorCategoria } from "./SeletorCategoria";
 import { enviar, mensagemDoErro } from "./api";
+import { SetaDireita } from "@/components/ui/Icones";
 import type { Categoria, Lancamento } from "./tipos";
 
 /**
@@ -141,7 +142,7 @@ export function ModalGasto({
         </Campo>
 
         {Number(form.valor) > 0 && (
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-tinta-3">
             Total do lançamento: <strong>{formatCurrency(Number(form.valor))}</strong>
           </p>
         )}
@@ -160,7 +161,7 @@ export function ModalGasto({
         {/* "Isto na verdade é uma conta fixa" — a correção que antes exigia cadastrar a
             regra e apagar os lançamentos avulsos na mão, mês a mês. */}
         {editando && !deRegra && (
-          <div className="border-t border-zinc-100 pt-3">
+          <div className="border-t border-linha pt-3">
             <button
               type="button"
               onClick={() => onFixar(gasto)}
@@ -168,13 +169,11 @@ export function ModalGasto({
             >
               <span>
                 Esta conta se repete todo mês?
-                <span className="mt-0.5 block text-xs text-zinc-500">
+                <span className="mt-0.5 block text-xs text-tinta-3">
                   Transformar em despesa fixa — ela passa a se lançar sozinha.
                 </span>
               </span>
-              <span aria-hidden className="shrink-0 text-zinc-400">
-                →
-              </span>
+              <SetaDireita tamanho={16} className="shrink-0 text-tinta-3" />
             </button>
           </div>
         )}

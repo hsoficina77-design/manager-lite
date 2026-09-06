@@ -149,7 +149,7 @@ export function ModalFixar({
         </Campo>
 
         {cobertos.length > 0 && (
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-sm text-atencao">
             <input
               type="checkbox"
               checked={adotar}
@@ -159,7 +159,7 @@ export function ModalFixar({
             <span>
               Aproveitar {cobertos.length === 1 ? "o lançamento igual" : "os lançamentos iguais"}{" "}
               de {listarMeses(cobertos)}.
-              <span className="mt-0.5 block text-xs text-amber-700">
+              <span className="mt-0.5 block text-xs text-atencao">
                 {adotar
                   ? "Eles passam a ser desta despesa fixa, em vez de virar cobrança repetida."
                   : `Sem isso, ${cobertos.length === 1 ? "esse mês vai ficar" : "esses meses vão ficar"} com a conta lançada duas vezes.`}
@@ -179,7 +179,7 @@ export function ModalFixar({
           </Botao>
         </div>
 
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-tinta-3">
           Depois dá para ajustar tudo em <strong>Despesas fixas</strong> — inclusive o valor,
           o dia e até quando ela vale.
         </p>

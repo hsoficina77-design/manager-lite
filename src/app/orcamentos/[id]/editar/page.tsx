@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import OrcamentoForm, { type OrcamentoFormInitial } from "@/components/OrcamentoForm";
+import { Esqueleto } from "@/components/ui/Dados";
 
 export default function EditarOrcamentoPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,8 +40,14 @@ export default function EditarOrcamentoPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <div className="p-6 text-sm text-zinc-400">Carregando...</div>;
-  if (erro || !initial) return <div className="p-6 text-sm text-zinc-400">Orçamento não encontrado.</div>;
+  if (loading)
+    return (
+      <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6">
+        <Esqueleto className="h-9 w-40" />
+        <Esqueleto className="h-64 w-full" />
+      </div>
+    );
+  if (erro || !initial) return <div className="p-6 text-sm text-tinta-3">Orçamento não encontrado.</div>;
 
   return (
     <Suspense>

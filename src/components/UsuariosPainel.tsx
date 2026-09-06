@@ -5,9 +5,14 @@ import { cn, formatDatetime } from "@/lib/utils";
 import { PAPEIS, labelPapel, type Papel } from "@/lib/permissoes";
 import { SENHA_MIN } from "@/lib/senha-regras";
 import { useUsuario } from "@/components/UsuarioProvider";
+import { useConfirmar } from "@/components/ui/Avisos";
+import { Botao } from "@/components/ui/Botao";
+import { Entrada, Selecao } from "@/components/ui/Campos";
+import { Modal } from "@/components/ui/Modal";
+import { EsqueletoLista } from "@/components/ui/Dados";
 
 const inputCls =
-  "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  "w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 type Usuario = {
   id: string;
@@ -26,6 +31,7 @@ export default function UsuariosPainel() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const confirmar = useConfirmar();
   const [aviso, setAviso] = useState("");
 
   const [modalNovo, setModalNovo] = useState(false);
@@ -116,7 +122,13 @@ export default function UsuariosPainel() {
   }
 
   async function excluir(usuario: Usuario) {
-    if (!confirm(`Excluir o acesso de ${usuario.nome}? Esta ação não pode ser desfeita.`)) return;
+    const ok = await confirmar({
+      titulo: `Excluir o acesso de ${usuario.nome}?`,
+      texto: "A pessoa perde o login imediatamente e as sessões abertas são encerradas. Não há como desfazer.",
+      acao: "Excluir acesso",
+      perigo: true,
+    });
+    if (!ok) return;
     setErro("");
     setOcupado(usuario.id);
     try {
@@ -137,8 +149,8 @@ export default function UsuariosPainel() {
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Acessos</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-2xl font-bold text-tinta">Acessos</h1>
+          <p className="mt-1 text-sm text-tinta-3">
             Quem entra no sistema e o que cada um enxerga.
           </p>
         </div>
@@ -153,25 +165,25 @@ export default function UsuariosPainel() {
         </button>
       </div>
 
-      {erro && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mb-4 rounded-lg bg-perigo-fraco px-3 py-2 text-sm text-perigo">{erro}</p>}
       {aviso && (
-        <p className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{aviso}</p>
+        <p className="mb-4 rounded-lg bg-ok-fraco px-3 py-2 text-sm text-ok">{aviso}</p>
       )}
 
-      <div className="mb-5 rounded-xl border border-zinc-200 bg-white p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">O que cada papel vê</p>
+      <div className="mb-5 rounded-xl border border-linha bg-superficie p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-tinta-3">O que cada papel vê</p>
         <dl className="mt-2 space-y-1.5">
           {PAPEIS.map((p) => (
             <div key={p.value} className="flex flex-wrap gap-x-2 text-sm">
-              <dt className="font-medium text-zinc-800">{p.label}:</dt>
-              <dd className="text-zinc-500">{p.ajuda}</dd>
+              <dt className="font-medium text-tinta">{p.label}:</dt>
+              <dd className="text-tinta-3">{p.ajuda}</dd>
             </div>
           ))}
         </dl>
       </div>
 
       {carregando ? (
-        <p className="text-sm text-zinc-400">Carregando...</p>
+        <EsqueletoLista linhas={3} />
       ) : (
         <div className="space-y-2">
           {usuarios.map((u) => {
@@ -181,15 +193,15 @@ export default function UsuariosPainel() {
               <div
                 key={u.id}
                 className={cn(
-                  "rounded-xl border border-zinc-200 bg-white p-4",
+                  "rounded-xl border border-linha bg-superficie p-4",
                   !u.ativo && "opacity-60"
                 )}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-zinc-900">{u.nome}</p>
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                      <p className="font-medium text-tinta">{u.nome}</p>
+                      <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs font-medium text-tinta-2">
                         {labelPapel(u.papel)}
                       </span>
                       {souEu && (
@@ -198,13 +210,13 @@ export default function UsuariosPainel() {
                         </span>
                       )}
                       {!u.ativo && (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                        <span className="rounded-full bg-perigo-fraco px-2 py-0.5 text-xs font-medium text-perigo">
                           desativado
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 truncate text-sm text-zinc-500">{u.email}</p>
-                    <p className="mt-0.5 text-xs text-zinc-400">
+                    <p className="mt-0.5 truncate text-sm text-tinta-3">{u.email}</p>
+                    <p className="mt-0.5 text-xs text-tinta-3">
                       {u.ultimoAcesso
                         ? `Último acesso: ${formatDatetime(u.ultimoAcesso)}`
                         : "Nunca entrou"}
@@ -217,7 +229,7 @@ export default function UsuariosPainel() {
                       disabled={travado || souEu}
                       onChange={(e) => alterar(u, { papel: e.target.value })}
                       title={souEu ? "Você não pode mudar o próprio papel" : "Mudar o papel"}
-                      className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+                      className="min-h-11 rounded-lg border border-linha-forte bg-superficie px-2.5 text-xs text-tinta outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50 sm:min-h-9"
                     >
                       {PAPEIS.map((p) => (
                         <option key={p.value} value={p.value}>
@@ -232,7 +244,7 @@ export default function UsuariosPainel() {
                         setModalSenha(u);
                       }}
                       disabled={travado}
-                      className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                      className="min-h-11 rounded-lg border border-linha-forte px-2.5 text-xs text-tinta-2 hover:bg-superficie-2 disabled:opacity-50 sm:min-h-9"
                     >
                       Definir senha
                     </button>
@@ -249,7 +261,7 @@ export default function UsuariosPainel() {
                           )
                         }
                         disabled={travado}
-                        className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                        className="min-h-11 rounded-lg border border-linha-forte px-2.5 text-xs text-tinta-2 hover:bg-superficie-2 disabled:opacity-50 sm:min-h-9"
                       >
                         {u.ativo ? "Desativar" : "Reativar"}
                       </button>
@@ -259,7 +271,7 @@ export default function UsuariosPainel() {
                       <button
                         onClick={() => excluir(u)}
                         disabled={travado}
-                        className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        className="min-h-11 rounded-lg border border-perigo-linha px-2.5 text-xs text-perigo hover:bg-perigo-fraco disabled:opacity-50 sm:min-h-9"
                       >
                         Excluir
                       </button>
@@ -274,139 +286,132 @@ export default function UsuariosPainel() {
 
       {/* Novo acesso */}
       {modalNovo && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center">
-          <form
-            onSubmit={criar}
-            className="my-auto w-full max-w-sm space-y-4 rounded-xl bg-white p-5 shadow-xl"
-          >
-            <h2 className="font-semibold text-zinc-900">Novo acesso</h2>
-
+        <Modal
+          titulo="Novo acesso"
+          descricao="A pessoa entra com este e-mail e a senha inicial."
+          largura="max-w-sm"
+          onFechar={() => setModalNovo(false)}
+          rodape={
+            <div className="flex gap-2">
+              <Botao type="submit" form="form-novo-acesso" className="flex-1" disabled={salvandoNovo}>
+                {salvandoNovo ? "Criando..." : "Criar acesso"}
+              </Botao>
+              <Botao variante="secundario" className="flex-1" onClick={() => setModalNovo(false)}>
+                Cancelar
+              </Botao>
+            </div>
+          }
+        >
+          <form id="form-novo-acesso" onSubmit={criar} className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">Nome</label>
-              <input
+              <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="novo-nome">
+                Nome
+              </label>
+              <Entrada
+                id="novo-nome"
                 required
-                autoFocus
+                data-foco-inicial
                 value={novo.nome}
                 onChange={(e) => setNovo({ ...novo, nome: e.target.value })}
-                className={inputCls}
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">E-mail</label>
-              <input
+              <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="novo-email">
+                E-mail
+              </label>
+              <Entrada
+                id="novo-email"
                 type="email"
                 required
                 inputMode="email"
                 value={novo.email}
                 onChange={(e) => setNovo({ ...novo, email: e.target.value })}
-                className={inputCls}
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">Papel</label>
-              <select
+              <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="novo-papel">
+                Papel
+              </label>
+              <Selecao
+                id="novo-papel"
                 value={novo.papel}
                 onChange={(e) => setNovo({ ...novo, papel: e.target.value as Papel })}
-                className={inputCls}
               >
                 {PAPEIS.map((p) => (
                   <option key={p.value} value={p.value}>
                     {p.label} — {p.ajuda}
                   </option>
                 ))}
-              </select>
+              </Selecao>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">Senha inicial</label>
-              <input
+              <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="novo-senha">
+                Senha inicial
+              </label>
+              <Entrada
+                id="novo-senha"
                 type="text"
                 required
                 minLength={SENHA_MIN}
                 value={novo.senha}
                 onChange={(e) => setNovo({ ...novo, senha: e.target.value })}
-                className={inputCls}
               />
-              <p className="mt-1 text-xs text-zinc-500">
-                Mínimo de {SENHA_MIN} caracteres. Fica visível para você copiar e passar à
-                pessoa — depois ela pode pedir a troca.
+              <p className="mt-1 text-xs text-tinta-3">
+                Mínimo de {SENHA_MIN} caracteres. Fica visível para você copiar e passar à pessoa —
+                depois ela pode pedir a troca.
               </p>
             </div>
 
-            {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setModalNovo(false)}
-                className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={salvandoNovo}
-                className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50"
-              >
-                {salvandoNovo ? "Criando..." : "Criar"}
-              </button>
-            </div>
+            {erro && <p className="rounded-lg bg-perigo-fraco px-3 py-2 text-sm text-perigo">{erro}</p>}
           </form>
-        </div>
+        </Modal>
       )}
 
       {/* Definir senha */}
       {modalSenha && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center">
-          <form
-            onSubmit={definirSenha}
-            className="my-auto w-full max-w-sm space-y-4 rounded-xl bg-white p-5 shadow-xl"
-          >
-            <div>
-              <h2 className="font-semibold text-zinc-900">Definir senha</h2>
-              <p className="mt-0.5 text-sm text-zinc-500">{modalSenha.nome}</p>
+        <Modal
+          titulo="Definir senha"
+          descricao={modalSenha.nome}
+          largura="max-w-sm"
+          onFechar={() => setModalSenha(null)}
+          rodape={
+            <div className="flex gap-2">
+              <Botao type="submit" form="form-senha" className="flex-1" disabled={salvandoSenha}>
+                {salvandoSenha ? "Salvando..." : "Salvar senha"}
+              </Botao>
+              <Botao variante="secundario" className="flex-1" onClick={() => setModalSenha(null)}>
+                Cancelar
+              </Botao>
             </div>
-
+          }
+        >
+          <form id="form-senha" onSubmit={definirSenha} className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">Nova senha</label>
-              <input
+              <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="senha-nova">
+                Nova senha
+              </label>
+              <Entrada
+                id="senha-nova"
                 type="text"
                 required
-                autoFocus
+                data-foco-inicial
                 minLength={SENHA_MIN}
                 value={senhaNova}
                 onChange={(e) => setSenhaNova(e.target.value)}
-                className={inputCls}
               />
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-tinta-3">
                 {modalSenha.id === eu?.id
                   ? "Suas outras sessões serão encerradas; esta continua aberta."
                   : "As sessões abertas dessa pessoa serão encerradas na hora."}
               </p>
             </div>
 
-            {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setModalSenha(null)}
-                className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={salvandoSenha}
-                className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50"
-              >
-                {salvandoSenha ? "Salvando..." : "Salvar"}
-              </button>
-            </div>
+            {erro && <p className="rounded-lg bg-perigo-fraco px-3 py-2 text-sm text-perigo">{erro}</p>}
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

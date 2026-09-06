@@ -93,7 +93,7 @@ export function SeletorCategoria({
       </div>
 
       {criando && (
-        <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+        <div className="mt-2 rounded-lg border border-linha bg-superficie-2 p-2">
           <div className="flex gap-2">
             <PaletaCor valor={cor} onMudar={setCor} />
             <Entrada
@@ -134,7 +134,7 @@ export function SeletorCategoria({
               Cancelar
             </Botao>
           </div>
-          {erro && <p className="mt-2 text-xs text-red-600">{erro}</p>}
+          {erro && <p className="mt-2 text-xs text-perigo">{erro}</p>}
         </div>
       )}
     </Campo>

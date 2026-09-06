@@ -10,7 +10,7 @@ function normalizar(txt: string) {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  "w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 /**
  * Seletor de cliente com campo de busca. Substitui o <select> nativo, que na
@@ -137,14 +137,14 @@ export default function ClienteSelect({
         aria-expanded={open}
         className={
           inputCls +
-          " flex items-center justify-between gap-2 bg-white text-left disabled:bg-zinc-50 disabled:text-zinc-400"
+          " flex items-center justify-between gap-2 bg-superficie text-left disabled:bg-superficie-2 disabled:text-tinta-3"
         }
       >
-        <span className={"truncate " + (selecionado ? "text-zinc-900" : "text-zinc-500")}>{rotulo}</span>
+        <span className={"truncate " + (selecionado ? "text-tinta" : "text-tinta-3")}>{rotulo}</span>
         <svg
           width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          className="shrink-0 text-zinc-400" aria-hidden="true"
+          className="shrink-0 text-tinta-3" aria-hidden="true"
         >
           <path d="m6 9 6 6 6-6" />
         </svg>
@@ -155,15 +155,15 @@ export default function ClienteSelect({
           {/* Fundo só no celular, onde o painel flutua sobre o formulário. */}
           <div onClick={fechar} className="fixed inset-0 z-40 bg-black/30 sm:hidden" aria-hidden="true" />
           <div
-            className="fixed inset-x-3 top-14 z-50 flex max-h-[70vh] flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl sm:absolute sm:inset-x-0 sm:top-full sm:z-30 sm:mt-1 sm:max-h-80 sm:shadow-lg"
+            className="fixed inset-x-3 top-14 z-50 flex max-h-[70vh] flex-col overflow-hidden rounded-xl border border-linha bg-superficie shadow-xl sm:absolute sm:inset-x-0 sm:top-full sm:z-30 sm:mt-1 sm:max-h-80 sm:shadow-lg"
             role="dialog"
           >
-            <div className="border-b border-zinc-100 p-2">
+            <div className="border-b border-linha p-2">
               <div className="relative">
                 <svg
                   width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-tinta-3"
                   aria-hidden="true"
                 >
                   <circle cx="11" cy="11" r="8" />
@@ -198,13 +198,13 @@ export default function ClienteSelect({
                       className={
                         "flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm min-h-[44px] " +
                         (i === destaque ? "bg-brand-50 " : "") +
-                        (ativo ? "font-semibold text-brand-700" : "text-zinc-700")
+                        (ativo ? "font-semibold text-brand-700" : "text-tinta-2")
                       }
                     >
                       <span className="min-w-0">
                         <span className="block truncate">{o.nome}</span>
                         {o.telefone && (
-                          <span className="block truncate text-xs text-zinc-500">{o.telefone}</span>
+                          <span className="block truncate text-xs text-tinta-3">{o.telefone}</span>
                         )}
                       </span>
                       {ativo && (
@@ -221,7 +221,7 @@ export default function ClienteSelect({
                 );
               })}
               {opcoes.length === 0 && (
-                <li className="px-3 py-6 text-center text-sm text-zinc-500">
+                <li className="px-3 py-6 text-center text-sm text-tinta-3">
                   Nenhum cliente encontrado para “{busca.trim()}”.
                 </li>
               )}

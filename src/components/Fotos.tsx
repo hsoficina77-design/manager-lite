@@ -11,6 +11,8 @@ import {
   tipoDaFoto,
   type FotoTipo,
 } from "@/lib/constants";
+import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
+import { Avancar, Fechar, Voltar } from "@/components/ui/Icones";
 
 export type Foto = {
   id: string;
@@ -53,6 +55,8 @@ export default function Fotos({
   documento?: "OS" | "orçamento";
 }) {
   const secoes = porMomento ? FOTO_TIPOS : SECAO_UNICA;
+  const confirmar = useConfirmar();
+  const avisar = useAvisar();
   const [enviando, setEnviando] = useState<Enviando[]>([]);
   // O visor guarda o id, não o índice: mudar o momento reordena a lista e um
   // índice fixo saltaria para outra foto.
@@ -155,36 +159,70 @@ export default function Fotos({
     (origem === "camera" ? cameraRef : galeriaRef).current?.click();
   }
 
+  // A exclusão era otimista e sem checagem: a foto sumia da tela antes da
+  // resposta, então uma falha a apagava da interface e a mantinha no banco.
+  // Agora só sai da lista depois que o servidor confirma.
   async function excluir(id: string) {
-    if (!confirm("Excluir esta foto?")) return;
-    onChange((atuais) => atuais.filter((f) => f.id !== id));
-    setVisor(null);
-    await fetch(`${apiBase}/${id}`, { method: "DELETE" });
+    const alvo = fotos.find((f) => f.id === id);
+    const ok = await confirmar({
+      titulo: "Excluir esta foto?",
+      texto: alvo?.legenda
+        ? `“${alvo.legenda}” sai da OS e do PDF do cliente. Não há como desfazer.`
+        : "Ela sai da OS e do PDF do cliente. Não há como desfazer.",
+      acao: "Excluir foto",
+      perigo: true,
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch(`${apiBase}/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        avisar("Não foi possível excluir a foto.", "erro");
+        return;
+      }
+      onChange((atuais) => atuais.filter((f) => f.id !== id));
+      setVisor(null);
+    } catch {
+      avisar("Sem conexão. A foto não foi excluída.", "erro");
+    }
+  }
+
+  // Legenda e momento eram salvos sem olhar a resposta: a tela mostrava o valor
+  // novo e o banco ficava com o antigo, sem ninguém saber.
+  async function salvarCampo(id: string, corpo: Record<string, unknown>, anterior: Partial<Foto>) {
+    try {
+      const res = await fetch(`${apiBase}/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpo),
+      });
+      if (res.ok) return;
+      onChange((atuais) => atuais.map((f) => (f.id === id ? { ...f, ...anterior } : f)));
+      avisar("Não foi possível salvar a alteração da foto.", "erro");
+    } catch {
+      onChange((atuais) => atuais.map((f) => (f.id === id ? { ...f, ...anterior } : f)));
+      avisar("Sem conexão. A alteração da foto não foi salva.", "erro");
+    }
   }
 
   async function salvarLegenda(id: string, legenda: string) {
+    const anterior = fotos.find((f) => f.id === id)?.legenda ?? null;
     onChange((atuais) =>
       atuais.map((f) => (f.id === id ? { ...f, legenda: legenda.trim() || null } : f))
     );
-    await fetch(`${apiBase}/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ legenda }),
-    });
+    await salvarCampo(id, { legenda }, { legenda: anterior });
   }
 
   async function salvarTipo(id: string, tipo: FotoTipo) {
+    const anterior = fotos.find((f) => f.id === id)?.tipo;
     onChange((atuais) => atuais.map((f) => (f.id === id ? { ...f, tipo } : f)));
-    await fetch(`${apiBase}/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipo }),
-    });
+    await salvarCampo(id, { tipo }, anterior ? { tipo: anterior } : {});
   }
 
-  // Navegação do visor por teclado
+  // Navegação do visor por teclado, e trava da rolagem de fundo enquanto ele está
+  // aberto — sem isso, arrastar sobre a foto rolava a página atrás dela.
   useEffect(() => {
     if (indice < 0) return;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setVisor(null);
       if (e.key === "ArrowRight" && indice < ordenadas.length - 1) {
@@ -193,17 +231,20 @@ export default function Fotos({
       if (e.key === "ArrowLeft" && indice > 0) setVisor(ordenadas[indice - 1].id);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
   }, [indice, ordenadas]);
 
   const total = fotos.length;
 
   return (
-    <div className="no-print bg-white rounded-xl border border-zinc-200 p-5 space-y-4">
+    <div className="no-print rounded-xl border border-linha bg-superficie p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-zinc-800">Fotos</h2>
-          <p className="text-xs text-zinc-500">
+          <h2 className="font-semibold text-tinta">Fotos</h2>
+          <p className="text-xs text-tinta-3">
             {descrevendo && total > 0
               ? "Escreva embaixo de cada foto o que ela mostra — a descrição sai no PDF do cliente"
               : total > 0
@@ -225,7 +266,7 @@ export default function Fotos({
               "shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
               descrevendo
                 ? "border-brand-600 bg-brand-600 text-brand-fg hover:bg-brand-700"
-                : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                : "border-linha-forte text-tinta-2 hover:bg-superficie-2"
             )}
           >
             {descrevendo ? "Concluir" : "Descrever fotos"}
@@ -359,46 +400,46 @@ function Secao({
         comTitulo && "border p-3",
         arrastando
           ? comTitulo
-            ? "border-red-400 bg-red-50"
-            : "bg-red-50"
-          : comTitulo && "border-zinc-200"
+            ? "border-perigo-linha bg-perigo-fraco"
+            : "bg-perigo-fraco"
+          : comTitulo && "border-linha"
       )}
     >
       {comTitulo && (
         <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-medium text-zinc-800">
+          <h3 className="text-sm font-medium text-tinta">
             {label}
             {fotos.length > 0 && (
-              <span className="ml-1.5 text-xs font-normal text-zinc-400">{fotos.length}</span>
+              <span className="ml-1.5 text-xs font-normal text-tinta-3">{fotos.length}</span>
             )}
           </h3>
-          <span className="truncate text-xs text-zinc-400">{ajuda}</span>
+          <span className="truncate text-xs text-tinta-3">{ajuda}</span>
         </div>
       )}
 
       {vazio ? (
         podeEditar ? (
-          <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-zinc-200 px-3 py-4 sm:flex-row sm:justify-center">
-            <span className="text-xs text-zinc-400">
+          <div className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-linha px-3 py-4 sm:flex-row sm:justify-center">
+            <span className="text-xs text-tinta-3">
               <span className="hidden sm:inline">Arraste as fotos aqui ou</span>
               <span className="sm:hidden">Nenhuma foto ainda</span>
             </span>
             <button
               onClick={() => onEscolher("camera")}
-              className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 sm:hidden"
+              className="rounded-lg bg-contraste px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 sm:hidden"
             >
               Tirar foto
             </button>
             <button
               onClick={() => onEscolher("galeria")}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+              className="rounded-lg border border-linha-forte px-3 py-1.5 text-xs font-medium text-tinta-2 hover:bg-superficie-2"
             >
               <span className="sm:hidden">Escolher da galeria</span>
               <span className="hidden sm:inline">escolha os arquivos</span>
             </button>
           </div>
         ) : (
-          <p className="px-1 py-2 text-xs text-zinc-400">Nenhuma foto.</p>
+          <p className="px-1 py-2 text-xs text-tinta-3">Nenhuma foto.</p>
         )
       ) : (
         <div
@@ -414,7 +455,7 @@ function Secao({
               <button
                 key={foto.id}
                 onClick={() => onAbrir(foto.id)}
-                className="group relative aspect-square w-full overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
+                className="group relative aspect-square w-full overflow-hidden rounded-lg border border-linha bg-superficie-3"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -425,7 +466,7 @@ function Secao({
                 />
                 {/* No modo descrever o texto aparece no campo abaixo, sem cobrir a foto. */}
                 {foto.legenda && !descrevendo && (
-                  <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-[10px] text-white">
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-xs text-white">
                     {foto.legenda}
                   </span>
                 )}
@@ -449,13 +490,13 @@ function Secao({
               <button
                 key={e.tempId}
                 onClick={() => onTentarNovamente(e)}
-                className="group relative aspect-square overflow-hidden rounded-lg border border-red-200 bg-zinc-100"
+                className="group relative aspect-square overflow-hidden rounded-lg border border-perigo-linha bg-superficie-3"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={e.preview} alt="" className="h-full w-full object-cover opacity-40" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-1 text-center">
-                  <span className="text-[10px] font-medium text-red-600">{e.erro}</span>
-                  <span className="text-[10px] font-semibold text-zinc-700 underline">
+                  <span className="text-xs font-medium text-perigo">{e.erro}</span>
+                  <span className="text-xs font-semibold text-tinta-2 underline">
                     Tentar novamente
                   </span>
                 </div>
@@ -466,21 +507,21 @@ function Secao({
                     ev.stopPropagation();
                     onRemoverPendente(e.tempId);
                   }}
-                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-black/80"
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
                 >
-                  ×
+                  <Fechar tamanho={12} />
                 </span>
               </button>
             ) : (
               <div
                 key={e.tempId}
-                className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
+                className="relative aspect-square overflow-hidden rounded-lg border border-linha bg-superficie-3"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={e.preview} alt="" className="h-full w-full object-cover opacity-40" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-1 text-center">
                   <Spinner />
-                  <span className="text-[10px] text-zinc-600">Enviando</span>
+                  <span className="text-xs text-tinta-2">Enviando</span>
                 </div>
               </div>
             )
@@ -490,17 +531,17 @@ function Secao({
             <>
               <button
                 onClick={() => onEscolher("camera")}
-                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600 sm:hidden"
+                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-linha text-tinta-3 hover:border-linha-forte hover:text-tinta-2 sm:hidden"
               >
                 <span className="text-2xl leading-none">+</span>
-                <span className="text-[10px]">Tirar foto</span>
+                <span className="text-xs">Tirar foto</span>
               </button>
               <button
                 onClick={() => onEscolher("galeria")}
-                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600"
+                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-linha text-tinta-3 hover:border-linha-forte hover:text-tinta-2"
               >
                 <span className="text-2xl leading-none">+</span>
-                <span className="text-[10px]">
+                <span className="text-xs">
                   <span className="sm:hidden">Galeria</span>
                   <span className="hidden sm:inline">Adicionar</span>
                 </span>
@@ -545,7 +586,13 @@ function Visor({
   useEffect(() => setLegenda(foto.legenda ?? ""), [foto.id, foto.legenda]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={onFechar}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Foto ${indice + 1} de ${total}`}
+      className="fixed inset-0 z-50 flex flex-col bg-black/90"
+      onClick={onFechar}
+    >
       <div
         className="flex items-center justify-between px-4 py-3 text-white"
         onClick={(e) => e.stopPropagation()}
@@ -586,10 +633,10 @@ function Visor({
         {indice > 0 && (
           <button
             onClick={onAnterior}
-            className="absolute left-2 z-10 rounded-full bg-black/50 px-3 py-2 text-xl text-white hover:bg-black/70"
+            className="absolute left-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
             aria-label="Foto anterior"
-          >
-            ‹
+            >
+              <Voltar tamanho={20} />
           </button>
         )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -601,10 +648,10 @@ function Visor({
         {indice < total - 1 && (
           <button
             onClick={onProxima}
-            className="absolute right-2 z-10 rounded-full bg-black/50 px-3 py-2 text-xl text-white hover:bg-black/70"
+            className="absolute right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
             aria-label="Próxima foto"
-          >
-            ›
+            >
+              <Avancar tamanho={20} />
           </button>
         )}
       </div>
@@ -621,7 +668,7 @@ function Visor({
                   className={cn(
                     "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
                     t.value === tipoAtual
-                      ? "border-white bg-white text-zinc-900"
+                      ? "border-white bg-white text-black"
                       : "border-white/25 text-white/70 hover:bg-white/10"
                   )}
                 >
@@ -676,14 +723,14 @@ function CampoDescricao({
       placeholder="Descreva a foto"
       maxLength={FOTO_LEGENDA_MAX}
       aria-label="Descrição da foto"
-      className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-xs text-zinc-700 placeholder:text-zinc-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
+      className="w-full rounded-lg border border-linha px-2 py-1.5 text-xs text-tinta-2 placeholder:text-tinta-3 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
     />
   );
 }
 
 function Spinner() {
   return (
-    <svg className="h-5 w-5 animate-spin text-zinc-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg className="h-5 w-5 animate-spin text-tinta-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
     </svg>

@@ -15,6 +15,9 @@ import {
 } from "@/lib/periodo";
 import { osEntreguesNoPeriodo, osNoPatio, dataProducao, diasParado } from "@/lib/os-periodo";
 import { custoDoIntervalo } from "@/lib/despesas";
+import { FaixaMetricas, Metrica, MetricaLink, Painel, Vazio } from "@/components/ui/Dados";
+import { BotaoLink } from "@/components/ui/Botao";
+import { Avancar, Mais, SetaDireita, Voltar } from "@/components/ui/Icones";
 
 // O dashboard responde duas perguntas de naturezas diferentes, e por isso são duas abas:
 //
@@ -65,17 +68,12 @@ export default async function Dashboard({
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
+      {/* As abas já dizem o que a tela mostra; a linha explicativa embaixo do
+          título era ruído em toda página para quem abre o sistema todo dia. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Dashboard</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            {aba === "operacao"
-              ? "O que está no pátio agora"
-              : "O que foi entregue no período"}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold text-tinta">Dashboard</h1>
         {ehDono && (
-          <div className="flex gap-1 bg-zinc-100 rounded-lg p-1">
+          <div className="flex gap-1 rounded-lg bg-superficie-3 p-1">
             <AbaLink href="/?aba=operacao" ativa={aba === "operacao"}>
               Operação
             </AbaLink>
@@ -152,92 +150,111 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
 
   return (
     <>
-      <div className={cn("grid gap-4", ehDono ? "grid-cols-2 lg:grid-cols-5" : "grid-cols-3")}>
-        <StatCard label="No pátio" value={String(patio.length)} href="/os?status=patio" />
-        <StatCard label="Em serviço" value={String(emServico)} href="/os?status=patio" />
-        <StatCard label="Ag. peça" value={String(agPeca)} href="/os?status=patio" />
+      {/* Uma superfície com divisórias, não cinco cartões iguais empilhados. */}
+      <FaixaMetricas colunas={ehDono ? 5 : 3}>
+        <MetricaLink
+          href="/os?status=patio"
+          rotulo="No pátio"
+          valor={String(patio.length)}
+          tamanho="grande"
+        />
+        <MetricaLink
+          href="/os?status=patio"
+          rotulo="Em serviço"
+          valor={String(emServico)}
+          tamanho="grande"
+        />
+        <MetricaLink
+          href="/os?status=patio"
+          rotulo="Ag. peça"
+          valor={String(agPeca)}
+          tamanho="grande"
+          tom={agPeca > 0 ? "atencao" : "neutro"}
+        />
         {ehDono && (
           <>
-            <StatCard
-              label="A Receber"
-              value={formatCurrency(totalAReceber)}
+            <MetricaLink
+              href="/contas-receber"
+              rotulo="A receber"
+              valor={formatCurrency(totalAReceber)}
               sub="de OS já entregues"
-              href="/contas-receber"
-              highlight={totalAReceber > 0}
+              tamanho="grande"
+              tom={totalAReceber > 0 ? "perigo" : "neutro"}
             />
-            <StatCard
-              label="Devedores"
-              value={String(devedoresCount)}
+            <MetricaLink
               href="/contas-receber"
-              highlight={devedoresCount > 0}
+              rotulo="Devedores"
+              valor={String(devedoresCount)}
+              tamanho="grande"
+              tom={devedoresCount > 0 ? "perigo" : "neutro"}
             />
           </>
         )}
-      </div>
+      </FaixaMetricas>
 
       {/* Previsibilidade de caixa: o resultado de fechar tudo que está no pátio. */}
       {ehDono && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <div className="mb-3">
-            <h2 className="font-semibold text-zinc-800">Se finalizar tudo do pátio</h2>
-            <p className="text-xs text-zinc-500">
-              {patio.length} OS em aberto · custo de peças estimado pelo que já está lançado nas OS
-            </p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <Metrica label="Receita potencial" valor={formatCurrency(previsao.receita)} />
-            <Metrica label="Custo de peças" valor={`- ${formatCurrency(previsao.custoPecas)}`} />
+        <Painel
+          titulo="Se finalizar tudo do pátio"
+          ajuda={`${patio.length} OS em aberto · custo de peças estimado pelo que já está lançado nas OS`}
+        >
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Metrica rotulo="Receita potencial" valor={formatCurrency(previsao.receita)} />
+            <Metrica rotulo="Custo de peças" valor={`- ${formatCurrency(previsao.custoPecas)}`} />
             <Metrica
-              label="Lucro potencial"
+              rotulo="Lucro potencial"
               valor={formatCurrency(previsao.lucro)}
-              cor={previsao.lucro >= 0 ? "text-green-600" : "text-red-600"}
-              forte
+              tom={previsao.lucro >= 0 ? "ok" : "perigo"}
             />
-            <Metrica label="Caixa a entrar" valor={formatCurrency(previsao.aEntrar)} />
+            <Metrica rotulo="Caixa a entrar" valor={formatCurrency(previsao.aEntrar)} />
           </div>
-        </div>
+        </Painel>
       )}
 
       {/* O único número com data nesta aba: o realizado do dia. */}
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
-          <div>
-            <p className="text-xs text-zinc-400">Entregue hoje</p>
-            <p className="font-semibold text-zinc-900">
-              {hojeResumo.n} OS
-            </p>
-          </div>
+      <div className="rounded-xl border border-linha bg-superficie-2 p-4">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+          <Metrica rotulo="Entregue hoje" valor={`${hojeResumo.n} OS`} />
           {ehDono && (
             <>
-              <Metrica label="Faturado" valor={formatCurrency(hojeResumo.faturado)} />
+              <Metrica rotulo="Faturado" valor={formatCurrency(hojeResumo.faturado)} />
               <Metrica
-                label="Lucro"
+                rotulo="Lucro"
                 valor={formatCurrency(hojeResumo.lucro)}
-                cor={hojeResumo.lucro >= 0 ? "text-green-600" : "text-red-600"}
+                tom={hojeResumo.lucro >= 0 ? "ok" : "perigo"}
               />
             </>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-3">
+      {/* No celular a coluna da direita vira "depois de tudo", e "Nova OS" ficava
+          atrás da lista inteira do pátio. Agora as ações vêm antes da lista, e só
+          voltam para a lateral onde há duas colunas de verdade. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-4 lg:order-2">
+          <AcoesRapidas />
+          {ehDono && <CardDevedores top5={top5} />}
+        </div>
+
+        <div className="space-y-3 lg:order-1 lg:col-span-2">
           <div>
-            <h2 className="font-semibold text-zinc-800">Pátio</h2>
-            <p className="text-xs text-zinc-500">Parada há mais tempo primeiro</p>
+            <h2 className="font-semibold text-tinta">Pátio</h2>
+            <p className="text-xs text-tinta-3">Parada há mais tempo primeiro</p>
           </div>
           <ListaOS
             ordens={patio}
             vazio="Nenhuma OS em aberto."
+            vazioTexto="Quando um carro entrar, ele aparece aqui com o tempo parado."
+            vazioAcao={
+              <BotaoLink href="/os/nova">
+                <Mais tamanho={16} /> Abrir a primeira OS
+              </BotaoLink>
+            }
             patio
             agora={agora}
             mostrarLucro={ehDono}
           />
-        </div>
-
-        <div className="space-y-4">
-          <AcoesRapidas />
-          {ehDono && <CardDevedores top5={top5} />}
         </div>
       </div>
     </>
@@ -314,86 +331,113 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
     <>
       <NavegacaoPeriodo periodo={periodo} offset={offset} janela={j} podeAvancar={offset < 0} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="OS entregues" value={String(ordens.length)} href="/os?status=entregues" />
-        <StatCard
-          label="Faturado"
-          value={formatCurrency(receita)}
-          sub={variacao(receita, receitaAnterior)}
+      <FaixaMetricas colunas={5}>
+        <MetricaLink
           href="/os?status=entregues"
+          rotulo="OS entregues"
+          valor={String(ordens.length)}
+          tamanho="grande"
         />
-        <StatCard label="Ticket médio" value={formatCurrency(ticket)} href="/os?status=entregues" />
-        <StatCard label="Recebido" value={formatCurrency(recebido)} sub="dinheiro que entrou" href="/caixa" />
-        <StatCard
-          label="Lucro líquido"
-          value={formatCurrency(lucroLiquido)}
-          sub={`bruto ${formatCurrency(lucroBruto)} − despesas`}
+        <MetricaLink
+          href="/os?status=entregues"
+          rotulo="Faturado"
+          valor={formatCurrency(receita)}
+          sub={variacao(receita, receitaAnterior)}
+          tamanho="grande"
+        />
+        <MetricaLink
+          href="/os?status=entregues"
+          rotulo="Ticket médio"
+          valor={formatCurrency(ticket)}
+          tamanho="grande"
+        />
+        <MetricaLink
+          href="/caixa"
+          rotulo="Recebido"
+          valor={formatCurrency(recebido)}
+          sub="dinheiro que entrou"
+          tamanho="grande"
+        />
+        <MetricaLink
           href="/despesas"
+          rotulo="Lucro líquido"
+          valor={formatCurrency(lucroLiquido)}
+          sub={`bruto ${formatCurrency(lucroBruto)} − despesas`}
+          tamanho="grande"
+          tom={lucroLiquido >= 0 ? "ok" : "perigo"}
         />
-      </div>
+      </FaixaMetricas>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <h2 className="font-semibold text-zinc-800">DRE Simplificado</h2>
-            <p className="text-xs text-zinc-500">Mesmas OS listadas abaixo</p>
-          </div>
-          <Link href="/despesas" className="shrink-0 text-xs text-brand-600 hover:underline">
-            Controle de gastos →
+      <Painel
+        titulo="DRE simplificado"
+        ajuda="Mesmas OS listadas abaixo"
+        acao={
+          <Link
+            href="/despesas"
+            className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+          >
+            Controle de gastos <SetaDireita tamanho={13} />
           </Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <Metrica label="Receita" valor={formatCurrency(receita)} />
-          <Metrica label="Custo de peças" valor={`- ${formatCurrency(custoPecas)}`} />
-          <Metrica label="Despesas fixas" valor={`- ${formatCurrency(totalDespesas)}`} />
+        }
+      >
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Metrica rotulo="Receita" valor={formatCurrency(receita)} />
+          <Metrica rotulo="Custo de peças" valor={`- ${formatCurrency(custoPecas)}`} />
+          <Metrica rotulo="Despesas fixas" valor={`- ${formatCurrency(totalDespesas)}`} />
           <Metrica
-            label="Lucro líquido"
+            rotulo="Lucro líquido"
             valor={formatCurrency(lucroLiquido)}
-            cor={lucroLiquido >= 0 ? "text-green-600" : "text-red-600"}
-            forte
+            tom={lucroLiquido >= 0 ? "ok" : "perigo"}
           />
         </div>
         {receita > 0 && recebido < receita && (
-          <p className="mt-3 text-xs text-zinc-500">
+          <p className="mt-3 text-xs text-tinta-3">
             Faturado {formatCurrency(receita)} · recebido {formatCurrency(recebido)} — diferença de{" "}
-            <span className="font-medium text-red-600">{formatCurrency(receita - recebido)}</span>{" "}
+            <span className="font-medium text-perigo">{formatCurrency(receita - recebido)}</span>{" "}
             entre o serviço entregue e o dinheiro que entrou no período.
           </p>
         )}
-      </div>
+      </Painel>
 
       {/* Distribuição interna: é aqui que dá pra ver qual semana rendeu. */}
       {partes.length > 1 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-5">
-          <h2 className="font-semibold text-zinc-800 mb-3">Distribuição no período</h2>
+        <Painel titulo="Distribuição no período">
           <div className="space-y-2">
             {partes.map((p) => (
               <div key={p.label} className="flex items-center gap-3 text-xs">
-                <span className="w-10 shrink-0 text-zinc-500">{p.label}</span>
-                <div className="flex-1 h-5 rounded bg-zinc-100 overflow-hidden">
+                <span className="w-10 shrink-0 text-tinta-3">{p.label}</span>
+                <div className="h-5 flex-1 overflow-hidden rounded bg-superficie-3">
                   <div
-                    className="h-full rounded bg-zinc-800"
+                    className="h-full rounded bg-contraste"
                     style={{ width: `${(p.receita / maiorBucket) * 100}%` }}
                   />
                 </div>
-                <span className="w-24 shrink-0 text-right font-medium text-zinc-900">
+                <span className="w-24 shrink-0 text-right font-medium tabular-nums text-tinta">
                   {formatCurrency(p.receita)}
                 </span>
-                <span className="w-12 shrink-0 text-right text-zinc-400">
-                  {p.n} OS
-                </span>
+                <span className="w-12 shrink-0 text-right tabular-nums text-tinta-3">{p.n} OS</span>
               </div>
             ))}
           </div>
-        </div>
+        </Painel>
       )}
 
       <div className="space-y-3">
         <div>
-          <h2 className="font-semibold text-zinc-800">Entregues no período</h2>
-          <p className="text-xs text-zinc-500">Mais recente primeiro</p>
+          <h2 className="font-semibold text-tinta">Entregues no período</h2>
+          <p className="text-xs text-tinta-3">Mais recente primeiro</p>
         </div>
-        <ListaOS ordens={ordenadas} vazio="Nenhuma OS entregue neste período." agora={agora} />
+        <ListaOS
+          ordens={ordenadas}
+          vazio="Nenhuma OS entregue neste período"
+          vazioTexto="Navegue para outro período ou confira o pátio."
+          vazioAcao={
+            <BotaoLink href="/?aba=operacao" variante="secundario">
+              Ver o pátio
+            </BotaoLink>
+          }
+          agora={agora}
+        />
       </div>
     </>
   );
@@ -440,10 +484,12 @@ function variacao(atual: number, anterior: number): string | undefined {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs. período anterior`;
 }
 
+// Mesma rampa de tempo em aberto usada em contas a receber, para o olho aprender
+// uma escala só. Zero é o normal do pátio, não um acerto — por isso neutro.
 function corAging(dias: number): string {
-  if (dias >= 15) return "bg-red-100 text-red-700";
-  if (dias >= 7) return "bg-orange-100 text-orange-700";
-  return "bg-zinc-100 text-zinc-500";
+  if (dias >= 15) return "idade idade-4";
+  if (dias >= 7) return "idade idade-3";
+  return "idade idade-0";
 }
 
 function AbaLink({ href, ativa, children }: { href: string; ativa: boolean; children: React.ReactNode }) {
@@ -452,7 +498,7 @@ function AbaLink({ href, ativa, children }: { href: string; ativa: boolean; chil
       href={href}
       className={cn(
         "shrink-0 whitespace-nowrap px-4 py-1.5 rounded-md text-xs font-medium transition-colors",
-        ativa ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+        ativa ? "bg-superficie text-tinta shadow-sm" : "text-tinta-3 hover:text-tinta-2"
       )}
     >
       {children}
@@ -479,29 +525,32 @@ function NavegacaoPeriodo({
         <Link
           href={url(periodo, offset - 1)}
           aria-label="Período anterior"
-          className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+          className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie text-tinta-2 hover:bg-superficie-2 sm:h-9 sm:w-9"
         >
-          ←
+          <Voltar tamanho={16} />
         </Link>
-        <span className="min-w-36 text-center text-sm font-semibold text-zinc-800">{j.label}</span>
+        <span className="min-w-36 text-center text-sm font-semibold text-tinta">{j.label}</span>
         {podeAvancar ? (
           <Link
             href={url(periodo, offset + 1)}
             aria-label="Próximo período"
-            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie text-tinta-2 hover:bg-superficie-2 sm:h-9 sm:w-9"
           >
-            →
+            <Avancar tamanho={16} />
           </Link>
         ) : (
-          <span className="rounded-lg border border-zinc-100 bg-zinc-50 px-2.5 py-1.5 text-sm text-zinc-300">
-            →
+          <span
+            aria-hidden="true"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie-2 text-tinta-3 opacity-50 sm:h-9 sm:w-9"
+          >
+            <Avancar tamanho={16} />
           </span>
         )}
       </div>
 
       {/* Trocar de período volta para o atual: "3 meses atrás" de uma semana não é
           equivalente a "3 meses atrás" de um mês, e manter o offset confundiria. */}
-      <div className="flex gap-1 bg-zinc-100 rounded-lg p-1 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-1">
+      <div className="flex gap-1 bg-superficie-3 rounded-lg p-1 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-1">
         {PERIODOS.map((opt) => (
           <Link
             key={opt.value}
@@ -509,8 +558,8 @@ function NavegacaoPeriodo({
             className={cn(
               "shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
               periodo === opt.value
-                ? "bg-white text-zinc-900 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-700"
+                ? "bg-superficie text-tinta shadow-sm"
+                : "text-tinta-3 hover:text-tinta-2"
             )}
           >
             {opt.label}
@@ -526,27 +575,27 @@ function NavegacaoPeriodo({
 function ListaOS({
   ordens,
   vazio,
+  vazioTexto,
+  vazioAcao,
   patio,
   agora,
   mostrarLucro = true,
 }: {
   ordens: OSLista[];
   vazio: string;
+  vazioTexto?: string;
+  vazioAcao?: React.ReactNode;
   patio?: boolean;
   agora: Date;
   /** Lucro e margem por OS são coisa de dono. */
   mostrarLucro?: boolean;
 }) {
   if (ordens.length === 0) {
-    return (
-      <div className="rounded-xl border border-zinc-200 bg-white py-8 text-center text-sm text-zinc-400">
-        {vazio}
-      </div>
-    );
+    return <Vazio titulo={vazio} texto={vazioTexto} acao={vazioAcao} compacto />;
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
+    <div className="overflow-hidden rounded-xl border border-linha bg-superficie divide-y divide-linha">
       {ordens.map((os) => {
         const dias = diasParado(os.abertura, agora);
         const margem = margemOS(os);
@@ -557,23 +606,23 @@ function ListaOS({
           <Link
             key={os.id}
             href={`/os/${os.id}`}
-            className="flex flex-col gap-1.5 px-4 py-3 hover:bg-zinc-50 transition-colors sm:flex-row sm:items-center sm:gap-3"
+            className="flex flex-col gap-1.5 px-4 py-3 hover:bg-superficie-2 transition-colors sm:flex-row sm:items-center sm:gap-3"
           >
             <div className="flex items-center gap-3 sm:contents">
               <div className="shrink-0 text-center w-10">
-                <p className="text-xs text-zinc-400">OS</p>
-                <p className="font-bold text-zinc-900 text-sm">#{os.numero}</p>
+                <p className="text-xs text-tinta-3">OS</p>
+                <p className="font-bold text-tinta text-sm">#{os.numero}</p>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium text-zinc-900 text-sm truncate">{os.cliente.nome}</p>
+                  <p className="font-medium text-tinta text-sm truncate">{os.cliente.nome}</p>
                   {os.cliente.apelido && (
-                    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                    <span className="shrink-0 rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-3">
                       {os.cliente.apelido}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500 truncate">
+                <p className="text-xs text-tinta-3 truncate">
                   {os.veiculo.marca} {os.veiculo.modelo}
                   {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
                   {os.mecanico ? ` · ${os.mecanico}` : ""}
@@ -581,43 +630,38 @@ function ListaOS({
               </div>
               <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
                 {patio && (
-                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", corAging(dias))}>
+                  <span className={corAging(dias)}>
+                    <span className="idade-ponto" aria-hidden="true" />
                     {dias}d
                   </span>
                 )}
-                <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", corStatus(os.status))}>
-                  {labelStatus(os.status)}
-                </span>
+                <span className={corStatus(os.status)}>{labelStatus(os.status)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-start">
               {mostrarLucro && (
-                <div className="text-right text-xs sm:w-24" title={lucroTitulo}>
+                <div className="text-right text-xs tabular-nums sm:w-24" title={lucroTitulo}>
                   <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
-                  <p className={cn("text-[11px]", corMargem(margem))}>
+                  <p className={cn("text-xs", corMargem(margem))}>
                     {margem === null ? "—" : `${margem.toFixed(0)}% margem`}
                   </p>
                 </div>
               )}
               {patio && (
                 <span
-                  className={cn("hidden rounded-full px-2 py-0.5 text-xs font-medium sm:inline-block", corAging(dias))}
+                  className={cn("hidden sm:inline-flex", corAging(dias))}
                   title={`No pátio há ${dias} dia${dias === 1 ? "" : "s"}`}
                 >
+                  <span className="idade-ponto" aria-hidden="true" />
                   {dias}d
                 </span>
               )}
-              <span
-                className={cn(
-                  "hidden rounded-full px-2 py-0.5 text-xs font-medium sm:inline-block",
-                  corStatus(os.status)
-                )}
-              >
+              <span className={cn("hidden sm:inline-flex", corStatus(os.status))}>
                 {labelStatus(os.status)}
               </span>
-              <div className="text-right text-xs">
-                <p className="font-semibold text-zinc-900">{formatCurrency(os.total)}</p>
-                {!os.pago && <p className="text-red-500">Pendente</p>}
+              <div className="text-right text-xs tabular-nums">
+                <p className="font-semibold text-tinta">{formatCurrency(os.total)}</p>
+                {!os.pago && <p className="text-perigo">Pendente</p>}
               </div>
             </div>
           </Link>
@@ -629,19 +673,13 @@ function ListaOS({
 
 function AcoesRapidas() {
   return (
-    <div className="space-y-2">
-      <Link
-        href="/clientes/novo"
-        className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-      >
-        + Novo Cliente
-      </Link>
-      <Link
-        href="/os/nova"
-        className="flex items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm font-medium text-brand-700 hover:bg-brand-100 transition-colors"
-      >
-        + Nova OS
-      </Link>
+    <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+      <BotaoLink href="/os/nova" className="w-full">
+        <Mais tamanho={16} /> Nova OS
+      </BotaoLink>
+      <BotaoLink href="/clientes/novo" variante="secundario" className="w-full">
+        <Mais tamanho={16} /> Novo cliente
+      </BotaoLink>
     </div>
   );
 }
@@ -650,70 +688,24 @@ function CardDevedores({ top5 }: { top5: { nome: string; saldo: number }[] }) {
   if (top5.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-red-800 text-sm">Maiores devedores</h3>
-        <Link href="/contas-receber" className="text-xs text-brand-600 hover:underline">
-          Ver todos →
+    <div className="space-y-3 rounded-xl border border-perigo-linha bg-perigo-fraco p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-perigo">Maiores devedores</h3>
+        <Link
+          href="/contas-receber"
+          className="inline-flex shrink-0 items-center gap-1 text-xs text-perigo hover:underline"
+        >
+          Ver todos <SetaDireita tamanho={13} />
         </Link>
       </div>
       <div className="space-y-2">
         {top5.map((d, i) => (
-          <div key={i} className="flex items-center justify-between text-sm">
-            <p className="text-red-900 font-medium truncate">{d.nome}</p>
-            <p className="text-red-700 font-bold shrink-0 ml-2">{formatCurrency(d.saldo)}</p>
+          <div key={i} className="flex items-center justify-between gap-2 text-sm">
+            <p className="min-w-0 truncate font-medium text-perigo">{d.nome}</p>
+            <p className="shrink-0 font-bold tabular-nums text-perigo">{formatCurrency(d.saldo)}</p>
           </div>
         ))}
       </div>
     </div>
-  );
-}
-
-function Metrica({
-  label,
-  valor,
-  cor,
-  forte,
-}: {
-  label: string;
-  valor: string;
-  cor?: string;
-  forte?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-xs text-zinc-400">{label}</p>
-      <p className={cn(forte ? "font-bold" : "font-semibold", cor ?? "text-zinc-900")}>{valor}</p>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  href,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  href: string;
-  highlight?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "block rounded-xl border p-4 hover:shadow-sm transition-shadow",
-        highlight ? "border-red-200 bg-red-50" : "border-zinc-200 bg-white"
-      )}
-    >
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className={cn("text-2xl font-bold mt-1", highlight ? "text-red-600" : "text-zinc-900")}>
-        {value}
-      </p>
-      {sub && <p className="text-xs text-zinc-400 mt-1">{sub}</p>}
-    </Link>
   );
 }

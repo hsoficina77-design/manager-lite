@@ -64,7 +64,7 @@ export function ModalPagamento({
         </Campo>
 
         {Number.isFinite(diferenca) && Math.abs(diferenca) >= 0.01 && (
-          <p className={`text-xs ${diferenca > 0 ? "text-red-600" : "text-green-600"}`}>
+          <p className={`text-xs ${diferenca > 0 ? "text-perigo" : "text-ok"}`}>
             Veio <strong>{formatCurrency(Math.abs(diferenca))}</strong>
             {diferenca > 0 ? " acima do previsto." : " abaixo do previsto."}
           </p>

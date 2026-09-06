@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
-import { cn } from "@/lib/utils";
-import { labelStatus } from "@/lib/constants";
-
-const FORMAS_PGTO = ["DINHEIRO", "PIX", "CARTAO_CREDITO", "CARTAO_DEBITO", "TRANSFERENCIA"];
-const FORMAS_LABEL: Record<string, string> = {
-  DINHEIRO: "Dinheiro", PIX: "PIX",
-  CARTAO_CREDITO: "Cartão Crédito", CARTAO_DEBITO: "Cartão Débito", TRANSFERENCIA: "Transferência",
-};
-
+import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
+import { FORMAS_PAGAMENTO, labelFormaPagamento, labelStatus } from "@/lib/constants";
+import { Botao } from "@/components/ui/Botao";
+import { CampoDinheiro, Entrada, Selecao } from "@/components/ui/Campos";
+import { Modal } from "@/components/ui/Modal";
+import { EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
+import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
+import { Alerta, Mais } from "@/components/ui/Icones";
 
 type Faixa = "0-15" | "16-30" | "31-60" | "60+";
 
-const FAIXA_STYLE: Record<Faixa, { label: string; active: string; text: string; dot: string }> = {
-  "0-15": { label: "0-15 dias", active: "border-green-300 bg-green-50", text: "text-green-700", dot: "bg-green-500" },
-  "16-30": { label: "16-30 dias", active: "border-yellow-300 bg-yellow-50", text: "text-yellow-700", dot: "bg-yellow-500" },
-  "31-60": { label: "31-60 dias", active: "border-orange-300 bg-orange-50", text: "text-orange-700", dot: "bg-orange-500" },
-  "60+": { label: "60+ dias", active: "border-red-300 bg-red-50", text: "text-red-700", dot: "bg-red-500" },
+// Quatro passos da rampa de tempo em aberto. O semáforo de três colapsaria
+// "16-30" e "31-60" na mesma cor, apagando a faixa que separa o atraso novo do
+// atraso velho — que é justamente a decisão que esta tela existe para apoiar.
+const FAIXA_LABEL: Record<Faixa, string> = {
+  "0-15": "0 a 15 dias",
+  "16-30": "16 a 30 dias",
+  "31-60": "31 a 60 dias",
+  "60+": "Mais de 60 dias",
+};
+const FAIXA_NIVEL: Record<Faixa, 1 | 2 | 3 | 4> = {
+  "0-15": 1,
+  "16-30": 2,
+  "31-60": 3,
+  "60+": 4,
 };
 const FAIXAS: Faixa[] = ["0-15", "16-30", "31-60", "60+"];
 
@@ -45,9 +52,11 @@ type Resumo = {
   porFaixa: Record<Faixa, { clientes: number; valor: number }>;
 };
 
+type Pagamento = {
+  id: string | number; valor: number; formaPagamento: string; obs: string | null; data: string;
+};
 type ModalPgto = { type: "os" | "divida"; id: string | number; saldo: number } | null;
-type HistoricoModal = { type: "os" | "divida"; id: string | number; pagamentos: { id: string | number; valor: number; formaPagamento: string; obs: string | null; data: string }[] } | null;
-type NovaDividaModal = boolean;
+type HistoricoModal = { type: "os" | "divida"; id: string | number; pagamentos: Pagamento[] } | null;
 type Ordenacao = "saldo" | "dias";
 
 const RESUMO_VAZIO: Resumo = {
@@ -80,34 +89,40 @@ export default function ContasReceberPage() {
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("saldo");
   const [modalPgto, setModalPgto] = useState<ModalPgto>(null);
   const [historicoModal, setHistoricoModal] = useState<HistoricoModal>(null);
-  const [novaDividaModal, setNovaDividaModal] = useState<NovaDividaModal>(false);
+  const [novaDividaModal, setNovaDividaModal] = useState(false);
   const [pgtoForm, setPgtoForm] = useState({ valor: "", formaPagamento: "DINHEIRO", obs: "" });
   const [savingPgto, setSavingPgto] = useState(false);
   const [novaDividaForm, setNovaDividaForm] = useState({ clienteId: "", descricao: "", valor: "" });
   const [savingDivida, setSavingDivida] = useState(false);
   const [estornandoId, setEstornandoId] = useState<string | number | null>(null);
-  const [toastMsg, setToastMsg] = useState("");
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 2500);
-  };
+  const confirmar = useConfirmar();
+  const avisar = useAvisar();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/contas-receber");
+      if (!res.ok) throw new Error("falha");
       const data: { clientes: ClienteDevedor[]; resumo: Resumo } = await res.json();
       setClientes(data.clientes);
       setResumo(data.resumo);
+    } catch {
+      avisar("Não foi possível carregar as contas a receber.", "erro");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [avisar]);
 
-  useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    fetch("/api/clientes").then((r) => r.json()).then((data: { id: string; nome: string }[]) => setAllClientes(data));
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    fetch("/api/clientes")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { id: string; nome: string }[]) => setAllClientes(data))
+      .catch(() => setAllClientes([]));
   }, []);
 
   const filtered = useMemo(() => {
@@ -117,7 +132,7 @@ export default function ContasReceberPage() {
       const t = q.toLowerCase();
       return (
         c.nome.toLowerCase().includes(t) ||
-        (c.apelido?.toLowerCase().includes(t)) ||
+        c.apelido?.toLowerCase().includes(t) ||
         c.ordens.some((o) => o.veiculo.placa?.toLowerCase().includes(t) || String(o.numero).includes(t))
       );
     });
@@ -126,9 +141,9 @@ export default function ContasReceberPage() {
     );
   }, [clientes, faixaFiltro, q, ordenacao]);
 
-  async function openPgto(type: "os" | "divida", id: string | number, saldo: number) {
+  function openPgto(type: "os" | "divida", id: string | number, saldo: number) {
     setModalPgto({ type, id, saldo });
-    setPgtoForm({ valor: saldo.toFixed(2), formaPagamento: "DINHEIRO", obs: "" });
+    setPgtoForm({ valor: String(saldo), formaPagamento: "DINHEIRO", obs: "" });
   }
 
   async function submitPgto(e: React.FormEvent) {
@@ -136,61 +151,87 @@ export default function ContasReceberPage() {
     if (!modalPgto) return;
     setSavingPgto(true);
     try {
-      const url = modalPgto.type === "os"
-        ? `/api/os/${modalPgto.id}/pagamentos`
-        : `/api/dividas/${modalPgto.id}/pagamentos`;
+      const url =
+        modalPgto.type === "os"
+          ? `/api/os/${modalPgto.id}/pagamentos`
+          : `/api/dividas/${modalPgto.id}/pagamentos`;
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(pgtoForm),
       });
-      if (res.ok) {
-        setModalPgto(null);
-        load();
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        avisar(d.error || "Não foi possível registrar o recebimento.", "erro");
+        return;
       }
+      setModalPgto(null);
+      avisar("Recebimento registrado.");
+      load();
+    } catch {
+      avisar("Sem conexão. O recebimento não foi registrado.", "erro");
     } finally {
       setSavingPgto(false);
     }
   }
 
-  async function deleteDivida(id: number) {
-    if (!confirm("Excluir esta dívida?")) return;
-    const res = await fetch(`/api/dividas/${id}`, { method: "DELETE" });
-    if (res.ok) load();
-    else {
-      const d = await res.json();
-      alert(d.error || "Não foi possível excluir.");
+  async function deleteDivida(div: DividaAvulsa) {
+    const ok = await confirmar({
+      titulo: "Excluir esta dívida?",
+      texto: `“${div.descricao}”, de ${formatCurrency(div.valor - div.valorPago)} em aberto. Não há como desfazer.`,
+      acao: "Excluir dívida",
+      perigo: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/dividas/${div.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      avisar(d.error || "Não foi possível excluir.", "erro");
+      return;
     }
+    avisar("Dívida excluída.");
+    load();
   }
 
   async function openHistorico(type: "os" | "divida", id: string | number) {
     const url = type === "os" ? `/api/os/${id}` : `/api/dividas/${id}/pagamentos`;
     const res = await fetch(url);
+    if (!res.ok) {
+      avisar("Não foi possível carregar o histórico.", "erro");
+      return;
+    }
     const data = await res.json();
-    const pagamentos = type === "os" ? data.pagamentos : data;
-    setHistoricoModal({ type, id, pagamentos });
+    setHistoricoModal({ type, id, pagamentos: type === "os" ? data.pagamentos : data });
   }
 
   // Estorna um pagamento do histórico — o valor volta para o saldo em aberto.
-  async function estornarPagamento(pagamentoId: string | number) {
+  async function estornarPagamento(p: Pagamento) {
     if (!historicoModal) return;
-    if (!confirm("Estornar este pagamento? O valor volta para o saldo em aberto.")) return;
+    const ok = await confirmar({
+      titulo: "Estornar este pagamento?",
+      texto: `Os ${formatCurrency(p.valor)} voltam para o saldo em aberto deste cliente.`,
+      acao: "Estornar",
+      perigo: true,
+    });
+    if (!ok) return;
     const { type, id } = historicoModal;
-    setEstornandoId(pagamentoId);
+    setEstornandoId(p.id);
     try {
       const base = type === "os" ? `/api/os/${id}` : `/api/dividas/${id}`;
-      const res = await fetch(`${base}/pagamentos/${pagamentoId}`, { method: "DELETE" });
+      const res = await fetch(`${base}/pagamentos/${p.id}`, { method: "DELETE" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        alert(d.error || "Não foi possível estornar.");
+        avisar(d.error || "Não foi possível estornar.", "erro");
         return;
       }
       setHistoricoModal({
         ...historicoModal,
-        pagamentos: historicoModal.pagamentos.filter((p) => p.id !== pagamentoId),
+        pagamentos: historicoModal.pagamentos.filter((x) => x.id !== p.id),
       });
-      showToast("Pagamento estornado!");
+      avisar("Pagamento estornado.");
       load();
+    } catch {
+      avisar("Sem conexão. O estorno não foi feito.", "erro");
     } finally {
       setEstornandoId(null);
     }
@@ -205,18 +246,27 @@ export default function ContasReceberPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(novaDividaForm),
       });
-      if (res.ok) {
-        setNovaDividaModal(false);
-        setNovaDividaForm({ clienteId: "", descricao: "", valor: "" });
-        load();
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        avisar(d.error || "Não foi possível criar a dívida.", "erro");
+        return;
       }
+      setNovaDividaModal(false);
+      setNovaDividaForm({ clienteId: "", descricao: "", valor: "" });
+      avisar("Dívida avulsa criada.");
+      load();
+    } catch {
+      avisar("Sem conexão. A dívida não foi criada.", "erro");
     } finally {
       setSavingDivida(false);
     }
   }
 
   function copyTelefone(tel: string) {
-    navigator.clipboard.writeText(tel).then(() => showToast("Telefone copiado!"));
+    navigator.clipboard
+      .writeText(tel)
+      .then(() => avisar("Telefone copiado."))
+      .catch(() => avisar("Não foi possível copiar o telefone.", "erro"));
   }
 
   function exportarCSV() {
@@ -241,144 +291,37 @@ export default function ContasReceberPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      {/* Toast */}
-      {toastMsg && (
-        <div className="fixed top-4 right-4 z-50 bg-zinc-900 text-white rounded-lg px-4 py-2 text-sm shadow-lg">
-          {toastMsg}
-        </div>
-      )}
-
-      {/* Modais */}
-      {modalPgto && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 z-40 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-          <div className="my-auto bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm space-y-4">
-            <h3 className="font-semibold text-zinc-900">Registrar recebimento</h3>
-            <form onSubmit={submitPgto} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Valor (R$) *</label>
-                <input type="number" inputMode="decimal" min="0.01" step="0.01" value={pgtoForm.valor} onChange={(e) => setPgtoForm({ ...pgtoForm, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Forma de pagamento</label>
-                <select value={pgtoForm.formaPagamento} onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-                  {FORMAS_PGTO.map((f) => <option key={f} value={f}>{FORMAS_LABEL[f]}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Observação</label>
-                <input value={pgtoForm.obs} onChange={(e) => setPgtoForm({ ...pgtoForm, obs: e.target.value })} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={savingPgto} className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
-                  {savingPgto ? "Confirmando..." : "Confirmar"}
-                </button>
-                <button type="button" onClick={() => setModalPgto(null)} className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {historicoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 z-40 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-          <div className="my-auto bg-white rounded-2xl shadow-xl p-6 w-full max-w-md space-y-4">
-            <h3 className="font-semibold text-zinc-900">Histórico de pagamentos</h3>
-            {historicoModal.pagamentos.length === 0 ? (
-              <p className="text-sm text-zinc-400">Nenhum pagamento registrado.</p>
-            ) : (
-              <div className="space-y-2">
-                {historicoModal.pagamentos.map((p) => (
-                  <div key={p.id} className="flex justify-between gap-2 text-sm border-b border-zinc-100 pb-2">
-                    <div className="min-w-0">
-                      <span className="font-medium text-zinc-900">{formatCurrency(p.valor)}</span>
-                      <span className="text-zinc-400 ml-2">{FORMAS_LABEL[p.formaPagamento] || p.formaPagamento}</span>
-                      {p.obs && <span className="text-zinc-400 ml-1">· {p.obs}</span>}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs text-zinc-400">{formatDatetime(p.data)}</span>
-                      <button
-                        onClick={() => estornarPagamento(p.id)}
-                        disabled={estornandoId === p.id}
-                        className="text-xs text-zinc-400 underline hover:text-red-600 disabled:opacity-50"
-                      >
-                        Estornar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button onClick={() => setHistoricoModal(null)} className="w-full rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {novaDividaModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 z-40 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-          <div className="my-auto bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm space-y-4">
-            <h3 className="font-semibold text-zinc-900">Nova dívida avulsa</h3>
-            <form onSubmit={submitNovaDivida} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Cliente *</label>
-                <select value={novaDividaForm.clienteId} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, clienteId: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-                  <option value="">Selecionar...</option>
-                  {allClientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Descrição *</label>
-                <input value={novaDividaForm.descricao} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, descricao: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Valor (R$) *</label>
-                <input type="number" inputMode="decimal" min="0.01" step="0.01" value={novaDividaForm.valor} onChange={(e) => setNovaDividaForm({ ...novaDividaForm, valor: e.target.value })} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={savingDivida} className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50">
-                  {savingDivida ? "Criando..." : "Criar"}
-                </button>
-                <button type="button" onClick={() => setNovaDividaModal(false)} className="flex-1 rounded-lg border border-zinc-300 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Cabeçalho */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Contas a Receber</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Pendências agrupadas por cliente</p>
-        </div>
+    <div className="space-y-4 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-tinta sm:text-2xl">Contas a receber</h1>
         <div className="flex gap-2">
-          <button onClick={exportarCSV} disabled={filtered.length === 0} className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
+          <Botao variante="secundario" onClick={exportarCSV} disabled={filtered.length === 0}>
             Exportar CSV
-          </button>
-          <button onClick={() => setNovaDividaModal(true)} className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700">
-            + Nova dívida avulsa
-          </button>
+          </Botao>
+          <Botao onClick={() => setNovaDividaModal(true)}>
+            <Mais tamanho={16} /> Dívida avulsa
+          </Botao>
         </div>
       </div>
 
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <SummaryCard label="Total a receber" value={formatCurrency(resumo.totalAReceber)} highlight />
-        <SummaryCard label="Clientes devedores" value={String(resumo.totalDevedores)} />
-        <SummaryCard label="OSs pendentes" value={String(resumo.totalOSPendentes)} />
-        <SummaryCard label="Dívidas avulsas" value={String(resumo.totalDividasAvulsas)} />
-      </div>
+      <FaixaMetricas colunas={4}>
+        <Metrica
+          rotulo="Total a receber"
+          valor={formatCurrency(resumo.totalAReceber)}
+          tamanho="grande"
+          tom={resumo.totalAReceber > 0 ? "perigo" : "neutro"}
+        />
+        <Metrica rotulo="Clientes devedores" valor={String(resumo.totalDevedores)} tamanho="grande" />
+        <Metrica rotulo="OS pendentes" valor={String(resumo.totalOSPendentes)} tamanho="grande" />
+        <Metrica rotulo="Dívidas avulsas" valor={String(resumo.totalDividasAvulsas)} tamanho="grande" />
+      </FaixaMetricas>
 
-      {/* Aging de inadimplência */}
-      <div className="mb-6">
-        <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">Tempo em aberto</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Tempo em aberto — cada faixa filtra a lista */}
+      <div>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-tinta-3">
+          Tempo em aberto
+        </p>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {FAIXAS.map((f) => (
             <FaixaCard
               key={f}
@@ -391,132 +334,179 @@ export default function ContasReceberPage() {
         </div>
       </div>
 
-      {/* Busca e ordenação */}
-      <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center">
-        <input
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Entrada
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nome, apelido, placa, #OS..."
-          className="w-full sm:flex-1 sm:max-w-sm rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          placeholder="Buscar por nome, apelido, placa ou nº da OS"
+          aria-label="Buscar devedores"
+          className="sm:max-w-sm"
         />
-        <select
+        <Selecao
           value={ordenacao}
           onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          aria-label="Ordenação"
+          className="sm:w-auto"
         >
           <option value="saldo">Ordenar: maior saldo</option>
           <option value="dias">Ordenar: mais atrasado</option>
-        </select>
+        </Selecao>
         {faixaFiltro && (
-          <button onClick={() => setFaixaFiltro(null)} className="text-xs text-zinc-500 hover:text-zinc-700 underline">
-            Limpar filtro de faixa
-          </button>
+          <Botao variante="secundario" onClick={() => setFaixaFiltro(null)} className="sm:w-auto">
+            Limpar faixa
+          </Botao>
         )}
       </div>
 
       {loading ? (
-        <div className="text-sm text-zinc-400 text-center py-12">Carregando...</div>
+        <EsqueletoLista linhas={4} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-zinc-200 bg-white py-12 text-center text-sm text-zinc-400">
-          {clientes.length === 0 ? "Nenhuma conta a receber. Tudo quitado!" : "Nenhum devedor encontrado para este filtro."}
-        </div>
+        clientes.length === 0 ? (
+          <Vazio
+            titulo="Nada a receber"
+            texto="Todas as OS entregues estão quitadas e não há dívidas avulsas em aberto."
+          />
+        ) : (
+          <Vazio
+            titulo="Nenhum devedor com esse filtro"
+            texto="Ajuste a busca ou a faixa de tempo em aberto."
+            acao={
+              <Botao
+                variante="secundario"
+                onClick={() => {
+                  setQ("");
+                  setFaixaFiltro(null);
+                }}
+              >
+                Limpar filtros
+              </Botao>
+            }
+          />
+        )
       ) : (
         <div className="space-y-4">
           {filtered.map((c) => {
-            const veicolosDesc = c.veiculos
+            const veiculosDesc = c.veiculos
               .slice(0, 2)
               .map((v) => `${v.marca} ${v.modelo}${v.placa ? ` · ${v.placa}` : ""}`)
-              .join("  ");
+              .join(" · ");
             const extrasVeiculos = c.veiculos.length > 2 ? ` +${c.veiculos.length - 2}` : "";
 
             return (
-              <div key={c.id} className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
-                {/* Header do cliente */}
-                <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 border-b border-zinc-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-zinc-200 text-zinc-700 font-bold text-sm flex items-center justify-center shrink-0">
+              <div key={c.id} className="overflow-hidden rounded-xl border border-linha bg-superficie">
+                {/* Cabeçalho do cliente.
+                    Era `flex items-center justify-between` sem nenhum ponto de
+                    quebra, carregando avatar, nome, apelido, faixa, telefone,
+                    botão de WhatsApp e total. Em 360 px isso espremia o nome e o
+                    valor devido — o dado que a pessoa foi ali ver. */}
+                <div className="flex flex-col gap-3 border-b border-linha bg-superficie-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-superficie-3 text-sm font-bold text-tinta-2">
                       {c.nome[0].toUpperCase()}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Link href={`/clientes/${c.id}`} className="font-semibold text-zinc-900 hover:underline">{c.nome}</Link>
-                        {c.apelido && <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600">{c.apelido}</span>}
-                        <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", FAIXA_STYLE[c.faixa].active, FAIXA_STYLE[c.faixa].text)}>
-                          <span className={cn("h-1.5 w-1.5 rounded-full", FAIXA_STYLE[c.faixa].dot)} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/clientes/${c.id}`}
+                          className="font-semibold text-tinta hover:underline"
+                        >
+                          {c.nome}
+                        </Link>
+                        {c.apelido && (
+                          <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-2">
+                            {c.apelido}
+                          </span>
+                        )}
+                        <span className={`idade idade-${FAIXA_NIVEL[c.faixa]}`}>
+                          <span className="idade-ponto" aria-hidden="true" />
                           {c.diasEmAberto}d
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-400">
-                        {veicolosDesc}{extrasVeiculos}
-                        {c.telefone && (
-                          <>
-                            {" · "}
-                            <button
-                              onClick={() => copyTelefone(c.telefone!)}
-                              className="hover:underline text-zinc-600"
-                            >
-                              {c.telefone}
-                            </button>
-                          </>
-                        )}
+                      <p className="mt-0.5 truncate text-xs text-tinta-3">
+                        {veiculosDesc}
+                        {extrasVeiculos}
                       </p>
+                      {c.telefone && (
+                        <button
+                          onClick={() => copyTelefone(c.telefone!)}
+                          className="mt-0.5 text-xs text-tinta-2 hover:underline"
+                          title="Copiar telefone"
+                        >
+                          {c.telefone}
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <div className="text-left sm:text-right">
+                      <p className="text-xs text-tinta-3">Total em aberto</p>
+                      <p className="font-bold tabular-nums text-perigo">
+                        {formatCurrency(c.totalSaldo)}
+                      </p>
+                    </div>
                     {c.telefone && (
                       <a
                         href={whatsappLink(c.telefone, c.nome, c.totalSaldo)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="shrink-0 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                        className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-ok-linha bg-ok-fraco px-3 text-xs font-medium text-ok hover:opacity-90 sm:min-h-9"
                       >
-                        Cobrar via WhatsApp
+                        Cobrar no WhatsApp
                       </a>
                     )}
-                    <div className="text-right">
-                      <p className="text-xs text-zinc-400">Total</p>
-                      <p className="font-bold text-red-600">{formatCurrency(c.totalSaldo)}</p>
-                    </div>
                   </div>
                 </div>
 
-                {/* OSs pendentes */}
                 {c.ordens.length > 0 && (
-                  <div className="px-4 py-2 space-y-1.5">
-                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide pt-1">OSs pendentes</p>
+                  <div className="px-4 py-2">
+                    <p className="pt-1 text-xs font-medium uppercase tracking-wide text-tinta-3">
+                      OS pendentes
+                    </p>
                     {c.ordens.map((os) => {
                       const saldo = os.total - os.valorPago;
                       const diasOS = Math.floor((Date.now() - new Date(os.abertura).getTime()) / 86400000);
-                      const atrasada = diasOS > 30;
                       return (
-                        <div key={os.id} className="flex flex-col gap-1.5 py-1.5 border-b border-zinc-50 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 text-sm">
-                              <Link href={`/os/${os.id}`} className="font-medium text-brand-600 hover:underline shrink-0">#{os.numero}</Link>
-                              <span className="text-zinc-500 truncate">
+                        <div
+                          key={os.id}
+                          className="flex flex-col gap-2 border-b border-linha py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                              <Link
+                                href={`/os/${os.id}`}
+                                className="shrink-0 font-medium tabular-nums text-brand-600 hover:underline"
+                              >
+                                #{os.numero}
+                              </Link>
+                              <span className="truncate text-tinta-2">
                                 {os.veiculo.marca} {os.veiculo.modelo}
                                 {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
                               </span>
-                              <span className="text-zinc-400 shrink-0 text-xs">
+                              <span className="inline-flex shrink-0 items-center gap-1 text-xs text-tinta-3">
                                 {labelStatus(os.status)} · {diasOS}d
-                                {atrasada && <span className="text-red-600 ml-1">⚠</span>}
+                                {diasOS > 30 && <Alerta tamanho={12} className="text-perigo" />}
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 sm:ml-3">
-                            <span className="font-semibold text-red-600 text-sm">{formatCurrency(saldo)}</span>
-                            <button
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="font-semibold tabular-nums text-perigo">
+                              {formatCurrency(saldo)}
+                            </span>
+                            <Botao
+                              variante="fantasma"
+                              tamanho="denso"
                               onClick={() => openHistorico("os", os.id)}
-                              className="text-xs text-zinc-400 hover:text-zinc-600 underline"
                             >
                               Histórico
-                            </button>
-                            <button
+                            </Botao>
+                            <Botao
+                              variante="sucesso"
+                              tamanho="denso"
                               onClick={() => openPgto("os", os.id, saldo)}
-                              className="rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700"
                             >
                               Receber
-                            </button>
+                            </Botao>
                           </div>
                         </div>
                       );
@@ -524,39 +514,46 @@ export default function ContasReceberPage() {
                   </div>
                 )}
 
-                {/* Dívidas avulsas */}
                 {c.dividasAvulsas.length > 0 && (
-                  <div className="px-4 py-2 space-y-1.5">
-                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide pt-1">Dívidas avulsas</p>
+                  <div className="px-4 py-2">
+                    <p className="pt-1 text-xs font-medium uppercase tracking-wide text-tinta-3">
+                      Dívidas avulsas
+                    </p>
                     {c.dividasAvulsas.map((div) => {
                       const saldo = div.valor - div.valorPago;
                       const dias = Math.floor((Date.now() - new Date(div.createdAt).getTime()) / 86400000);
                       return (
-                        <div key={div.id} className="flex flex-col gap-1.5 py-1.5 border-b border-zinc-50 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-zinc-800 truncate">{div.descricao}</p>
-                            <p className="text-xs text-zinc-400">Há {dias} dias · {formatDate(div.createdAt)}</p>
+                        <div
+                          key={div.id}
+                          className="flex flex-col gap-2 border-b border-linha py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm text-tinta-2">{div.descricao}</p>
+                            <p className="text-xs tabular-nums text-tinta-3">
+                              Há {dias} dias · {formatDate(div.createdAt)}
+                            </p>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 sm:ml-3">
-                            <span className="font-semibold text-red-600 text-sm">{formatCurrency(saldo)}</span>
-                            <button
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            <span className="font-semibold tabular-nums text-perigo">
+                              {formatCurrency(saldo)}
+                            </span>
+                            <Botao
+                              variante="fantasma"
+                              tamanho="denso"
                               onClick={() => openHistorico("divida", div.id)}
-                              className="text-xs text-zinc-400 hover:text-zinc-600 underline"
                             >
                               Histórico
-                            </button>
-                            <button
+                            </Botao>
+                            <Botao
+                              variante="sucesso"
+                              tamanho="denso"
                               onClick={() => openPgto("divida", div.id, saldo)}
-                              className="rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700"
                             >
                               Receber
-                            </button>
-                            <button
-                              onClick={() => deleteDivida(div.id)}
-                              className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs text-red-500 hover:bg-red-50"
-                            >
+                            </Botao>
+                            <Botao variante="perigo" tamanho="denso" onClick={() => deleteDivida(div)}>
                               Excluir
-                            </button>
+                            </Botao>
                           </div>
                         </div>
                       );
@@ -568,39 +565,219 @@ export default function ContasReceberPage() {
           })}
         </div>
       )}
-    </div>
-  );
-}
 
-function SummaryCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className={cn("rounded-xl border p-4", highlight ? "border-red-200 bg-red-50" : "border-zinc-200 bg-white")}>
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className={cn("text-2xl font-bold mt-1", highlight ? "text-red-600" : "text-zinc-900")}>{value}</p>
+      {/* --- modais ---------------------------------------------------------- */}
+
+      {modalPgto && (
+        <Modal
+          titulo="Registrar recebimento"
+          descricao={`Saldo em aberto: ${formatCurrency(modalPgto.saldo)}`}
+          largura="max-w-sm"
+          onFechar={() => setModalPgto(null)}
+          rodape={
+            <div className="flex gap-2">
+              <Botao
+                type="submit"
+                form="form-recebimento"
+                variante="sucesso"
+                className="flex-1"
+                disabled={savingPgto}
+              >
+                {savingPgto ? "Confirmando..." : "Confirmar"}
+              </Botao>
+              <Botao variante="secundario" className="flex-1" onClick={() => setModalPgto(null)}>
+                Cancelar
+              </Botao>
+            </div>
+          }
+        >
+          <form id="form-recebimento" onSubmit={submitPgto} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="valor-receb">
+                Valor <span className="text-perigo">*</span>
+              </label>
+              <CampoDinheiro
+                id="valor-receb"
+                valor={pgtoForm.valor}
+                onChange={(v) => setPgtoForm({ ...pgtoForm, valor: v })}
+                required
+                data-foco-inicial
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="forma-receb">
+                Forma de pagamento
+              </label>
+              <Selecao
+                id="forma-receb"
+                value={pgtoForm.formaPagamento}
+                onChange={(e) => setPgtoForm({ ...pgtoForm, formaPagamento: e.target.value })}
+              >
+                {FORMAS_PAGAMENTO.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </Selecao>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="obs-receb">
+                Observação
+              </label>
+              <Entrada
+                id="obs-receb"
+                value={pgtoForm.obs}
+                onChange={(e) => setPgtoForm({ ...pgtoForm, obs: e.target.value })}
+              />
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {historicoModal && (
+        <Modal
+          titulo="Histórico de pagamentos"
+          onFechar={() => setHistoricoModal(null)}
+          rodape={
+            <Botao variante="secundario" className="w-full" onClick={() => setHistoricoModal(null)}>
+              Fechar
+            </Botao>
+          }
+        >
+          {historicoModal.pagamentos.length === 0 ? (
+            <p className="text-sm text-tinta-3">Nenhum pagamento registrado.</p>
+          ) : (
+            <div className="space-y-2">
+              {historicoModal.pagamentos.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 border-b border-linha pb-2 text-sm last:border-0"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium tabular-nums text-tinta">
+                      {formatCurrency(p.valor)}
+                    </span>
+                    <span className="ml-2 text-tinta-3">{labelFormaPagamento(p.formaPagamento)}</span>
+                    {p.obs && <span className="ml-1 text-tinta-3">· {p.obs}</span>}
+                    <span className="block text-xs tabular-nums text-tinta-3">
+                      {formatDatetime(p.data)}
+                    </span>
+                  </div>
+                  <Botao
+                    variante="fantasma"
+                    tamanho="denso"
+                    onClick={() => estornarPagamento(p)}
+                    disabled={estornandoId === p.id}
+                  >
+                    Estornar
+                  </Botao>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {novaDividaModal && (
+        <Modal
+          titulo="Nova dívida avulsa"
+          descricao="Para o que o cliente deve sem ter uma OS aberta."
+          largura="max-w-sm"
+          onFechar={() => setNovaDividaModal(false)}
+          rodape={
+            <div className="flex gap-2">
+              <Botao type="submit" form="form-divida" className="flex-1" disabled={savingDivida}>
+                {savingDivida ? "Criando..." : "Criar dívida"}
+              </Botao>
+              <Botao
+                variante="secundario"
+                className="flex-1"
+                onClick={() => setNovaDividaModal(false)}
+              >
+                Cancelar
+              </Botao>
+            </div>
+          }
+        >
+          <form id="form-divida" onSubmit={submitNovaDivida} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="divida-cliente">
+                Cliente <span className="text-perigo">*</span>
+              </label>
+              <Selecao
+                id="divida-cliente"
+                value={novaDividaForm.clienteId}
+                onChange={(e) => setNovaDividaForm({ ...novaDividaForm, clienteId: e.target.value })}
+                required
+                data-foco-inicial
+              >
+                <option value="">Selecionar...</option>
+                {allClientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </Selecao>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="divida-desc">
+                Descrição <span className="text-perigo">*</span>
+              </label>
+              <Entrada
+                id="divida-desc"
+                value={novaDividaForm.descricao}
+                onChange={(e) => setNovaDividaForm({ ...novaDividaForm, descricao: e.target.value })}
+                placeholder="Ex: peça comprada para o cliente"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="divida-valor">
+                Valor <span className="text-perigo">*</span>
+              </label>
+              <CampoDinheiro
+                id="divida-valor"
+                valor={novaDividaForm.valor}
+                onChange={(v) => setNovaDividaForm({ ...novaDividaForm, valor: v })}
+                required
+              />
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
 
 function FaixaCard({
-  faixa, dados, ativo, onClick,
+  faixa,
+  dados,
+  ativo,
+  onClick,
 }: {
-  faixa: Faixa; dados: { clientes: number; valor: number }; ativo: boolean; onClick: () => void;
+  faixa: Faixa;
+  dados: { clientes: number; valor: number };
+  ativo: boolean;
+  onClick: () => void;
 }) {
-  const s = FAIXA_STYLE[faixa];
+  const nivel = FAIXA_NIVEL[faixa];
   return (
     <button
       onClick={onClick}
+      aria-pressed={ativo}
       className={cn(
-        "rounded-xl border p-4 text-left transition-colors",
-        ativo ? s.active : "border-zinc-200 bg-white hover:bg-zinc-50"
+        "rounded-xl border p-3 text-left transition-colors",
+        ativo ? "border-brand-600 bg-superficie ring-1 ring-brand-600" : "border-linha bg-superficie hover:bg-superficie-2"
       )}
     >
-      <div className="flex items-center gap-1.5">
-        <span className={cn("h-2 w-2 rounded-full", s.dot)} />
-        <p className="text-xs text-zinc-500">{s.label}</p>
-      </div>
-      <p className={cn("text-lg font-bold mt-1", ativo ? s.text : "text-zinc-900")}>{formatCurrency(dados.valor)}</p>
-      <p className="text-xs text-zinc-400">{dados.clientes} cliente{dados.clientes !== 1 ? "s" : ""}</p>
+      <span className={`idade idade-${nivel}`}>
+        <span className="idade-ponto" aria-hidden="true" />
+        {FAIXA_LABEL[faixa]}
+      </span>
+      <p className="mt-1.5 text-lg font-bold tabular-nums text-tinta">{formatCurrency(dados.valor)}</p>
+      <p className="text-xs tabular-nums text-tinta-3">
+        {dados.clientes} cliente{dados.clientes !== 1 ? "s" : ""}
+      </p>
     </button>
   );
 }

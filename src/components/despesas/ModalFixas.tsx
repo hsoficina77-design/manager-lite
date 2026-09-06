@@ -17,6 +17,7 @@ import {
 } from "./campos";
 import { SeletorCategoria } from "./SeletorCategoria";
 import { enviar, mensagemDoErro } from "./api";
+import { useConfirmar } from "@/components/ui/Avisos";
 import type { Categoria, Regra } from "./tipos";
 
 /**
@@ -41,6 +42,7 @@ export function ModalFixas({
   const [editando, setEditando] = useState<Regra | "nova" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const confirmar = useConfirmar();
 
   const ativas = regras.filter((r) => r.ativa);
   const custo = custoOperacionalMensal(regras);
@@ -80,11 +82,11 @@ export function ModalFixas({
       onFechar={onFechar}
     >
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-linha bg-superficie-2 px-4 py-3">
           <div>
-            <p className="text-xs text-zinc-500">Custo operacional</p>
-            <p className="text-xl font-bold text-zinc-900">{formatCurrency(custo)}/mês</p>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <p className="text-xs text-tinta-3">Custo operacional</p>
+            <p className="text-xl font-bold text-tinta">{formatCurrency(custo)}/mês</p>
+            <p className="mt-0.5 text-xs text-tinta-3">
               {ativas.length === 1 ? "1 conta ativa" : `${ativas.length} contas ativas`} · o que
               não é mensal entra pela fatia do mês
             </p>
@@ -97,14 +99,14 @@ export function ModalFixas({
         <Aviso>{erro}</Aviso>
 
         {regras.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 py-10 text-center">
-            <p className="text-sm text-zinc-500">Nenhuma despesa fixa cadastrada.</p>
-            <p className="mt-1 text-xs text-zinc-400">
+          <div className="rounded-xl border border-dashed border-linha-forte py-10 text-center">
+            <p className="text-sm text-tinta-3">Nenhuma despesa fixa cadastrada.</p>
+            <p className="mt-1 text-xs text-tinta-3">
               Comece pelo aluguel, salários, energia, água e internet.
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+          <ul className="divide-y divide-linha rounded-xl border border-linha">
             {regras.map((r) => (
               <li
                 key={r.id}
@@ -113,18 +115,18 @@ export function ModalFixas({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`font-medium ${r.ativa ? "text-zinc-900" : "text-zinc-400 line-through"}`}
+                      className={`font-medium ${r.ativa ? "text-tinta" : "text-tinta-3 line-through"}`}
                     >
                       {r.descricao}
                     </span>
                     <ChipCategoria nome={r.categoria.nome} cor={r.categoria.cor} />
                     {!r.ativa && (
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                      <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-3">
                         Inativa
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs text-zinc-400">
+                  <p className="mt-0.5 text-xs text-tinta-3">
                     Dia {r.diaVencimento} · {labelPeriodicidade(r.periodicidade)}
                     {r.fornecedor ? ` · ${r.fornecedor}` : ""}
                     {r.fim ? ` · até ${rotuloMes(r.fim)}` : ""}
@@ -132,14 +134,14 @@ export function ModalFixas({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="w-24 text-right font-semibold text-zinc-900">
+                  <span className="w-24 text-right font-semibold text-tinta">
                     {formatCurrency(r.valor)}
                   </span>
                   <button
                     type="button"
                     disabled={ocupado}
                     onClick={() => setEditando(r)}
-                    className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
+                    className="rounded-md px-2 py-1 text-xs text-tinta-3 hover:bg-superficie-3 hover:text-tinta-2 disabled:opacity-50"
                   >
                     Editar
                   </button>
@@ -151,23 +153,25 @@ export function ModalFixas({
                         enviar(`/api/despesas/recorrentes/${r.id}`, "PUT", { ativa: !r.ativa })
                       )
                     }
-                    className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
+                    className="min-h-11 rounded-md px-2 text-xs text-tinta-3 hover:bg-superficie-3 hover:text-tinta-2 disabled:opacity-50 sm:min-h-9"
                   >
                     {r.ativa ? "Desativar" : "Reativar"}
                   </button>
                   <button
                     type="button"
                     disabled={ocupado}
-                    onClick={() => {
-                      if (
-                        !confirm(
-                          `Excluir "${r.descricao}"?\n\nOs lançamentos deste mês em diante que ainda não foram pagos saem junto. O que já foi pago fica no histórico.`
-                        )
-                      )
-                        return;
+                    onClick={async () => {
+                      const ok = await confirmar({
+                        titulo: `Excluir a despesa fixa “${r.descricao}”?`,
+                        texto:
+                          "Os lançamentos deste mês em diante que ainda não foram pagos saem junto. O que já foi pago fica no histórico.",
+                        acao: "Excluir despesa fixa",
+                        perigo: true,
+                      });
+                      if (!ok) return;
                       acao(() => enviar(`/api/despesas/recorrentes/${r.id}`, "DELETE"));
                     }}
-                    className="rounded-md px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
+                    className="min-h-11 rounded-md px-2 text-xs text-perigo hover:bg-perigo-fraco disabled:opacity-50 sm:min-h-9"
                   >
                     Excluir
                   </button>
@@ -177,7 +181,7 @@ export function ModalFixas({
           </ul>
         )}
 
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-tinta-3">
           Desativar para de gerar lançamentos e mantém o histórico. Excluir só vale a pena
           quando a conta foi cadastrada por engano.
         </p>
@@ -325,7 +329,7 @@ function FormularioFixa({
         </Campo>
 
         {regra && (
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm text-tinta-2">
             <input
               type="checkbox"
               checked={propagar}
@@ -334,7 +338,7 @@ function FormularioFixa({
             />
             <span>
               Atualizar os lançamentos ainda não pagos deste mês em diante.
-              <span className="mt-0.5 block text-xs text-zinc-400">
+              <span className="mt-0.5 block text-xs text-tinta-3">
                 Meses já fechados nunca mudam.
               </span>
             </span>

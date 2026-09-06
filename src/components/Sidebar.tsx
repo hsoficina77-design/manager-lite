@@ -5,6 +5,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { labelPapel, type Papel } from "@/lib/permissoes";
+import { BarraInferior } from "./ui/BarraInferior";
+import { SeletorTema } from "./ui/Tema";
+import {
+  Chevron,
+  Dinheiro,
+  Engrenagem,
+  Fechar,
+  Menu as IconeMenu,
+  Patio,
+  Recibo,
+  Sair,
+} from "./ui/Icones";
+
+type IconeNav = typeof Patio;
 
 type LinkDef = {
   href: string;
@@ -12,6 +26,7 @@ type LinkDef = {
   exact?: boolean;
   badge?: number;
   children?: LinkDef[];
+  Icone?: IconeNav;
   /** Só o dono vê. Esconder é conforto; quem barra de verdade é o proxy. */
   dono?: boolean;
 };
@@ -40,32 +55,44 @@ export function Sidebar({
     setOpen(false);
   }, [pathname]);
 
-  // Trava o scroll do body enquanto o drawer está aberto
+  // Trava o scroll do body e fecha no Escape enquanto o drawer está aberto
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
+    if (!open) return;
+    document.body.style.overflow = "hidden";
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", aoTeclar);
+    return () => {
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", aoTeclar);
+    };
   }, [open]);
 
   const todosOsLinks: LinkDef[] = [
-    { href: "/", label: "Dashboard", exact: true },
-    { href: "/clientes", label: "Clientes" },
+    { href: "/", label: "Dashboard", exact: true, Icone: Patio },
+    { href: "/clientes", label: "Clientes", Icone: Dinheiro },
     {
       href: "/os",
-      label: "Ordens de Serviço",
+      label: "Ordens de serviço",
+      Icone: Recibo,
       children: [{ href: "/orcamentos", label: "Orçamentos" }],
     },
     {
       href: "/mecanicos",
       label: "Mecânicos",
+      Icone: IconeMenu,
       children: [{ href: "/produtividade", label: "Produtividade", dono: true }],
     },
-    { href: "/contas-receber", label: "Contas a Receber", badge: pendingCount, dono: true },
-    { href: "/despesas", label: "Controle de Gastos", dono: true },
-    { href: "/caixa", label: "Caixa", dono: true },
+    {
+      href: "/contas-receber",
+      label: "Contas a receber",
+      badge: pendingCount,
+      dono: true,
+      Icone: Dinheiro,
+    },
+    { href: "/despesas", label: "Controle de gastos", dono: true, Icone: Recibo },
+    { href: "/caixa", label: "Caixa", dono: true, Icone: Dinheiro },
   ];
 
   const permitido = (link: LinkDef) => ehDono || !link.dono;
@@ -98,11 +125,7 @@ export function Sidebar({
     const box = tamanho === "sm" ? "h-8 w-8" : "h-11 w-11";
     return logoUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={logoUrl}
-        alt={nome}
-        className={cn("shrink-0 object-contain", box)}
-      />
+      <img src={logoUrl} alt={nome} className={cn("shrink-0 object-contain", box)} />
     ) : (
       <span
         aria-hidden
@@ -126,13 +149,28 @@ export function Sidebar({
     </div>
   );
 
+  // O contador de pendências não usa o vermelho da marca: numa oficina de
+  // identidade vermelha ele sumiria dentro do próprio menu. O anel na cor do
+  // fundo o separa de qualquer identidade escolhida.
+  const contador = (n: number, className?: string) => (
+    <span
+      className={cn(
+        "rounded-full bg-perigo px-1.5 py-0.5 text-center text-xs font-bold text-perigo-fg ring-2 ring-menu",
+        className
+      )}
+    >
+      {n > 99 ? "99+" : n}
+    </span>
+  );
+
   const nav = (
-    <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+    <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
       {links.map((link) => {
         const isActive = isLinkActive(link);
         const childActive = link.children?.some(isLinkActive) ?? false;
         const hasChildren = !!link.children?.length;
         const isExpanded = expanded[link.href] ?? (isActive || childActive);
+        const Icone = link.Icone;
         return (
           <div key={link.href}>
             <div
@@ -145,14 +183,11 @@ export function Sidebar({
             >
               <Link
                 href={link.href}
-                className="flex min-h-11 flex-1 items-center justify-between px-3 py-2.5 text-sm font-medium"
+                className="flex min-h-11 flex-1 items-center gap-2.5 px-3 py-2.5 text-sm font-medium"
               >
-                <span>{link.label}</span>
-                {link.badge != null && link.badge > 0 && (
-                  <span className="rounded-full bg-red-600 text-white text-xs font-bold px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                    {link.badge > 99 ? "99+" : link.badge}
-                  </span>
-                )}
+                {Icone && <Icone tamanho={17} className="shrink-0 opacity-80" />}
+                <span className="min-w-0 flex-1 truncate">{link.label}</span>
+                {link.badge != null && link.badge > 0 && contador(link.badge)}
               </Link>
               {hasChildren && (
                 <button
@@ -160,35 +195,25 @@ export function Sidebar({
                   onClick={() => toggleExpand(link.href)}
                   aria-label={isExpanded ? `Recolher ${link.label}` : `Expandir ${link.label}`}
                   aria-expanded={isExpanded}
-                  className="px-2 py-2.5 text-current hover:text-menu-fg"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-current hover:text-menu-fg"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+                  <Chevron
+                    tamanho={16}
                     className={cn("transition-transform", isExpanded && "rotate-180")}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
+                  />
                 </button>
               )}
             </div>
             {link.children && isExpanded && (
-              <div className="mt-0.5 ml-3 space-y-0.5 border-l border-menu-borda pl-2">
+              <div className="ml-3 mt-0.5 space-y-0.5 border-l border-menu-borda pl-2">
                 {link.children.map((child) => (
                   <Link
                     key={child.href}
                     href={child.href}
                     className={cn(
-                      "flex items-center px-3 py-2 rounded-md text-sm transition-colors",
+                      "flex min-h-11 items-center rounded-md px-3 py-2 text-sm transition-colors",
                       isLinkActive(child)
-                        ? "bg-brand-700 text-brand-fg font-medium"
+                        ? "bg-brand-700 font-medium text-brand-fg"
                         : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
                     )}
                   >
@@ -203,34 +228,22 @@ export function Sidebar({
     </nav>
   );
 
-  // Quem está logado, configurações (só o dono) e a saída — separados da operação.
+  // Quem está logado, tema, configurações (só o dono) e a saída — separados da operação.
   const rodape = (
-    <div className="space-y-1 border-t border-menu-borda p-3">
+    <div className="space-y-2 border-t border-menu-borda p-3 pb-segura">
+      <SeletorTema />
+
       {ehDono && (
         <Link
           href="/configuracoes"
           className={cn(
-            "flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+            "flex min-h-11 items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
             pathname.startsWith("/configuracoes")
               ? "bg-brand-700 text-brand-fg"
               : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
           )}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            className="shrink-0"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
+          <Engrenagem tamanho={16} className="shrink-0" />
           Configurações
         </Link>
       )}
@@ -248,21 +261,7 @@ export function Sidebar({
           aria-label="Sair"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-menu-texto hover:bg-menu-hover hover:text-menu-fg disabled:opacity-50"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
+          <Sair tamanho={18} />
         </button>
       </div>
     </div>
@@ -270,54 +269,51 @@ export function Sidebar({
 
   return (
     <>
-      {/* Sidebar desktop */}
-      <aside className="hidden md:flex w-56 bg-menu text-menu-fg flex-col shrink-0 no-print">
-        <div className="px-4 py-5 border-b border-menu-borda">{brand}</div>
+      {/* Menu lateral do desktop. Fixo, porque agora quem rola é o documento. */}
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-menu text-menu-fg md:flex">
+        <div className="border-b border-menu-borda px-4 py-5">{brand}</div>
         {nav}
         {rodape}
       </aside>
 
-      {/* Barra superior mobile (fixa) */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-30 h-14 flex items-center gap-3 bg-menu text-menu-fg px-4 no-print">
+      {/* Barra superior do celular */}
+      <header className="no-print fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 bg-menu px-4 text-menu-fg md:hidden">
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"
           className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-menu-texto hover:bg-menu-hover hover:text-menu-fg active:bg-menu-hover"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
+          <IconeMenu tamanho={22} />
         </button>
         {marca("sm")}
-        <span className="min-w-0 truncate text-sm font-bold tracking-tight text-menu-fg">{nome}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight text-menu-fg">
+          {nome}
+        </span>
         {pendingCount > 0 && (
-          <Link
-            href="/contas-receber"
-            className="ml-auto rounded-full bg-red-600 text-white text-xs font-bold px-2 py-0.5 min-w-[1.5rem] text-center"
-          >
-            {pendingCount > 99 ? "99+" : pendingCount}
+          <Link href="/contas-receber" aria-label={`${pendingCount} contas a receber`}>
+            {contador(pendingCount, "shrink-0")}
           </Link>
         )}
       </header>
 
-      {/* Drawer mobile */}
+      {/* Gaveta do celular */}
       {open && (
-        <div className="md:hidden fixed inset-0 z-40 no-print">
+        <div className="no-print fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 h-full w-72 max-w-[80%] bg-menu text-menu-fg flex flex-col shadow-xl animate-in">
-            <div className="px-4 py-5 border-b border-menu-borda flex items-center justify-between gap-2">
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className="animate-in absolute left-0 top-0 flex h-full w-72 max-w-[80%] flex-col bg-menu text-menu-fg shadow-xl"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-menu-borda px-4 py-5">
               {brand}
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Fechar menu"
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-menu-texto hover:bg-menu-hover hover:text-menu-fg active:bg-menu-hover"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <Fechar tamanho={20} />
               </button>
             </div>
             {nav}
@@ -325,6 +321,9 @@ export function Sidebar({
           </aside>
         </div>
       )}
+
+      {/* Navegação inferior — os destinos do dia sem passar pela gaveta */}
+      <BarraInferior papel={usuario.papel} onAbrirMenu={() => setOpen(true)} />
     </>
   );
 }

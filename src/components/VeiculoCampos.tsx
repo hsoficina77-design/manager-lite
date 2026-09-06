@@ -88,8 +88,8 @@ export function veiculoIniciado(f: VeiculoForm): boolean {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
-const labelCls = "block text-sm font-medium text-zinc-700 mb-1";
+  "w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+const labelCls = "block text-sm font-medium text-tinta-2 mb-1";
 
 export default function VeiculoCampos({
   value,

@@ -14,6 +14,9 @@ import {
   type Situacao,
 } from "@/lib/despesas-comum";
 import { Aviso, Botao, ChipCategoria, Selecao } from "./campos";
+import { FaixaMetricas, Metrica as MetricaUI, Vazio as VazioUI } from "@/components/ui/Dados";
+import { useConfirmar } from "@/components/ui/Avisos";
+import { Avancar, Mais, Voltar } from "@/components/ui/Icones";
 import { enviar, mensagemDoErro } from "./api";
 import { ModalCategorias } from "./ModalCategorias";
 import { ModalFixar } from "./ModalFixar";
@@ -23,10 +26,10 @@ import { ModalPagamento } from "./ModalPagamento";
 import type { Categoria, Equilibrio, Lancamento, Regra } from "./tipos";
 
 const SITUACOES: Record<Situacao, { label: string; chip: string }> = {
-  vencida: { label: "Vencida", chip: "bg-red-100 text-red-700" },
-  "vence-breve": { label: "Vence em breve", chip: "bg-orange-100 text-orange-700" },
-  "a-vencer": { label: "A vencer", chip: "bg-zinc-100 text-zinc-500" },
-  paga: { label: "Paga", chip: "bg-green-100 text-green-700" },
+  vencida: { label: "Vencida", chip: "bg-perigo-fraco text-perigo" },
+  "vence-breve": { label: "Vence em breve", chip: "bg-atencao-fraco text-atencao" },
+  "a-vencer": { label: "A vencer", chip: "bg-superficie-3 text-tinta-3" },
+  paga: { label: "Paga", chip: "bg-ok-fraco text-ok" },
 };
 
 type Filtro = "todos" | "aberto" | "pago";
@@ -60,6 +63,7 @@ export function ControleDeGastos({
   equilibrio: Equilibrio;
 }) {
   const router = useRouter();
+  const confirmar = useConfirmar();
 
   const [modal, setModal] = useState<
     | { tipo: "gasto"; gasto: Lancamento | null }
@@ -204,8 +208,8 @@ export function ControleDeGastos({
       {/* Cabeçalho */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Controle de Gastos</h1>
-          <p className="mt-0.5 text-sm text-zinc-500">
+          <h1 className="text-2xl font-bold text-tinta">Controle de gastos</h1>
+          <p className="mt-0.5 text-sm text-tinta-3">
             Tudo o que a oficina paga para funcionar, mês a mês
           </p>
         </div>
@@ -225,32 +229,32 @@ export function ControleDeGastos({
           <Botao variante="secundario" onClick={() => setModal({ tipo: "fixas" })}>
             Despesas fixas
             {fixasAtivas > 0 && (
-              <span className="ml-1 rounded-full bg-zinc-100 px-1.5 text-xs text-zinc-500">
+              <span className="ml-1 rounded-full bg-superficie-3 px-1.5 text-xs text-tinta-3">
                 {fixasAtivas}
               </span>
             )}
           </Botao>
-          <Botao onClick={() => setModal({ tipo: "gasto", gasto: null })}>+ Lançar gasto</Botao>
+          <Botao onClick={() => setModal({ tipo: "gasto", gasto: null })}><Mais tamanho={16} /> Lançar gasto</Botao>
         </div>
       </div>
 
       <NavegacaoMes mes={mes} rotulo={rotuloMes} ehMesAtual={ehMesAtual} />
 
       {erro && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <p className="rounded-lg border border-perigo-linha bg-perigo-fraco px-3 py-2 text-sm text-perigo">
           {erro}
         </p>
       )}
 
       {/* Os quatro números do mês */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Cartao
+      <FaixaMetricas colunas={4}>
+        <MetricaUI
           rotulo="Gastos do mês"
           valor={formatCurrency(resumo.total)}
           sub={`${resumo.quantidade} ${plural(resumo.quantidade, "lançamento")}`}
-          destaque
+          tamanho="grande"
         />
-        <Cartao
+        <MetricaUI
           rotulo="Já pago"
           valor={formatCurrency(resumo.pago)}
           sub={
@@ -258,19 +262,22 @@ export function ControleDeGastos({
               ? `${Math.round((resumo.pago / resumo.total) * 100)}% do mês`
               : "nada lançado ainda"
           }
+          tamanho="grande"
         />
-        <Cartao
+        <MetricaUI
           rotulo="Em aberto"
           valor={formatCurrency(resumo.aberto)}
           sub={`${emAberto} ${plural(emAberto, "conta")} a pagar`}
+          tamanho="grande"
         />
-        <Cartao
+        <MetricaUI
           rotulo="Vencidas"
           valor={formatCurrency(resumo.vencido)}
           sub={`${resumo.vencidas} ${plural(resumo.vencidas, "conta")}`}
-          perigo={resumo.vencidas > 0}
+          tamanho="grande"
+          tom={resumo.vencidas > 0 ? "perigo" : "neutro"}
         />
-      </div>
+      </FaixaMetricas>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <PainelEquilibrio
@@ -288,7 +295,7 @@ export function ControleDeGastos({
 
       {/* Filtros */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="-mx-4 flex gap-1 overflow-x-auto rounded-lg bg-zinc-100 p-1 px-4 sm:mx-0 sm:px-1">
+        <div className="-mx-4 flex gap-1 overflow-x-auto rounded-lg bg-superficie-3 p-1 px-4 sm:mx-0 sm:px-1">
           {(
             [
               ["todos", "Todos"],
@@ -302,8 +309,8 @@ export function ControleDeGastos({
               className={cn(
                 "shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 filtro === valor
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-700"
+                  ? "bg-superficie text-tinta shadow-sm"
+                  : "text-tinta-3 hover:text-tinta-2"
               )}
             >
               {label}
@@ -316,12 +323,12 @@ export function ControleDeGastos({
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por descrição ou fornecedor"
-            className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-64 sm:flex-none"
+            className="min-w-0 flex-1 rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-64 sm:flex-none"
           />
           <select
             value={categoriaFiltro}
             onChange={(e) => setCategoriaFiltro(e.target.value)}
-            className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="shrink-0 rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="">Todas as categorias</option>
             {categorias.map((c) => (
@@ -335,7 +342,7 @@ export function ControleDeGastos({
 
       {/* Lançamentos */}
       {lancamentos.length === 0 ? (
-        <Vazio
+        <VazioUI
           titulo="Nenhum gasto neste mês"
           texto={
             regras.length === 0
@@ -351,26 +358,26 @@ export function ControleDeGastos({
           }
         />
       ) : listadas.length === 0 ? (
-        <Vazio titulo="Nada com esse filtro" texto="Ajuste a busca ou volte para “Todos”." />
+        <VazioUI titulo="Nada com esse filtro" texto="Ajuste a busca ou volte para “Todos”." />
       ) : (
         <div className="space-y-4">
           {grupos.map((grupo) => (
             <div key={grupo.chave}>
-              <div className="flex items-start justify-between gap-3 rounded-t-xl border border-zinc-200 bg-zinc-100 px-4 py-2.5">
+              <div className="flex items-start justify-between gap-3 rounded-t-xl border border-linha bg-superficie-3 px-4 py-2.5">
                 <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-zinc-700">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-tinta-2">
                     {grupo.label}
-                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                    <span className="rounded-full bg-superficie/80 px-2 py-0.5 text-xs font-medium text-tinta-2">
                       {grupo.itens.length}
                     </span>
                   </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">{grupo.ajuda}</p>
+                  <p className="mt-0.5 text-xs text-tinta-3">{grupo.ajuda}</p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-800">
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-tinta">
                   {formatCurrency(grupo.itens.reduce((s, d) => s + valorEfetivo(d), 0))}
                 </span>
               </div>
-              <ul className="divide-y divide-zinc-100 overflow-hidden rounded-b-xl border border-t-0 border-zinc-200 bg-white">
+              <ul className="divide-y divide-linha overflow-hidden rounded-b-xl border border-t-0 border-linha bg-superficie">
                 {grupo.itens.map((d) => (
                   <Linha
                     key={d.id}
@@ -386,11 +393,22 @@ export function ControleDeGastos({
                         enviar(`/api/despesas/${d.id}/pagamento`, "PUT", { pago: false })
                       )
                     }
-                    onRemover={() => {
-                      const pergunta = d.recorrenteId
-                        ? `Marcar "${d.descricao}" como não cobrada em ${rotuloMes}?\n\nA despesa fixa continua valendo nos outros meses.`
-                        : `Excluir "${d.descricao}"?`;
-                      if (!confirm(pergunta)) return;
+                    onRemover={async () => {
+                      const ok = await confirmar(
+                        d.recorrenteId
+                          ? {
+                              titulo: `Marcar “${d.descricao}” como não cobrada em ${rotuloMes}?`,
+                              texto: "A despesa fixa continua valendo nos outros meses, e dá para trazer de volta depois.",
+                              acao: "Não teve este mês",
+                            }
+                          : {
+                              titulo: `Excluir “${d.descricao}”?`,
+                              texto: `O lançamento de ${formatCurrency(valorEfetivo(d))} sai do mês. Não há como desfazer.`,
+                              acao: "Excluir gasto",
+                              perigo: true,
+                            }
+                      );
+                      if (!ok) return;
                       comAcao(d.id, () => enviar(`/api/despesas/${d.id}`, "DELETE"));
                     }}
                   />
@@ -399,7 +417,7 @@ export function ControleDeGastos({
             </div>
           ))}
 
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-linha bg-superficie-2 px-4 py-2.5 text-sm">
             {reclassificando ? (
               <button
                 type="button"
@@ -417,11 +435,11 @@ export function ControleDeGastos({
                   : "Selecionar os da lista"}
               </button>
             ) : (
-              <span className="text-zinc-500">
+              <span className="text-tinta-3">
                 {`${listadas.length} de ${lancamentos.length} ${plural(lancamentos.length, "lançamento")}`}
               </span>
             )}
-            <span className="font-semibold text-zinc-900">{formatCurrency(totalListado)}</span>
+            <span className="font-semibold text-tinta">{formatCurrency(totalListado)}</span>
           </div>
         </div>
       )}
@@ -441,14 +459,14 @@ export function ControleDeGastos({
       )}
 
       {cancelados.length > 0 && (
-        <details className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-          <summary className="cursor-pointer text-sm text-zinc-500">
+        <details className="rounded-xl border border-linha bg-superficie px-4 py-3">
+          <summary className="cursor-pointer text-sm text-tinta-3">
             {cancelados.length} despesa fixa marcada como “não teve” em {rotuloMes}
           </summary>
           <ul className="mt-3 space-y-2">
             {cancelados.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-zinc-500">
+                <span className="min-w-0 truncate text-tinta-3">
                   {d.descricao} · {formatCurrency(d.valor)}
                 </span>
                 <button
@@ -490,19 +508,19 @@ function NavegacaoMes({
       <Link
         href={link(-1)}
         aria-label="Mês anterior"
-        className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+        className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie text-tinta-2 hover:bg-superficie-2 sm:h-9 sm:w-9"
       >
-        ←
+        <Voltar tamanho={16} />
       </Link>
-      <span className="min-w-36 text-center text-sm font-semibold text-zinc-800">{rotulo}</span>
+      <span className="min-w-36 text-center text-sm font-semibold text-tinta">{rotulo}</span>
       {/* Avançar é permitido de propósito: ver o que vem pela frente é metade do
           motivo de cadastrar despesa fixa. */}
       <Link
         href={link(1)}
         aria-label="Próximo mês"
-        className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+        className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie text-tinta-2 hover:bg-superficie-2 sm:h-9 sm:w-9"
       >
-        →
+        <Avancar tamanho={16} />
       </Link>
       {!ehMesAtual && (
         <Link
@@ -512,44 +530,6 @@ function NavegacaoMes({
           Mês atual
         </Link>
       )}
-    </div>
-  );
-}
-
-function Cartao({
-  rotulo,
-  valor,
-  sub,
-  destaque,
-  perigo,
-}: {
-  rotulo: string;
-  valor: string;
-  sub?: string;
-  destaque?: boolean;
-  perigo?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border p-4",
-        perigo
-          ? "border-red-200 bg-red-50"
-          : destaque
-            ? "border-zinc-300 bg-zinc-50"
-            : "border-zinc-200 bg-white"
-      )}
-    >
-      <p className="text-sm text-zinc-500">{rotulo}</p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-bold tabular-nums",
-          perigo ? "text-red-600" : "text-zinc-900"
-        )}
-      >
-        {valor}
-      </p>
-      {sub && <p className="mt-1 text-xs text-zinc-400">{sub}</p>}
     </div>
   );
 }
@@ -577,43 +557,43 @@ function PainelEquilibrio({
     e.necessario && e.necessario > 0 ? Math.min(100, (e.faturado / e.necessario) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 lg:col-span-2">
+    <div className="rounded-xl border border-linha bg-superficie p-5 lg:col-span-2">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-zinc-800">Ponto de equilíbrio</h2>
-          <p className="text-xs text-zinc-500">Quanto precisa faturar para cobrir os gastos</p>
+          <h2 className="font-semibold text-tinta">Ponto de equilíbrio</h2>
+          <p className="text-xs text-tinta-3">Quanto precisa faturar para cobrir os gastos</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-zinc-500">Custo operacional</p>
-          <p className="font-semibold text-zinc-900">{formatCurrency(custoOperacional)}/mês</p>
+          <p className="text-xs text-tinta-3">Custo operacional</p>
+          <p className="font-semibold text-tinta">{formatCurrency(custoOperacional)}/mês</p>
         </div>
       </div>
 
       {e.necessario === null ? (
-        <p className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+        <p className="mt-4 rounded-lg border border-linha bg-superficie-2 px-3 py-3 text-sm text-tinta-3">
           Ainda não dá para calcular: é preciso ter OS entregues nos últimos três meses para
           saber a margem média da oficina.
         </p>
       ) : (
         <>
-          <p className="mt-4 text-sm text-zinc-600">
+          <p className="mt-4 text-sm text-tinta-2">
             Com margem de <strong>{Math.round((e.margem ?? 0) * 100)}%</strong>, a oficina precisa
             faturar{" "}
-            <strong className="text-zinc-900">{formatCurrency(e.necessario)}</strong> neste mês.
+            <strong className="text-tinta">{formatCurrency(e.necessario)}</strong> neste mês.
           </p>
 
-          <div className="mt-3 h-3 overflow-hidden rounded-full bg-zinc-100">
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-superficie-3">
             <div
-              className={cn("h-full rounded-full", cobriu ? "bg-green-500" : "bg-brand-600")}
+              className={cn("h-full rounded-full", cobriu ? "bg-ok" : "bg-brand-600")}
               style={{ width: `${progresso}%` }}
             />
           </div>
 
           <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
-            <span className="text-zinc-500">
+            <span className="text-tinta-3">
               {`Faturado ${formatCurrency(e.faturado)} · ${e.osNoMes} ${plural(e.osNoMes, "OS entregue")}`}
             </span>
-            <span className={cn("font-medium", cobriu ? "text-green-600" : "text-red-600")}>
+            <span className={cn("font-medium", cobriu ? "text-ok" : "text-perigo")}>
               {cobriu
                 ? `Coberto — sobra ${formatCurrency(e.resultado)} de lucro`
                 : `Faltam ${formatCurrency(e.falta ?? 0)}`}
@@ -622,7 +602,7 @@ function PainelEquilibrio({
         </>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-zinc-100 pt-3 text-sm sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-linha pt-3 text-sm sm:grid-cols-3">
         {/* Mesmas palavras dos dois blocos da lista — "avulso" e "variável" para a mesma
             coisa faria parecer que são dois números diferentes. */}
         <Metrica rotulo="Gastos fixos" valor={formatCurrency(fixo)} />
@@ -630,7 +610,7 @@ function PainelEquilibrio({
         <Metrica
           rotulo="Resultado do mês"
           valor={formatCurrency(e.resultado)}
-          cor={e.resultado >= 0 ? "text-green-600" : "text-red-600"}
+          cor={e.resultado >= 0 ? "text-ok" : "text-perigo"}
           ajuda="lucro bruto das OS − gastos"
         />
       </div>
@@ -651,9 +631,9 @@ function Metrica({
 }) {
   return (
     <div>
-      <p className="text-xs text-zinc-500">{rotulo}</p>
-      <p className={cn("mt-0.5 font-semibold tabular-nums", cor ?? "text-zinc-900")}>{valor}</p>
-      {ajuda && <p className="text-[11px] text-zinc-400">{ajuda}</p>}
+      <p className="text-xs text-tinta-3">{rotulo}</p>
+      <p className={cn("mt-0.5 font-semibold tabular-nums", cor ?? "text-tinta")}>{valor}</p>
+      {ajuda && <p className="text-xs text-tinta-3">{ajuda}</p>}
     </div>
   );
 }
@@ -674,10 +654,10 @@ function PorCategoria({
   onReclassificar: (categoriaId: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5">
-      <h2 className="font-semibold text-zinc-800">Por categoria</h2>
+    <div className="rounded-xl border border-linha bg-superficie p-5">
+      <h2 className="font-semibold text-tinta">Por categoria</h2>
       {itens.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-400">Nada lançado neste mês.</p>
+        <p className="mt-3 text-sm text-tinta-3">Nada lançado neste mês.</p>
       ) : (
         <>
           <ul className="mt-3 space-y-1">
@@ -687,15 +667,15 @@ function PorCategoria({
                   type="button"
                   onClick={() => onReclassificar(c.id)}
                   title={`Ver e reclassificar os gastos de ${c.nome}`}
-                  className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-zinc-50"
+                  className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-superficie-2"
                 >
                   <span className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="min-w-0 truncate text-zinc-600">{c.nome}</span>
-                    <span className="shrink-0 font-medium tabular-nums text-zinc-900">
+                    <span className="min-w-0 truncate text-tinta-2">{c.nome}</span>
+                    <span className="shrink-0 font-medium tabular-nums text-tinta">
                       {formatCurrency(c.valor)}
                     </span>
                   </span>
-                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-zinc-100">
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-superficie-3">
                     <span
                       className="block h-full rounded-full"
                       style={{
@@ -708,7 +688,7 @@ function PorCategoria({
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[11px] leading-snug text-zinc-400">
+          <p className="mt-3 text-xs leading-snug text-tinta-3">
             Toque numa categoria para ver o que caiu nela e trocar em lote — é o jeito de
             esvaziar o “Outros” sem abrir gasto por gasto.
           </p>
@@ -763,10 +743,10 @@ function BarraReclassificar({
   }
 
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.07)] backdrop-blur sm:-mx-6 sm:px-6">
+    <div className="sticky bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-10 -mx-4 border-t border-linha bg-superficie/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.07)] backdrop-blur sm:-mx-6 sm:px-6 md:bottom-0">
       {selecionados.length === 0 ? (
         <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-zinc-500">Marque os gastos que foram para a categoria errada.</span>
+          <span className="text-tinta-3">Marque os gastos que foram para a categoria errada.</span>
           <Botao variante="secundario" className="shrink-0" onClick={onSair}>
             Sair
           </Botao>
@@ -774,14 +754,14 @@ function BarraReclassificar({
       ) : (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
-            <span className="font-medium text-zinc-800">
+            <span className="font-medium text-tinta">
               {selecionados.length}{" "}
               {selecionados.length === 1 ? "gasto selecionado" : "gastos selecionados"}
             </span>
             <button
               type="button"
               onClick={onLimpar}
-              className="text-xs text-zinc-500 hover:text-zinc-700"
+              className="text-xs text-tinta-3 hover:text-tinta-2"
             >
               Limpar seleção
             </button>
@@ -811,7 +791,7 @@ function BarraReclassificar({
           </div>
 
           {deRegra > 0 && (
-            <p className="text-[11px] leading-snug text-amber-700">
+            <p className="text-xs leading-snug text-atencao">
               {deRegra === 1
                 ? "1 dos selecionados vem de despesa fixa: a troca vale só para este mês."
                 : `${deRegra} dos selecionados vêm de despesa fixa: a troca vale só para este mês.`}{" "}
@@ -854,7 +834,7 @@ function Linha({
   const info = (
     <div className="min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-zinc-900">{d.descricao}</span>
+        <span className="font-medium text-tinta">{d.descricao}</span>
         <ChipCategoria nome={d.categoria.nome} cor={d.categoria.cor} />
         {/* O antigo chip "Fixa" saiu daqui: agora quem diz isso é o bloco em que a
             linha está, e repetir em toda linha só engordava a lista no celular. */}
@@ -864,7 +844,7 @@ function Linha({
           {SITUACOES[situacao].label}
         </span>
       </div>
-      <p className="mt-0.5 text-xs text-zinc-400">
+      <p className="mt-0.5 text-xs text-tinta-3">
         {d.pago && d.pagoEm
           ? `Pago em ${formatDate(d.pagoEm)}${
               labelFormaPagamento(d.formaPagamento)
@@ -878,13 +858,13 @@ function Linha({
   );
 
   const valor = (
-    <span className="w-24 text-right font-semibold tabular-nums text-zinc-900">
+    <span className="w-24 text-right font-semibold tabular-nums text-tinta">
       {formatCurrency(valorEfetivo(d))}
       {Math.abs(diferenca) >= 0.01 && (
         <span
           className={cn(
-            "block text-[11px] font-normal",
-            diferenca > 0 ? "text-red-500" : "text-green-600"
+            "block text-xs font-normal",
+            diferenca > 0 ? "text-perigo" : "text-ok"
           )}
         >
           previsto {formatCurrency(d.valor)}
@@ -903,7 +883,7 @@ function Linha({
             type="checkbox"
             checked={selecionado}
             onChange={onSelecionar}
-            className="mt-0.5 h-5 w-5 shrink-0 rounded border-zinc-300 accent-brand-600"
+            className="mt-0.5 h-5 w-5 shrink-0 rounded border-linha-forte accent-brand-600"
           />
           <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             {info}
@@ -922,60 +902,27 @@ function Linha({
         {valor}
 
         {d.pago ? (
-          <button
-            type="button"
-            disabled={ocupado}
-            onClick={onEstornar}
-            className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-          >
+          <Botao variante="secundario" tamanho="denso" disabled={ocupado} onClick={onEstornar}>
             Desfazer
-          </button>
+          </Botao>
         ) : (
-          <button
-            type="button"
-            disabled={ocupado}
-            onClick={onPagar}
-            className="rounded-lg bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-          >
+          <Botao variante="sucesso" tamanho="denso" disabled={ocupado} onClick={onPagar}>
             Pagar
-          </button>
+          </Botao>
         )}
-        <button
-          type="button"
-          disabled={ocupado}
-          onClick={onEditar}
-          className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-        >
+        <Botao variante="secundario" tamanho="denso" disabled={ocupado} onClick={onEditar}>
           Editar
-        </button>
-        <button
-          type="button"
+        </Botao>
+        <Botao
+          variante="perigo"
+          tamanho="denso"
           disabled={ocupado}
           onClick={onRemover}
           title={d.recorrenteId ? "Não teve este mês" : "Excluir"}
-          className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs text-red-500 hover:bg-red-50 disabled:opacity-50"
         >
           {d.recorrenteId ? "Não teve" : "Excluir"}
-        </button>
+        </Botao>
       </div>
     </li>
-  );
-}
-
-function Vazio({
-  titulo,
-  texto,
-  acao,
-}: {
-  titulo: string;
-  texto: string;
-  acao?: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white px-6 py-12 text-center">
-      <p className="font-medium text-zinc-700">{titulo}</p>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-400">{texto}</p>
-      {acao && <div className="mt-4 flex justify-center">{acao}</div>}
-    </div>
   );
 }

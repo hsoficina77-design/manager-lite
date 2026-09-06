@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { UsuarioProvider } from "@/components/UsuarioProvider";
+import { AvisosProvider } from "@/components/ui/Avisos";
+import { SCRIPT_TEMA } from "@/components/ui/Tema";
 import { prisma } from "@/lib/prisma";
 import { getUsuarioAtual } from "@/lib/auth";
 import { getConfiguracao } from "@/lib/configuracao-db";
@@ -15,6 +17,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  // `cover` é o que faz `env(safe-area-inset-*)` valer alguma coisa. Sem isto a
+  // barra colada no rodapé fica sob o indicador de home do iPhone.
+  viewportFit: "cover",
 };
 
 // Título, descrição e ícone saem do painel de configurações — a aba do navegador
@@ -67,8 +72,13 @@ export default async function RootLayout({
         {/* Cores da oficina. Vai no <head> para o tema já valer na primeira pintura,
             sem piscar o vermelho padrão antes de trocar. */}
         <style id="tema-da-marca" dangerouslySetInnerHTML={{ __html: cssDoTema(config) }} />
+        {/* Claro ou escuro, também antes da primeira pintura — senão a tela nasce
+            branca e pisca para escura no primeiro render. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>
-      <body className="min-h-screen bg-gray-100 text-zinc-900 antialiased">
+      {/* `100dvh` em vez de `100vh`: no iOS a unidade antiga conta a altura com a
+          barra de endereço escondida, e o fim de cada tela ficava cortado. */}
+      <body className="min-h-[100dvh] bg-fundo text-tinta antialiased">
         <UsuarioProvider
           usuario={
             usuario
@@ -76,7 +86,7 @@ export default async function RootLayout({
               : null
           }
         >
-          {conteudo}
+          <AvisosProvider>{conteudo}</AvisosProvider>
         </UsuarioProvider>
       </body>
     </html>
@@ -98,18 +108,27 @@ async function AppComMenu({
       ? await contarPendencias()
       : 0;
 
+  // Quem rola agora é o documento, não um `main` de altura travada.
+  //
+  // O shell era `h-screen overflow-hidden` com a rolagem dentro do `main`, e isso
+  // custava duas coisas no celular: a barra de endereço nunca recolhia, porque a
+  // página em si não rolava, e `position: sticky` media a partir do topo do
+  // `main` — que fica atrás do cabeçalho fixo.
+  //
+  // O respiro no rodapé é a altura da barra de navegação do celular mais a área
+  // segura do aparelho, para nenhuma tela terminar embaixo dela.
   return (
-    <div className="flex h-screen overflow-hidden">
+    <>
       <Sidebar
         pendingCount={pendingCount}
         nome={nomeDoMenu(config)}
         logoUrl={config.logoUrl}
         usuario={{ nome: usuario.nome, papel: usuario.papel }}
       />
-      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
+      <main className="pt-14 pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-56 md:pt-0">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
-    </div>
+    </>
   );
 }
 

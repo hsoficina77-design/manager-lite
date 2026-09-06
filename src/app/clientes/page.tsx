@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
+import { BotaoLink } from "@/components/ui/Botao";
+import { BuscaLive } from "@/components/ui/BuscaLive";
+import { Vazio } from "@/components/ui/Dados";
+import { Mais } from "@/components/ui/Icones";
 
 export default async function ClientesPage({
   searchParams,
@@ -42,84 +47,108 @@ export default async function ClientesPage({
   });
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-6 gap-3">
-        <h1 className="text-2xl font-bold text-zinc-900">Clientes</h1>
-        <Link
-          href="/clientes/novo"
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 transition-colors"
-        >
-          + Novo Cliente
-        </Link>
+    <div className="space-y-4 p-4 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-tinta sm:text-2xl">Clientes</h1>
+        <BotaoLink href="/clientes/novo">
+          <Mais tamanho={16} /> Novo cliente
+        </BotaoLink>
       </div>
 
-      <form className="mb-4 flex flex-wrap gap-2">
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Buscar por nome, apelido, placa, marca, modelo..."
-          className="flex-1 min-w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          autoComplete="off"
-        />
-        <input
-          type="date"
-          name="de"
-          defaultValue={de}
-          title="Cadastro a partir de"
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
-        <input
-          type="date"
-          name="ate"
-          defaultValue={ate}
-          title="Cadastro até"
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-        >
-          Filtrar
-        </button>
-        {(q || de || ate) && (
-          <Link
-            href="/clientes"
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+      {/* Busca ao vivo, como nas outras listas — antes esta era a única que
+          exigia apertar "Filtrar". As datas seguem em formulário porque são
+          recorte, não busca. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Suspense fallback={<div className="h-10 flex-1 sm:max-w-sm" />}>
+          <BuscaLive
+            placeholder="Buscar por nome, apelido, placa, marca ou modelo"
+            rotulo="Buscar clientes"
+            className="flex-1 sm:max-w-sm"
+          />
+        </Suspense>
+        <form className="flex flex-wrap items-center gap-2">
+          {q && <input type="hidden" name="q" value={q} />}
+          <input
+            type="date"
+            name="de"
+            defaultValue={de}
+            aria-label="Cadastrado a partir de"
+            className="rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <input
+            type="date"
+            name="ate"
+            defaultValue={ate}
+            aria-label="Cadastrado até"
+            className="rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm text-tinta focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <button
+            type="submit"
+            className="inline-flex min-h-11 items-center rounded-lg border border-linha-forte bg-superficie px-4 text-sm font-medium text-tinta-2 hover:bg-superficie-2 sm:min-h-9"
           >
-            Limpar
-          </Link>
-        )}
-      </form>
+            Aplicar datas
+          </button>
+          {(q || de || ate) && (
+            <Link
+              href="/clientes"
+              className="inline-flex min-h-11 items-center rounded-lg border border-linha-forte bg-superficie px-4 text-sm text-tinta-2 hover:bg-superficie-2 sm:min-h-9"
+            >
+              Limpar
+            </Link>
+          )}
+        </form>
+      </div>
 
       {clientes.length === 0 ? (
-        <div className="rounded-xl border border-zinc-200 bg-white py-12 text-center text-sm text-zinc-400">
-          {q ? `Nenhum cliente encontrado para "${q}".` : "Nenhum cliente cadastrado."}
-        </div>
+        q || de || ate ? (
+          <Vazio
+            titulo="Nenhum cliente encontrado"
+            texto={q ? `Nada corresponde a “${q}”. Tente outro nome, apelido ou placa.` : "Nenhum cadastro no período escolhido."}
+            acao={
+              <Link
+                href="/clientes"
+                className="inline-flex min-h-11 items-center rounded-lg border border-linha-forte bg-superficie px-4 text-sm font-medium text-tinta-2 hover:bg-superficie-2"
+              >
+                Limpar filtros
+              </Link>
+            }
+          />
+        ) : (
+          <Vazio
+            titulo="Nenhum cliente cadastrado"
+            texto="O cliente é o começo de tudo: com ele cadastrado dá para abrir orçamento e OS."
+            acao={
+              <BotaoLink href="/clientes/novo">
+                <Mais tamanho={16} /> Cadastrar o primeiro
+              </BotaoLink>
+            }
+          />
+        )
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
+        <div className="overflow-hidden rounded-xl border border-linha bg-superficie divide-y divide-linha">
           {clientes.map((c) => (
             <Link
               key={c.id}
               href={`/clientes/${c.id}`}
-              className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50 transition-colors"
+              className="flex items-center justify-between px-4 py-3 hover:bg-superficie-2 transition-colors"
             >
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="font-medium text-zinc-900">{c.nome}</p>
+                  <p className="font-medium text-tinta">{c.nome}</p>
                   {c.apelido && (
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                    <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-3">
                       {c.apelido}
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-tinta-3">
                   {c.telefone || "Sem telefone"}
                   {c.cpfCnpj ? ` · ${c.cpfCnpj}` : ""}
                   {c.cidade ? ` · ${c.cidade}` : ""}
                 </p>
               </div>
-              <div className="text-right text-xs text-zinc-400 shrink-0 ml-4">
-                <p className="text-zinc-500">{formatDate(c.createdAt)}</p>
+              <div className="text-right text-xs text-tinta-3 shrink-0 ml-4">
+                <p className="text-tinta-3">{formatDate(c.createdAt)}</p>
                 <p>{c._count.veiculos} veículo{c._count.veiculos !== 1 ? "s" : ""} · {c._count.ordens} OS</p>
               </div>
             </Link>

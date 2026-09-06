@@ -1,138 +1,41 @@
 "use client";
 
-// Peças de formulário do controle de gastos. Existem por um motivo prático: são quatro
-// modais e uma lista, e sem isto a mesma linha de classes do Tailwind apareceria umas
-// quarenta vezes — que foi como a tela antiga acabou difícil de mexer.
+// Peças de formulário do controle de gastos.
+//
+// O que era próprio daqui virou primitiva do sistema: os mesmos modais, o mesmo
+// campo e o mesmo botão passaram a servir contas a receber, a OS e o cadastro de
+// cliente. Este arquivo agora reexporta, para os locais de chamada não trocarem
+// de import, e guarda só o que é exclusivo de gastos — a paleta das categorias.
 
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { CampoDinheiro } from "@/components/ui/Campos";
 
-const BASE_CAMPO =
-  "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-zinc-50 disabled:text-zinc-400";
-
-export function Campo({
-  rotulo,
-  ajuda,
-  className,
-  children,
-}: {
-  rotulo: string;
-  ajuda?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className={cn("block", className)}>
-      <span className="mb-1 block text-xs font-medium text-zinc-500">{rotulo}</span>
-      {children}
-      {ajuda && <span className="mt-1 block text-xs text-zinc-400">{ajuda}</span>}
-    </label>
-  );
-}
-
-export function Entrada(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cn(BASE_CAMPO, props.className)} />;
-}
-
-export function Selecao(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={cn(BASE_CAMPO, "bg-white", props.className)} />;
-}
-
-export function Area(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={cn(BASE_CAMPO, "resize-y", props.className)} />;
-}
-
-/** Campo de dinheiro: teclado numérico do Android e casas decimais. */
-export function EntradaValor(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <Entrada type="number" inputMode="decimal" min="0.01" step="0.01" {...props} />;
-}
-
-export function Botao({
-  variante = "primario",
-  className,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variante?: "primario" | "secundario" | "perigo" | "sucesso";
-}) {
-  const estilos = {
-    primario: "bg-brand-600 text-brand-fg hover:bg-brand-700 border-transparent",
-    secundario: "border-zinc-300 text-zinc-700 hover:bg-zinc-50 bg-white",
-    // Vermelho é literal neste app: perigo e dinheiro ruim, nunca identidade.
-    perigo: "border-red-200 text-red-600 hover:bg-red-50 bg-white",
-    sucesso: "bg-green-600 text-white hover:bg-green-700 border-transparent",
-  }[variante];
-
-  return (
-    <button
-      {...props}
-      className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
-        estilos,
-        className
-      )}
-    />
-  );
-}
+export { Campo, Entrada, Selecao, Area, CampoDinheiro, Aviso } from "@/components/ui/Campos";
+export { Botao } from "@/components/ui/Botao";
+export { Modal } from "@/components/ui/Modal";
 
 /**
- * Casca dos modais.
+ * Campo de dinheiro do controle de gastos.
  *
- * `items-start` + `overflow-y-auto` no fundo e `my-auto` no cartão são a convenção
- * daqui: no Android o teclado encolhe a viewport, e um modal centrado sem scroll
- * esconde o botão de salvar sem deixar como chegar nele.
+ * Mantém o nome antigo porque os quatro modais o chamam assim, e continua
+ * recebendo/entregando evento com `target.value`. Por baixo é o campo de texto
+ * que aceita vírgula: antes era `type="number"`, que recusava `1.250,50` e
+ * entregava vazio no envio sem dizer nada.
  */
-export function Modal({
-  titulo,
-  descricao,
-  largura = "max-w-md",
-  onFechar,
-  children,
-}: {
-  titulo: string;
-  descricao?: string;
-  largura?: string;
-  onFechar: () => void;
-  children: React.ReactNode;
+export function EntradaValor({
+  value,
+  onChange,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & {
+  value?: string | number;
+  onChange?: (e: { target: { value: string } }) => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onFechar();
-      }}
-    >
-      <div
-        className={cn(
-          "my-auto w-full rounded-2xl bg-white shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto",
-          largura
-        )}
-      >
-        <div className="sticky top-0 flex items-start justify-between gap-3 border-b border-zinc-100 bg-white px-5 py-4">
-          <div className="min-w-0">
-            <h3 className="font-semibold text-zinc-900">{titulo}</h3>
-            {descricao && <p className="mt-0.5 text-xs text-zinc-500">{descricao}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onFechar}
-            aria-label="Fechar"
-            className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="px-5 py-4">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-export function Aviso({ children }: { children: React.ReactNode }) {
-  if (!children) return null;
-  return (
-    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-      {children}
-    </p>
+    <CampoDinheiro
+      {...props}
+      valor={value == null ? "" : String(value)}
+      onChange={(canonico) => onChange?.({ target: { value: canonico } })}
+    />
   );
 }
 
@@ -154,12 +57,14 @@ export function PaletaCor({ valor, onMudar }: { valor: string; onMudar: (cor: st
       <button
         type="button"
         aria-label="Escolher cor"
+        aria-expanded={aberta}
         onClick={() => setAberta((v) => !v)}
-        className="h-11 w-11 rounded-lg border border-zinc-300"
+        className="h-11 w-11 rounded-lg border border-linha-forte"
         style={{ backgroundColor: valor }}
       />
       {aberta && (
-        <div className="absolute left-0 top-12 z-10 grid w-44 grid-cols-6 gap-1.5 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg">
+        // Alvos de 32 px: os quadradinhos de 24 px eram difíceis de acertar no dedo.
+        <div className="absolute left-0 top-12 z-10 grid w-56 grid-cols-6 gap-1 rounded-xl border border-linha bg-superficie p-2 shadow-lg">
           {CORES.map((cor) => (
             <button
               key={cor}
@@ -169,9 +74,10 @@ export function PaletaCor({ valor, onMudar }: { valor: string; onMudar: (cor: st
                 onMudar(cor);
                 setAberta(false);
               }}
-              className="h-6 w-6 rounded-full ring-offset-1 hover:ring-2 hover:ring-zinc-300"
-              style={{ backgroundColor: cor }}
-            />
+              className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-superficie-2"
+            >
+              <span className="h-6 w-6 rounded-full" style={{ backgroundColor: cor }} />
+            </button>
           ))}
         </div>
       )}

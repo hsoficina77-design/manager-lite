@@ -204,12 +204,12 @@ function Marca({ form, setCampo, logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverL
     <>
       <Cartao titulo="Logo" ajuda="Aparece no menu, na aba do navegador e no topo dos documentos.">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-linha-forte bg-superficie-2">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="Logo da oficina" className="h-20 w-20 object-contain" />
             ) : (
-              <span className="px-2 text-center text-xs text-zinc-400">Sem logo</span>
+              <span className="px-2 text-center text-xs text-tinta-3">Sem logo</span>
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -238,13 +238,13 @@ function Marca({ form, setCampo, logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverL
                   type="button"
                   disabled={enviandoLogo}
                   onClick={aoRemoverLogo}
-                  className="min-h-11 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="min-h-11 rounded-lg border border-perigo-linha px-3 py-2 text-sm text-perigo hover:bg-perigo-fraco disabled:opacity-50"
                 >
                   Remover
                 </button>
               )}
             </div>
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 text-xs text-tinta-3">
               PNG, JPG, WebP ou SVG, até 2MB. PNG com fundo transparente fica melhor no cabeçalho.
               A logo é salva assim que você escolhe o arquivo.
             </p>
@@ -304,7 +304,7 @@ function Documentos({ form, setCampo, previa }: SecaoProps) {
           />
         </Campo>
 
-        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-zinc-200 p-3 text-sm text-zinc-700 hover:bg-zinc-50">
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-linha p-3 text-sm text-tinta-2 hover:bg-superficie-2">
           <input
             type="checkbox"
             checked={form.mostrarAssinatura}
@@ -313,7 +313,7 @@ function Documentos({ form, setCampo, previa }: SecaoProps) {
           />
           <span>
             Espaço para assinatura do cliente
-            <span className="mt-0.5 block text-xs text-zinc-500">
+            <span className="mt-0.5 block text-xs text-tinta-3">
               Linha de assinatura no fim da OS e do orçamento impressos.
             </span>
           </span>
@@ -343,7 +343,7 @@ function Orcamento({ form, setCampo }: SecaoProps) {
             onChange={(e) => setCampo("validadeOrcamentoDias", e.target.value)}
             className={cn(inputCls, "w-24")}
           />
-          <span className="text-sm text-zinc-500">dias</span>
+          <span className="text-sm text-tinta-3">dias</span>
         </div>
       </Campo>
     </Cartao>
