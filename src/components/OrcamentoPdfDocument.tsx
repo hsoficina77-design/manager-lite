@@ -1,5 +1,6 @@
-import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { anoVeiculo } from "@/lib/constants";
+import type { FotoPdf } from "@/lib/foto-pdf";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -27,6 +28,7 @@ export type OrcamentoForPdf = {
   } | null;
   veiculoDesc: string | null;
   itens: Item[];
+  fotos?: { id: string; url: string; legenda: string | null; tipo: string; createdAt: string }[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -111,15 +113,32 @@ const s = StyleSheet.create({
     backgroundColor: C.soft, padding: 10,
   },
   avisoTexto: { fontSize: 8, color: C.sub, lineHeight: 1.45 },
+
+  // Fotos — mesma grade da OS, sem a divisão por momento (no orçamento o carro
+  // ainda nem entrou: existe um momento só).
+  fotosTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 2 },
+  fotosSub: { fontSize: 8.5, color: C.sub, marginBottom: 2 },
+  fotosDica: { fontSize: 7.5, color: C.mute, marginBottom: 12, fontFamily: "Helvetica-Oblique" },
+  fotosGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 },
+  fotoCell: { width: "33.33%", paddingHorizontal: 4, marginBottom: 12 },
+  fotoBox: {
+    backgroundColor: C.soft, borderWidth: 1, borderColor: C.line, borderRadius: 4,
+    textDecoration: "none",
+  },
+  fotoImg: { width: "100%", height: 120, objectFit: "contain" },
+  fotoLegenda: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, marginTop: 3 },
+  fotoData: { fontSize: 7.5, color: C.mute, marginTop: 1 },
 });
 
 export function OrcamentoPdfDocument({
   orc,
   logoSrc,
+  fotos = [],
   config = CONFIG_PADRAO,
 }: {
   orc: OrcamentoForPdf;
   logoSrc?: string;
+  fotos?: FotoPdf[];
   config?: Configuracao;
 }) {
   // Identidade da oficina — nome, contatos, rodapé e cor saem do painel.
@@ -277,6 +296,40 @@ export function OrcamentoPdfDocument({
           />
         </View>
       </Page>
+
+      {/* Fotos — páginas próprias, após o documento */}
+      {fotos.length > 0 ? (
+        <Page size="A4" style={s.page}>
+          <Text style={s.fotosTitle}>Fotos</Text>
+          <Text style={s.fotosSub}>
+            Orçamento Nº {orc.numero}
+            {veiculoNome ? ` · ${veiculoNome}` : ""}
+            {orc.veiculo?.placa ? ` · ${orc.veiculo.placa}` : ""}
+          </Text>
+          <Text style={s.fotosDica}>Toque em uma foto para abri-la em alta resolução.</Text>
+
+          <View style={s.fotosGrid}>
+            {fotos.map((foto) => (
+              <View key={foto.id} style={s.fotoCell} wrap={false}>
+                <Link src={foto.url} style={s.fotoBox}>
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  <Image style={s.fotoImg} src={foto.src} />
+                </Link>
+                {foto.legenda ? <Text style={s.fotoLegenda}>{foto.legenda}</Text> : null}
+                <Text style={s.fotoData}>{dia(foto.createdAt)}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={s.footer} fixed>
+            <Text style={s.footerText}>{rodape}</Text>
+            <Text
+              style={s.footerText}
+              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            />
+          </View>
+        </Page>
+      ) : null}
     </Document>
   );
 }

@@ -198,9 +198,23 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const fotos = await prisma.fotoOS.findMany({ where: { ordemId: id }, select: { path: true } });
+    const fotos = await prisma.fotoOS.findMany({
+      where: { ordemId: id },
+      select: { id: true, path: true, orcamentoId: true },
+    });
+
+    // Foto que veio do orçamento fica com ele: desliga da OS antes, senão o cascade
+    // apagaria a imagem de um documento que continua existindo.
+    const doOrcamento = fotos.filter((f) => f.orcamentoId);
+    if (doOrcamento.length > 0) {
+      await prisma.fotoOS.updateMany({
+        where: { id: { in: doOrcamento.map((f) => f.id) } },
+        data: { ordemId: null },
+      });
+    }
+
     await prisma.ordemServico.delete({ where: { id } });
-    await deleteFotos(fotos.map((f) => f.path));
+    await deleteFotos(fotos.filter((f) => !f.orcamentoId).map((f) => f.path));
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir OS" }, { status: 500 });

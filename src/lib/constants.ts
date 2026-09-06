@@ -137,6 +137,11 @@ export const FOTO_TIPO_VALUES: readonly string[] = FOTO_TIPOS.map((t) => t.value
 // Fotos criadas antes da separação por momento ficam como serviço.
 export const FOTO_TIPO_PADRAO: FotoTipo = "SERVICO";
 
+// No orçamento não se pergunta o momento: o carro ainda nem entrou, e a foto é
+// sempre o estado em que ele chegou. Guardar como ENTRADA faz com que, na conversão
+// em OS, ela caia sozinha na seção certa — onde ainda dá para remanejar.
+export const FOTO_TIPO_ORCAMENTO: FotoTipo = "ENTRADA";
+
 /** Descrição da foto: uma linha curta, que cabe na legenda do PDF sem quebrar a grade. */
 export const FOTO_LEGENDA_MAX = 140;
 

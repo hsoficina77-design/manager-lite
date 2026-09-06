@@ -2,50 +2,12 @@
 
 import { useCallback } from "react";
 import { pdf } from "@react-pdf/renderer";
-import { toThumbDataUrl } from "@/lib/image-compress";
 import { carregarConfiguracao } from "@/lib/useConfiguracao";
 import { limparNome } from "@/lib/formato-download";
-import { PRAZO, comPrazo, fetchComPrazo } from "@/lib/tempo-limite";
+import { fotosParaPdf, toDataUrl } from "@/lib/foto-pdf";
+import { PRAZO, comPrazo } from "@/lib/tempo-limite";
 import BaixarDocumento from "./BaixarDocumento";
-import { OSPdfDocument, type FotoPdf, type OSForPdf } from "./OSPdfDocument";
-
-async function toDataUrl(url: string): Promise<string | undefined> {
-  try {
-    const res = await fetchComPrazo(url, PRAZO.imagem);
-    if (!res.ok) return undefined;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(undefined);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Baixa a foto e reduz para miniatura só na memória. O PDF carrega a miniatura e
- * aponta para a original no Storage — nada de novo é gravado no bucket.
- */
-async function toFotoPdf(foto: NonNullable<OSForPdf["fotos"]>[number]): Promise<FotoPdf | null> {
-  try {
-    const res = await fetchComPrazo(foto.url, PRAZO.imagem);
-    if (!res.ok) return null;
-    const src = await toThumbDataUrl(await res.blob());
-    return {
-      id: foto.id,
-      src,
-      url: foto.url,
-      legenda: foto.legenda,
-      tipo: foto.tipo,
-      createdAt: foto.createdAt,
-    };
-  } catch {
-    return null;
-  }
-}
+import { OSPdfDocument, type OSForPdf } from "./OSPdfDocument";
 
 /** Ex.: "OS 123 - João Silva - Gol ABC1D23" */
 function nomeArquivo(os: OSForPdf) {
@@ -63,8 +25,7 @@ export default function BaixarOS({ os }: { os: OSForPdf }) {
     const logo = config.logoUrl ? await toDataUrl(config.logoUrl) : undefined;
 
     // As imagens precisam virar data URL antes de entrar no PDF.
-    const convertidas = await Promise.all((os.fotos ?? []).map(toFotoPdf));
-    const fotos = convertidas.filter((f): f is FotoPdf => f !== null);
+    const fotos = await fotosParaPdf(os.fotos ?? []);
 
     return await comPrazo(
       pdf(<OSPdfDocument os={os} logoSrc={logo} fotos={fotos} config={config} />).toBlob(),

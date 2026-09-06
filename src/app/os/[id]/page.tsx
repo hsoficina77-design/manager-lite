@@ -6,7 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
 import { FOTO_TIPOS, tipoDaFoto, labelStatus, corStatus, OS_STATUS_VALUES, OS_CONCLUIDA, anoVeiculo } from "@/lib/constants";
-import OSFotos, { type Foto } from "@/components/OSFotos";
+import Fotos, { type Foto } from "@/components/Fotos";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 import { useEhDono } from "@/components/UsuarioProvider";
@@ -689,8 +689,8 @@ export default function OSDetailPage() {
         )}
 
         {/* Fotos */}
-        <OSFotos
-          osId={os.id}
+        <Fotos
+          apiBase={`/api/os/${os.id}/fotos`}
           fotos={os.fotos}
           podeEditar={os.status !== "CANCELADA"}
           onChange={(atualizar) =>

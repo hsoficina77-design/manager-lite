@@ -6,6 +6,7 @@ import { compressImage } from "@/lib/image-compress";
 import {
   FOTO_LEGENDA_MAX,
   FOTO_TIPOS,
+  FOTO_TIPO_ORCAMENTO,
   FOTO_TIPO_PADRAO,
   tipoDaFoto,
   type FotoTipo,
@@ -26,18 +27,32 @@ function esperar(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export default function OSFotos({
-  osId,
+// Uma seção só, sem título próprio: é o que o orçamento usa. O momento da foto não
+// se pergunta ali (ver FOTO_TIPO_ORCAMENTO), então a grade fica limpa como uma galeria.
+const SECAO_UNICA = [
+  { value: FOTO_TIPO_ORCAMENTO, label: "Fotos", ajuda: "" },
+] as const;
+
+export default function Fotos({
+  apiBase,
   fotos,
   onChange,
   podeEditar,
+  porMomento = true,
+  documento = "OS",
 }: {
-  osId: string;
+  /** Rota das fotos deste documento, ex.: `/api/os/<id>/fotos`. */
+  apiBase: string;
   fotos: Foto[];
   /** Recebe um atualizador para evitar perder fotos ao enviar várias em sequência. */
   onChange: (atualizar: (atuais: Foto[]) => Foto[]) => void;
   podeEditar: boolean;
+  /** Separa por entrada/serviço/saída (OS) ou mostra uma galeria só (orçamento). */
+  porMomento?: boolean;
+  /** Como o documento é chamado nos textos de ajuda. */
+  documento?: "OS" | "orçamento";
 }) {
+  const secoes = porMomento ? FOTO_TIPOS : SECAO_UNICA;
   const [enviando, setEnviando] = useState<Enviando[]>([]);
   // O visor guarda o id, não o índice: mudar o momento reordena a lista e um
   // índice fixo saltaria para outra foto.
@@ -47,12 +62,20 @@ export default function OSFotos({
   const [descrevendo, setDescrevendo] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
-  const tipoAlvo = useRef<FotoTipo>(FOTO_TIPO_PADRAO);
+  const tipoAlvo = useRef<FotoTipo>(porMomento ? FOTO_TIPO_PADRAO : FOTO_TIPO_ORCAMENTO);
+
+  // Sem separação por momento a galeria mostra tudo — inclusive foto que chegou com
+  // outro tipo (herdada de uma OS, ou de antes desta tela existir).
+  const fotosDaSecao = (valor: FotoTipo) =>
+    porMomento ? fotos.filter((f) => tipoDaFoto(f.tipo) === valor) : fotos;
 
   // Ordem de navegação do visor: seções na ordem definida, cronológico dentro de cada uma.
   const ordenadas = useMemo(
-    () => FOTO_TIPOS.flatMap((t) => fotos.filter((f) => tipoDaFoto(f.tipo) === t.value)),
-    [fotos]
+    () =>
+      porMomento
+        ? FOTO_TIPOS.flatMap((t) => fotos.filter((f) => tipoDaFoto(f.tipo) === t.value))
+        : fotos,
+    [fotos, porMomento]
   );
   const indice = visor === null ? -1 : ordenadas.findIndex((f) => f.id === visor);
   const fotoAtual = indice >= 0 ? ordenadas[indice] : null;
@@ -89,7 +112,7 @@ export default function OSFotos({
         const form = new FormData();
         form.append("file", blob, "foto.jpg");
         form.append("tipo", pendente.tipo);
-        const res = await fetch(`/api/os/${osId}/fotos`, { method: "POST", body: form });
+        const res = await fetch(apiBase, { method: "POST", body: form });
         if (!res.ok) {
           const msg = (await res.json().catch(() => null))?.error ?? "Falha no envio";
           // Erros de validação (formato/tamanho) não se resolvem tentando de novo.
@@ -136,14 +159,14 @@ export default function OSFotos({
     if (!confirm("Excluir esta foto?")) return;
     onChange((atuais) => atuais.filter((f) => f.id !== id));
     setVisor(null);
-    await fetch(`/api/os/${osId}/fotos/${id}`, { method: "DELETE" });
+    await fetch(`${apiBase}/${id}`, { method: "DELETE" });
   }
 
   async function salvarLegenda(id: string, legenda: string) {
     onChange((atuais) =>
       atuais.map((f) => (f.id === id ? { ...f, legenda: legenda.trim() || null } : f))
     );
-    await fetch(`/api/os/${osId}/fotos/${id}`, {
+    await fetch(`${apiBase}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ legenda }),
@@ -152,7 +175,7 @@ export default function OSFotos({
 
   async function salvarTipo(id: string, tipo: FotoTipo) {
     onChange((atuais) => atuais.map((f) => (f.id === id ? { ...f, tipo } : f)));
-    await fetch(`/api/os/${osId}/fotos/${id}`, {
+    await fetch(`${apiBase}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tipo }),
@@ -184,8 +207,14 @@ export default function OSFotos({
             {descrevendo && total > 0
               ? "Escreva embaixo de cada foto o que ela mostra — a descrição sai no PDF do cliente"
               : total > 0
-                ? `${total} foto${total > 1 ? "s" : ""} — aparecem no fim do PDF do cliente, separadas por momento`
-                : "Registre o veículo na entrada, o serviço e a entrega"}
+                ? `${total} foto${total > 1 ? "s" : ""} — ${
+                    porMomento
+                      ? "aparecem no fim do PDF do cliente, separadas por momento"
+                      : `aparecem no fim do PDF do ${documento}`
+                  }`
+                : porMomento
+                  ? "Registre o veículo na entrada, o serviço e a entrega"
+                  : "Mostre o defeito e o estado do veículo — a foto segue junto na conversão em OS"}
           </p>
         </div>
         {podeEditar && total > 0 && (
@@ -232,13 +261,14 @@ export default function OSFotos({
         </>
       )}
 
-      {FOTO_TIPOS.map((t) => (
+      {secoes.map((t) => (
         <Secao
           key={t.value}
           label={t.label}
           ajuda={t.ajuda}
-          fotos={fotos.filter((f) => tipoDaFoto(f.tipo) === t.value)}
-          enviando={enviando.filter((e) => e.tipo === t.value)}
+          comTitulo={porMomento}
+          fotos={fotosDaSecao(t.value)}
+          enviando={porMomento ? enviando.filter((e) => e.tipo === t.value) : enviando}
           podeEditar={podeEditar}
           descrevendo={descrevendo}
           onSoltar={(files) => enviarArquivos(files, t.value)}
@@ -257,6 +287,7 @@ export default function OSFotos({
           indice={indice}
           total={ordenadas.length}
           podeEditar={podeEditar}
+          comMomento={porMomento}
           onFechar={() => setVisor(null)}
           onAnterior={() => indice > 0 && setVisor(ordenadas[indice - 1].id)}
           onProxima={() => indice < ordenadas.length - 1 && setVisor(ordenadas[indice + 1].id)}
@@ -269,10 +300,12 @@ export default function OSFotos({
   );
 }
 
-/** Um momento do serviço (entrada, serviço, saída) — cada um é seu próprio alvo de envio. */
+/** Um momento do serviço (entrada, serviço, saída) — cada um é seu próprio alvo de envio.
+ *  Sem momento (orçamento) a seção vira uma galeria só, sem título nem moldura. */
 function Secao({
   label,
   ajuda,
+  comTitulo,
   fotos,
   enviando,
   podeEditar,
@@ -286,6 +319,7 @@ function Secao({
 }: {
   label: string;
   ajuda: string;
+  comTitulo: boolean;
   fotos: Foto[];
   enviando: Enviando[];
   podeEditar: boolean;
@@ -321,19 +355,26 @@ function Secao({
           : undefined
       }
       className={cn(
-        "rounded-xl border p-3 transition-colors",
-        arrastando ? "border-red-400 bg-red-50" : "border-zinc-200"
+        "rounded-xl transition-colors",
+        comTitulo && "border p-3",
+        arrastando
+          ? comTitulo
+            ? "border-red-400 bg-red-50"
+            : "bg-red-50"
+          : comTitulo && "border-zinc-200"
       )}
     >
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium text-zinc-800">
-          {label}
-          {fotos.length > 0 && (
-            <span className="ml-1.5 text-xs font-normal text-zinc-400">{fotos.length}</span>
-          )}
-        </h3>
-        <span className="truncate text-xs text-zinc-400">{ajuda}</span>
-      </div>
+      {comTitulo && (
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h3 className="text-sm font-medium text-zinc-800">
+            {label}
+            {fotos.length > 0 && (
+              <span className="ml-1.5 text-xs font-normal text-zinc-400">{fotos.length}</span>
+            )}
+          </h3>
+          <span className="truncate text-xs text-zinc-400">{ajuda}</span>
+        </div>
+      )}
 
       {vazio ? (
         podeEditar ? (
@@ -477,6 +518,7 @@ function Visor({
   indice,
   total,
   podeEditar,
+  comMomento,
   onFechar,
   onAnterior,
   onProxima,
@@ -488,6 +530,7 @@ function Visor({
   indice: number;
   total: number;
   podeEditar: boolean;
+  comMomento: boolean;
   onFechar: () => void;
   onAnterior: () => void;
   onProxima: () => void;
@@ -569,6 +612,7 @@ function Visor({
       <div className="space-y-3 px-4 py-4" onClick={(e) => e.stopPropagation()}>
         {podeEditar ? (
           <>
+            {comMomento && (
             <div className="flex items-center justify-center gap-1.5">
               {FOTO_TIPOS.map((t) => (
                 <button
@@ -585,6 +629,7 @@ function Visor({
                 </button>
               ))}
             </div>
+            )}
             <input
               value={legenda}
               onChange={(e) => setLegenda(e.target.value)}
@@ -596,8 +641,9 @@ function Visor({
           </>
         ) : (
           <p className="text-center text-sm text-white/80">
-            {FOTO_TIPOS.find((t) => t.value === tipoAtual)?.label}
-            {foto.legenda ? ` · ${foto.legenda}` : ""}
+            {[comMomento ? FOTO_TIPOS.find((t) => t.value === tipoAtual)?.label : null, foto.legenda]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         )}
       </div>

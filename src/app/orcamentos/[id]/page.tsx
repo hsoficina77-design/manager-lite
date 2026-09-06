@@ -8,6 +8,7 @@ import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricao
 import { anoVeiculo } from "@/lib/constants";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
+import Fotos, { type Foto } from "@/components/Fotos";
 import { useEhDono } from "@/components/UsuarioProvider";
 
 const BaixarOrcamento = dynamic(() => import("@/components/BaixarOrcamento"), {
@@ -44,6 +45,7 @@ type Orcamento = {
   veiculoDesc: string | null;
   ordem: { id: string; numero: number } | null;
   itens: Item[];
+  fotos: Foto[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -73,7 +75,8 @@ export default function OrcamentoDetailPage() {
   const load = () =>
     fetch(`/api/orcamentos/${id}`)
       .then((r) => r.json())
-      .then(setOrc)
+      // Orçamento antigo (resposta em cache, ou papel sem fotos) não quebra a tela.
+      .then((data: Orcamento) => setOrc({ ...data, fotos: data.fotos ?? [] }))
       .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, [id]);
@@ -419,6 +422,52 @@ export default function OrcamentoDetailPage() {
             </p>
           </div>
         </div>
+
+        {/* Fotos no documento — páginas próprias na impressão */}
+        {orc.fotos.length > 0 && (
+          <div className="print-fotos mt-6 rounded-xl border border-zinc-200 bg-white px-5 sm:px-8 py-6 shadow-sm print:border-none print:shadow-none">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Fotos
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {orc.fotos.map((foto) => (
+                <figure key={foto.id}>
+                  {/* object-contain: a foto aparece inteira e centralizada, sem corte */}
+                  <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={foto.url}
+                      alt={foto.legenda ?? "Foto do orçamento"}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                  <figcaption className="mt-1 text-[11px] leading-tight text-zinc-500">
+                    {foto.legenda ? (
+                      <span className="block font-medium text-zinc-700">{foto.legenda}</span>
+                    ) : null}
+                    {formatDate(foto.createdAt)}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Anexar fotos — some depois da conversão, quando a OS passa a ser o lugar */}
+        {(podeEditar || orc.fotos.length > 0) && (
+          <div className="mt-6">
+            <Fotos
+              apiBase={`/api/orcamentos/${orc.id}/fotos`}
+              fotos={orc.fotos}
+              podeEditar={podeEditar}
+              porMomento={false}
+              documento="orçamento"
+              onChange={(atualizar) =>
+                setOrc((atual) => (atual ? { ...atual, fotos: atualizar(atual.fotos) } : atual))
+              }
+            />
+          </div>
+        )}
       </div>
     </div>
   );

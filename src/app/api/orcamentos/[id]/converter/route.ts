@@ -89,6 +89,13 @@ export async function POST(
         },
       });
 
+      // As fotos do orçamento passam a ser também da OS. O vínculo com o orçamento
+      // continua, para que o documento que o cliente aprovou não mude depois.
+      await tx.fotoOS.updateMany({
+        where: { orcamentoId: id, ordemId: null },
+        data: { ordemId: novaOS.id },
+      });
+
       await tx.orcamento.update({
         where: { id },
         data: { status: "CONVERTIDO", ordemId: novaOS.id },

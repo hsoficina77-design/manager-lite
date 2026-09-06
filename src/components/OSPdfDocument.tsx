@@ -1,5 +1,6 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { FOTO_TIPOS, tipoDaFoto, labelStatus, anoVeiculo } from "@/lib/constants";
+import type { FotoPdf } from "@/lib/foto-pdf";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -33,20 +34,6 @@ export type OSForPdf = {
   itens: Item[];
   pagamentos: Pagamento[];
   fotos?: { id: string; url: string; legenda: string | null; tipo: string; createdAt: string }[];
-};
-
-/**
- * Foto pronta para o PDF: `src` é uma miniatura em data URL (o react-pdf não busca
- * imagens remotas de forma confiável) e `url` é a original no Storage, usada como
- * link — o PDF fica leve e a foto em alta continua a um toque, sem gravar nada novo.
- */
-export type FotoPdf = {
-  id: string;
-  src: string;
-  url: string;
-  legenda: string | null;
-  tipo: string;
-  createdAt: string;
 };
 
 // Rótulos próprios do impresso: no papel cabe o nome por extenso, enquanto o badge

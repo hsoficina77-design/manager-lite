@@ -143,6 +143,15 @@ export function uploadFoto(osId: string, bytes: ArrayBuffer, contentType: TipoIm
   return uploadArquivo(`os/${osId}`, bytes, contentType);
 }
 
+/** Foto do orçamento — pasta própria, porque a foto existe antes de haver OS. */
+export function uploadFotoOrcamento(
+  orcamentoId: string,
+  bytes: ArrayBuffer,
+  contentType: TipoImagem
+) {
+  return uploadArquivo(`orcamentos/${orcamentoId}`, bytes, contentType);
+}
+
 /** Logo da oficina (painel de configurações). */
 export function uploadLogo(bytes: ArrayBuffer, contentType: TipoImagem) {
   return uploadArquivo("marca", bytes, contentType);

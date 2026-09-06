@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { comUrlAssinada } from "@/lib/fotos";
+import { deleteFotos } from "@/lib/supabase-storage";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { orcamentoAtualizarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -23,6 +25,7 @@ export async function GET(
       veiculo: true,
       ordem: { select: { id: true, numero: true } },
       itens: { orderBy: { createdAt: "asc" } },
+      fotos: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -30,7 +33,14 @@ export async function GET(
     return NextResponse.json({ error: "Orçamento não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel));
+  // As fotos saem com URL assinada e temporária (lib/fotos); os valores de custo
+  // são apagados para o operador (lib/permissoes).
+  return NextResponse.json(
+    semFinanceiro(
+      { ...orcamento, fotos: await comUrlAssinada(orcamento.fotos) },
+      guarda.usuario.papel
+    )
+  );
 }
 
 export async function PUT(
@@ -167,7 +177,24 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
+    const fotos = await prisma.fotoOS.findMany({
+      where: { orcamentoId: id },
+      select: { id: true, path: true, ordemId: true },
+    });
+
+    // Foto que também é da OS sobrevive ao orçamento: desliga antes, para o cascade
+    // não levar junto o registro fotográfico do serviço.
+    const daOS = fotos.filter((f) => f.ordemId);
+    if (daOS.length > 0) {
+      await prisma.fotoOS.updateMany({
+        where: { id: { in: daOS.map((f) => f.id) } },
+        data: { orcamentoId: null },
+      });
+    }
+
     await prisma.orcamento.delete({ where: { id } });
+    // O cascade apaga as linhas; os arquivos no bucket saem aqui.
+    await deleteFotos(fotos.filter((f) => !f.ordemId).map((f) => f.path));
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir orçamento" }, { status: 500 });

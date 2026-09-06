@@ -164,6 +164,7 @@ model Orcamento {
   veiculo Veiculo?        @relation(fields: [veiculoId], references: [id])
   ordem   OrdemServico?   @relation(fields: [ordemId], references: [id])
   itens   ItemOrcamento[]
+  fotos   FotoOS[]
 
   @@index([status])
   @@index([clienteId])
@@ -241,19 +242,27 @@ model PagamentoDivida {
   divida DividaAvulsa @relation(fields: [dividaId], references: [id])
 }
 
-// Foto anexada à OS — o arquivo fica no Supabase Storage, aqui só a referência.
+// Foto anexada a um documento — o arquivo fica no Supabase Storage, aqui só a referência.
+//
+// A foto pode nascer no orçamento (o defeito que o cliente trouxe, fotografado antes
+// de haver OS) ou direto na OS. Na conversão ela ganha também o `ordemId`, sem perder
+// o `orcamentoId`: a mesma foto passa a aparecer nos dois documentos, e o orçamento
+// impresso continua igual ao que o cliente aprovou.
 model FotoOS {
-  id        String   @id @default(cuid())
-  ordemId   String
-  path      String   // caminho do arquivo no bucket (usado para excluir)
-  url       String   // URL pública da imagem
-  legenda   String?
-  tipo      String   @default("SERVICO") // ENTRADA | SERVICO | SAIDA
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  ordemId     String?
+  orcamentoId String?
+  path        String   // caminho do arquivo no bucket (usado para excluir)
+  url         String   // URL pública da imagem
+  legenda     String?
+  tipo        String   @default("SERVICO") // ENTRADA | SERVICO | SAIDA
+  createdAt   DateTime @default(now())
 
-  ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+  ordem     OrdemServico? @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+  orcamento Orcamento?    @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 
   @@index([ordemId, tipo])
+  @@index([orcamentoId])
 }
 
 model Sequencia {
