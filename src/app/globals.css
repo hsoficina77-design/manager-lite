@@ -240,6 +240,19 @@
     scrollbar-color: rgb(var(--linha-forte)) transparent;
   }
 
+  /* Piso de cor para campos de formulário. Sem isto, um input sem as classes
+     `bg-superficie text-tinta` herda o preto-sobre-branco do navegador — some
+     no tema escuro. `:where()` mantém especificidade zero: qualquer utilitário
+     do Tailwind ainda vence. */
+  :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    background-color: rgb(var(--superficie));
+    color: rgb(var(--tinta));
+  }
+  :where(input, textarea)::placeholder {
+    color: rgb(var(--tinta-3));
+    opacity: 1;
+  }
+
   /* Evita zoom automático do iOS ao focar inputs (fontes < 16px) */
   @media (max-width: 767px) {
     input,

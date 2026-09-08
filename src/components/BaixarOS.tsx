@@ -17,7 +17,7 @@ function nomeArquivo(os: OSForPdf) {
   return partes.filter(Boolean).join(" - ");
 }
 
-export default function BaixarOS({ os }: { os: OSForPdf }) {
+export default function BaixarOS({ os, comoItem = false }: { os: OSForPdf; comoItem?: boolean }) {
   const gerarPdf = useCallback(async () => {
     // Identidade da oficina e imagens só são buscadas na hora de gerar: o arquivo
     // é raro perto do número de vezes que a tela da OS abre.
@@ -34,5 +34,12 @@ export default function BaixarOS({ os }: { os: OSForPdf }) {
     );
   }, [os]);
 
-  return <BaixarDocumento gerarPdf={gerarPdf} nomeBase={nomeArquivo(os)} descricao="a OS" />;
+  return (
+    <BaixarDocumento
+      gerarPdf={gerarPdf}
+      nomeBase={nomeArquivo(os)}
+      descricao="a OS"
+      comoItem={comoItem}
+    />
+  );
 }

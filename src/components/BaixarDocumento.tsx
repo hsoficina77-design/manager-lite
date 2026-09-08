@@ -26,6 +26,7 @@ export default function BaixarDocumento({
   gerarPdf,
   nomeBase,
   descricao,
+  comoItem = false,
 }: {
   /** Monta o PDF do documento. Chamado só na hora de baixar. */
   gerarPdf: () => Promise<Blob>;
@@ -33,6 +34,8 @@ export default function BaixarDocumento({
   nomeBase: string;
   /** Como o documento se chama nas dicas. Ex.: "a OS", "o orçamento". */
   descricao: string;
+  /** Dentro de um menu de ações: vira uma linha por formato, sem botão dividido. */
+  comoItem?: boolean;
 }) {
   const [formato, setFormato] = useState<FormatoDownload>("pdf");
   const [menuAberto, setMenuAberto] = useState(false);
@@ -116,6 +119,40 @@ export default function BaixarDocumento({
     : erro
       ? "Tentar de novo"
       : `Baixar ${atual.label}`;
+
+  if (comoItem) {
+    return (
+      <div className="w-full">
+        {FORMATOS.map((f) => {
+          const gerandoEste = gerando === f.valor;
+          return (
+            <button
+              key={f.valor}
+              onClick={() => escolher(f.valor)}
+              disabled={ocupado}
+              title={`Salvar ${descricao} em ${f.label}`}
+              className={cn(
+                "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm hover:bg-superficie-2 disabled:opacity-60",
+                erro && gerandoEste ? "text-perigo" : "text-tinta-2"
+              )}
+            >
+              <IconeDownload className="h-4 w-4 shrink-0" />
+              <span>
+                {gerandoEste
+                  ? `Gerando ${f.label}${progresso ? ` ${progresso}` : ""}...`
+                  : `Baixar ${f.label}`}
+              </span>
+            </button>
+          );
+        })}
+        {erro && (
+          <p role="alert" className="px-3 pb-1 text-xs leading-snug text-perigo">
+            {erro}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={caixa} className="relative">

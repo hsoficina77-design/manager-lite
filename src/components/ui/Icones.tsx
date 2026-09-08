@@ -195,6 +195,16 @@ export const Recibo = (p: Props) => (
   </Base>
 );
 
+/** Dinheiro saindo — a aba de Gastos, para não repetir o ícone de Dinheiro (entrada)
+ *  nem o de Menu (hambúrguer), que ficavam emprestados de outras abas. */
+export const Despesa = (p: Props) => (
+  <Base {...p}>
+    <path d="M12 2v13" />
+    <path d="m7 11 5 5 5-5" />
+    <path d="M4 21h16" />
+  </Base>
+);
+
 /* --- tema ------------------------------------------------------------------ */
 
 export const Sol = (p: Props) => (

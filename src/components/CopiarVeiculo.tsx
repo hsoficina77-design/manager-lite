@@ -37,10 +37,13 @@ export default function CopiarVeiculo({
   veiculo,
   label = "Copiar carro",
   className,
+  comoItem = false,
 }: {
   veiculo: VeiculoInfo;
   label?: string;
   className?: string;
+  /** Renderiza como linha de menu (largura cheia, sem borda) em vez de botão-pílula. */
+  comoItem?: boolean;
 }) {
   const [estado, setEstado] = useState<"parado" | "copiado" | "falhou">("parado");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,20 +60,38 @@ export default function CopiarVeiculo({
   }
 
   return (
-    <div className={cn("no-print inline-flex flex-col items-start gap-1", className)}>
+    <div
+      className={cn(
+        "no-print flex flex-col items-start gap-1",
+        comoItem ? "w-full" : "inline-flex",
+        className
+      )}
+    >
       <button
         type="button"
         onClick={copiar}
         title={`Copiar para enviar à auto peça:\n\n${texto}`}
         aria-live="polite"
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
-          estado === "copiado"
-            ? "border-ok-linha bg-ok-fraco text-ok"
-            : "border-linha-forte text-tinta-2 hover:bg-superficie-2"
+          "text-sm transition-colors",
+          comoItem
+            ? cn(
+                "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left",
+                estado === "copiado" ? "text-ok" : "text-tinta-2 hover:bg-superficie-2"
+              )
+            : cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5",
+                estado === "copiado"
+                  ? "border-ok-linha bg-ok-fraco text-ok"
+                  : "border-linha-forte text-tinta-2 hover:bg-superficie-2"
+              )
         )}
       >
-        {estado === "copiado" ? <CheckIcon /> : <CopyIcon />}
+        {estado === "copiado" ? (
+          <CheckIcon tamanho={comoItem ? 16 : 14} />
+        ) : (
+          <CopyIcon tamanho={comoItem ? 16 : 14} />
+        )}
         {estado === "copiado" ? "Copiado!" : label}
       </button>
 
@@ -93,18 +114,18 @@ export default function CopiarVeiculo({
   );
 }
 
-function CopyIcon() {
+function CopyIcon({ tamanho = 14 }: { tamanho?: number }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
   );
 }
 
-function CheckIcon() {
+function CheckIcon({ tamanho = 14 }: { tamanho?: number }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );

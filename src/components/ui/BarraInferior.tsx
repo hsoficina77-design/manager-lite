@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { Papel } from "@/lib/permissoes";
-import { Dinheiro, Mais, Patio, Recibo, Menu } from "./Icones";
+import { Despesa, Dinheiro, Mais, Patio, Recibo } from "./Icones";
 
 /**
  * Navegação inferior do celular.
@@ -14,9 +13,16 @@ import { Dinheiro, Mais, Patio, Recibo, Menu } from "./Icones";
  * texto, tocar. Numa oficina, com o celular numa das mãos, esse é o gesto mais
  * repetido do dia.
  *
- * Quatro destinos fixos mais "Nova OS", que no dashboard ficava soterrado abaixo
- * da lista inteira do pátio. Some na impressão e no desktop, onde o menu lateral
- * já resolve.
+ * Cinco posições fixas, sempre as mesmas, nesta ordem: Pátio, OS, Nova OS,
+ * A receber, Gastos. Antes os dois últimos trocavam para Clientes/Mecânicos
+ * quando quem estava logado era o operador, e havia um botão de menu que nunca
+ * chegava a aparecer (a lista de itens tinha sempre 4, então a condição que o
+ * mostraria nunca era verdadeira) — o resultado prático eram cinco posições
+ * que pareciam mudar de lugar. Agora a barra é a mesma para todo mundo; quem
+ * não é dono e toca em A receber ou Gastos é devolvido ao pátio pelo proxy
+ * (ver src/proxy.ts), do mesmo jeito que aconteceria clicando o link direto.
+ *
+ * Some na impressão e no desktop, onde o menu lateral já resolve.
  */
 
 type Item = {
@@ -25,36 +31,20 @@ type Item = {
   Icone: typeof Patio;
   /** Casa exata; sem isto "/" acenderia em toda tela. */
   exato?: boolean;
-  dono?: boolean;
 };
 
-const ITENS: Item[] = [
+const ANTES: Item[] = [
   { href: "/", label: "Pátio", Icone: Patio, exato: true },
   { href: "/os", label: "OS", Icone: Recibo },
-  { href: "/contas-receber", label: "A receber", Icone: Dinheiro, dono: true },
-  { href: "/despesas", label: "Gastos", Icone: Menu, dono: true },
 ];
 
-export function BarraInferior({
-  papel,
-  onAbrirMenu,
-}: {
-  papel: Papel;
-  onAbrirMenu: () => void;
-}) {
-  const pathname = usePathname();
-  const ehDono = papel === "ADMIN";
+const DEPOIS: Item[] = [
+  { href: "/contas-receber", label: "A receber", Icone: Dinheiro },
+  { href: "/despesas", label: "Gastos", Icone: Despesa },
+];
 
-  // Para o operador as duas telas de dinheiro não existem; entram clientes e
-  // mecânicos, que são o que ele de fato abre.
-  const itens: Item[] = ehDono
-    ? ITENS
-    : [
-        { href: "/", label: "Pátio", Icone: Patio, exato: true },
-        { href: "/os", label: "OS", Icone: Recibo },
-        { href: "/clientes", label: "Clientes", Icone: Dinheiro },
-        { href: "/mecanicos", label: "Mecânicos", Icone: Menu },
-      ];
+export function BarraInferior() {
+  const pathname = usePathname();
 
   const ativo = (i: Item) => (i.exato ? pathname === i.href : pathname.startsWith(i.href));
 
@@ -64,7 +54,7 @@ export function BarraInferior({
       className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-linha bg-superficie/95 pb-segura backdrop-blur md:hidden"
     >
       <div className="grid grid-cols-5">
-        {itens.slice(0, 2).map((i) => (
+        {ANTES.map((i) => (
           <BotaoBarra key={i.href} item={i} ativo={ativo(i)} />
         ))}
 
@@ -77,23 +67,12 @@ export function BarraInferior({
           <span className="flex h-8 w-12 items-center justify-center rounded-full bg-brand-600 text-brand-fg">
             <Mais tamanho={20} />
           </span>
-          <span className="text-[11px] font-medium leading-none">Nova OS</span>
+          <span className="text-xs font-medium leading-none">Nova OS</span>
         </Link>
 
-        {itens.slice(2, 4).map((i) => (
+        {DEPOIS.map((i) => (
           <BotaoBarra key={i.href} item={i} ativo={ativo(i)} />
         ))}
-
-        {itens.length < 4 && (
-          <button
-            type="button"
-            onClick={onAbrirMenu}
-            className="flex min-h-[3.25rem] flex-col items-center justify-center gap-1 text-tinta-3"
-          >
-            <Menu tamanho={19} />
-            <span className="text-[11px] leading-none">Menu</span>
-          </button>
-        )}
       </div>
     </nav>
   );
@@ -111,7 +90,7 @@ function BotaoBarra({ item, ativo }: { item: Item; ativo: boolean }) {
       )}
     >
       <Icone tamanho={19} />
-      <span className="text-[11px] leading-none">{item.label}</span>
+      <span className="text-xs leading-none">{item.label}</span>
     </Link>
   );
 }

@@ -25,7 +25,7 @@ import { CampoDinheiro, Entrada, Selecao } from "@/components/ui/Campos";
 import { Modal } from "@/components/ui/Modal";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
-import { Chevron, Olho, Voltar } from "@/components/ui/Icones";
+import { Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
 
 const BaixarOS = dynamic(() => import("@/components/BaixarOS"), {
   ssr: false,
@@ -432,26 +432,23 @@ export default function OSDetailPage() {
                     onClick={() => setMenuAberto(false)}
                     aria-hidden="true"
                   />
-                  <div className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-xl border border-linha bg-superficie p-1 shadow-lg">
+                  <div className="absolute right-0 top-full z-20 mt-1 w-60 overflow-hidden rounded-xl border border-linha bg-superficie p-1 shadow-lg">
                     {saldo > 0 && OS_CONCLUIDA.includes(os.status) && (
                       <p className="px-3 py-2 text-xs font-medium tabular-nums text-atencao lg:hidden">
                         A receber — {formatCurrency(saldo)}
                       </p>
                     )}
-                    <div onClick={() => setMenuAberto(false)} className="[&>*]:w-full">
-                      <CopiarVeiculo veiculo={os.veiculo} />
-                    </div>
+                    <CopiarVeiculo veiculo={os.veiculo} comoItem />
                     {os.status !== "CANCELADA" && (
                       <Link
                         href={`/os/${os.id}/editar`}
-                        className="flex min-h-11 items-center rounded-lg px-3 text-sm text-tinta-2 hover:bg-superficie-2"
+                        className="flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-sm text-tinta-2 hover:bg-superficie-2"
                       >
+                        <Lapis tamanho={16} className="shrink-0" />
                         Editar OS
                       </Link>
                     )}
-                    <div onClick={() => setMenuAberto(false)} className="[&>*]:w-full">
-                      <BaixarOS os={os} />
-                    </div>
+                    <BaixarOS os={os} comoItem />
                     {/* Excluir apaga faturamento junto — fica com o dono
                         (ver src/lib/permissoes.ts) e separado por um filete. */}
                     {ehDono && (
@@ -463,8 +460,9 @@ export default function OSDetailPage() {
                             deleteOS();
                           }}
                           disabled={deletingOS}
-                          className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm text-perigo hover:bg-perigo-fraco disabled:opacity-50"
+                          className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm text-perigo hover:bg-perigo-fraco disabled:opacity-50"
                         >
+                          <Lixeira tamanho={16} className="shrink-0" />
                           Excluir OS
                         </button>
                       </>

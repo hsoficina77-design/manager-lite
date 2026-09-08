@@ -323,7 +323,7 @@ export function Sidebar({
       )}
 
       {/* Navegação inferior — os destinos do dia sem passar pela gaveta */}
-      <BarraInferior papel={usuario.papel} onAbrirMenu={() => setOpen(true)} />
+      <BarraInferior />
     </>
   );
 }
