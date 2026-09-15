@@ -253,6 +253,15 @@
     opacity: 1;
   }
 
+  /* Autofill do Chrome: pinta o campo de amarelo-claro com texto preto e ignora
+     `background-color`. A sombra interna cobre esse fundo e o `-webkit-text-fill`
+     devolve a tinta do tema. */
+  :where(input:-webkit-autofill, input:-webkit-autofill:focus, textarea:-webkit-autofill) {
+    -webkit-text-fill-color: rgb(var(--tinta));
+    -webkit-box-shadow: 0 0 0 1000px rgb(var(--superficie)) inset;
+    caret-color: rgb(var(--tinta));
+  }
+
   /* Evita zoom automático do iOS ao focar inputs (fontes < 16px) */
   @media (max-width: 767px) {
     input,

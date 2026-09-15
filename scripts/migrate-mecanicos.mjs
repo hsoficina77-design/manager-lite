@@ -16,7 +16,7 @@ async function main() {
     return;
   }
 
-  // Agrupa nomes distintos (case-insensitive, trim).
+  // Agrupa nomes distintos (case-insensitive, trim)
   const porChave = new Map(); // chave normalizada -> nome exibido
   for (const o of ordens) {
     const nome = (o.mecanico ?? "").trim();
@@ -25,7 +25,7 @@ async function main() {
     if (!porChave.has(chave)) porChave.set(chave, nome);
   }
 
-  // Reaproveita mecânicos já existentes com o mesmo nome.
+  // Reaproveita mecânicos já existentes com o mesmo nome
   const existentes = await prisma.mecanico.findMany({ select: { id: true, nome: true } });
   const idPorChave = new Map(existentes.map((m) => [m.nome.trim().toLowerCase(), m.id]));
 
