@@ -36,6 +36,15 @@ const BaixarOS = dynamic(() => import("@/components/BaixarOS"), {
   ),
 });
 
+const BaixarComprovante = dynamic(() => import("@/components/BaixarComprovante"), {
+  ssr: false,
+  loading: () => (
+    <span className="inline-block rounded-lg border border-linha px-3 py-1.5 text-xs text-tinta-3">
+      Baixar comprovante
+    </span>
+  ),
+});
+
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
   valorUnit: number; valorTotal: number; custoUnit: number | null;
@@ -762,7 +771,20 @@ export default function OSDetailPage() {
 
           {os.pagamentos.length > 0 && (
             <div className="border-t border-linha pt-4">
-              <p className="text-xs font-medium text-tinta-3 mb-2">Histórico</p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-tinta-3">Histórico</p>
+                <BaixarComprovante
+                  os={{
+                    numero: os.numero,
+                    cliente: { nome: os.cliente.nome },
+                    veiculo: { marca: os.veiculo.marca, modelo: os.veiculo.modelo, placa: os.veiculo.placa },
+                    total: os.total,
+                    valorPago: os.valorPago,
+                    pago: os.pago,
+                    pagamentos: os.pagamentos,
+                  }}
+                />
+              </div>
               <div className="space-y-1.5">
                 {os.pagamentos.map((p) => (
                   <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
