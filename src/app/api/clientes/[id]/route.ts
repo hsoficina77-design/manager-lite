@@ -5,6 +5,7 @@ import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { clienteAtualizarSchema } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
+import { registrarExclusao } from "@/lib/exclusoes";
 
 export async function GET(
   _req: Request,
@@ -71,7 +72,7 @@ export async function GET(
     ultimaOS: ultimaOS?.abertura ?? null,
   };
 
-  return NextResponse.json(semFinanceiro({ ...cliente, stats }, guarda.usuario.papel));
+  return NextResponse.json(semFinanceiro({ ...cliente, stats }, guarda.usuario.podeFinanceiro));
 }
 
 export async function PUT(
@@ -120,6 +121,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi({ exclusao: true });
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
 
   const osCount = await prisma.ordemServico.count({ where: { clienteId: id } });
@@ -131,7 +135,13 @@ export async function DELETE(
   }
 
   try {
+    const cliente = await prisma.cliente.findUnique({ where: { id }, select: { nome: true } });
+    if (!cliente) {
+      return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
+    }
+
     await prisma.cliente.delete({ where: { id } });
+    await registrarExclusao("Cliente", cliente.nome, guarda.usuario);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir cliente" }, { status: 500 });

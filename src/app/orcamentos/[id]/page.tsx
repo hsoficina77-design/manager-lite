@@ -13,7 +13,7 @@ import { Chevron, Olho, Voltar } from "@/components/ui/Icones";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 import Fotos, { type Foto } from "@/components/Fotos";
-import { useEhDono } from "@/components/UsuarioProvider";
+import { usePodeFinanceiro, usePodeExcluir } from "@/components/UsuarioProvider";
 
 const BaixarOrcamento = dynamic(() => import("@/components/BaixarOrcamento"), {
   ssr: false,
@@ -58,7 +58,8 @@ const TIPO_LABEL: Record<string, string> = { PECA: "Peça", MAO_DE_OBRA: "Mão d
 export default function OrcamentoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const ehDono = useEhDono();
+  const podeFinanceiro = usePodeFinanceiro();
+  const podeExcluir = usePodeExcluir();
   const confirmar = useConfirmar();
   const avisar = useAvisar();
   const [orc, setOrc] = useState<Orcamento | null>(null);
@@ -232,7 +233,7 @@ export default function OrcamentoDetailPage() {
               {converting ? "Convertendo..." : "Converter em OS"}
             </Botao>
           )}
-          {!convertido && ehDono && (
+          {!convertido && podeExcluir && (
             <Botao variante="perigo" tamanho="denso" onClick={excluir} disabled={deleting}>
               Excluir
             </Botao>
@@ -273,7 +274,7 @@ export default function OrcamentoDetailPage() {
       )}
 
       {/* Visão interna — margens. Não sai na impressão nem no PDF do cliente. */}
-      {ehDono && temValores && (
+      {podeFinanceiro && temValores && (
         <div className="no-print mx-auto max-w-3xl px-4 sm:px-6 pt-4">
           <div className="rounded-xl border border-linha bg-superficie p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">

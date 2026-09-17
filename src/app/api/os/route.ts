@@ -74,8 +74,8 @@ export async function GET(request: Request) {
     lucro_asc: { lucroReal: "asc" },
     valor_desc: { total: "desc" },
   };
-  // Ordenar por lucro é informação de dono; para o operador cai no padrão.
-  const podeOrdenarPorLucro = guarda.usuario.papel === "ADMIN";
+  // Ordenar por lucro é informação de financeiro; sem esse acesso cai no padrão.
+  const podeOrdenarPorLucro = guarda.usuario.podeFinanceiro;
   const orderBy =
     (podeOrdenarPorLucro || !ordenar.startsWith("lucro") ? ORDENS[ordenar] : null) ??
     ORDENS.recentes;
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
   // outros consumidores da rota esperam.
   if (!paginado) {
     const ordens = await prisma.ordemServico.findMany(consulta);
-    return NextResponse.json(semFinanceiro(ordens, guarda.usuario.papel));
+    return NextResponse.json(semFinanceiro(ordens, guarda.usuario.podeFinanceiro));
   }
 
   const [ordens, total, agregado] = await Promise.all([
@@ -102,7 +102,11 @@ export async function GET(request: Request) {
     // O resumo é do filtro inteiro, não da página em tela: somar só o que veio
     // daria um faturamento que muda conforme a pessoa rola.
     prisma.ordemServico.aggregate({
-      where: { ...where, status: { not: "CANCELADA" } },
+      // Sem filtro de status explícito, cancelada some do resumo (não é produção
+      // nem faturamento real). Com filtro explícito — inclusive por Cancelada —
+      // o resumo respeita o que a pessoa pediu, senão filtrar por Cancelada mostra
+      // as linhas na lista mas some com elas no card.
+      where: status ? where : { ...where, status: { not: "CANCELADA" } },
       _sum: { total: true, lucroReal: true },
       _count: true,
     }),
@@ -112,13 +116,13 @@ export async function GET(request: Request) {
   const lucro = agregado._sum.lucroReal ?? 0;
 
   return NextResponse.json({
-    itens: semFinanceiro(ordens, guarda.usuario.papel),
+    itens: semFinanceiro(ordens, guarda.usuario.podeFinanceiro),
     total,
     temMais: (pagina + 1) * limite < total,
     resumo: {
       quantidade: agregado._count,
       faturamento,
-      ...(guarda.usuario.papel === "ADMIN"
+      ...(guarda.usuario.podeFinanceiro
         ? { lucro, margem: faturamento > 0 ? (lucro / faturamento) * 100 : null }
         : {}),
     },
@@ -129,9 +133,9 @@ export async function POST(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
 
-  // Operador não vê custo — logo, também não define custo. OS aberta por ele nasce
-  // sem custo de peça, e o dono preenche depois.
-  const podeDefinirCusto = guarda.usuario.papel === "ADMIN";
+  // Quem não vê custo também não o define. OS aberta por essa pessoa nasce sem custo
+  // de peça, e quem tem financeiro preenche depois.
+  const podeDefinirCusto = guarda.usuario.podeFinanceiro;
   const custoDoItem = (item: { custoUnit?: unknown }) =>
     podeDefinirCusto && item.custoUnit != null && item.custoUnit !== ""
       ? Number(item.custoUnit)
@@ -223,7 +227,7 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(semFinanceiro(os, guarda.usuario.papel), { status: 201 });
+    return NextResponse.json(semFinanceiro(os, guarda.usuario.podeFinanceiro), { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

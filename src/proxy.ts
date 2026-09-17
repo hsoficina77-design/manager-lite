@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
-import { HEADER_ROTA, ehRotaPublica, exigeDono } from "@/lib/permissoes";
+import { HEADER_ROTA, ehRotaPublica, exigeDono, exigeFinanceiro, exigeExclusao } from "@/lib/permissoes";
 
 /**
  * Porta de entrada do app: **nada** passa sem sessão válida.
@@ -12,9 +12,10 @@ import { HEADER_ROTA, ehRotaPublica, exigeDono } from "@/lib/permissoes";
  * uma tela ou API criada amanhã já nasce fechada; esquecer de proteger deixou de ser
  * possível. O que se pode esquecer é de *abrir* algo, e isso aparece na hora.
  *
- * Aqui só se confere o que dá para conferir sem banco: assinatura, validade e papel,
- * todos dentro do cookie assinado. A confirmação de que a sessão continua existindo e
- * de que o usuário segue ativo é feita no servidor, em `auth.ts`.
+ * Aqui só se confere o que dá para conferir sem banco: assinatura, validade, papel e
+ * as permissões de financeiro/exclusão, todos dentro do cookie assinado. A confirmação
+ * de que a sessão continua existindo e de que o usuário segue ativo é feita no
+ * servidor, em `auth.ts`.
  */
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -37,11 +38,24 @@ export default async function proxy(request: NextRequest) {
     return resposta;
   }
 
-  if (sessao.papel !== "ADMIN" && exigeDono(pathname, request.method)) {
+  const ehDono = sessao.papel === "ADMIN";
+
+  if (!ehDono && exigeDono(pathname, request.method)) {
     if (ehApi) {
       return NextResponse.json({ error: "Acesso restrito ao dono" }, { status: 403 });
     }
     return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (!ehDono && !sessao.podeFinanceiro && exigeFinanceiro(pathname)) {
+    if (ehApi) {
+      return NextResponse.json({ error: "Acesso restrito ao financeiro" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (!ehDono && !sessao.podeExcluir && exigeExclusao(pathname, request.method)) {
+    return NextResponse.json({ error: "Sem permissão para excluir" }, { status: 403 });
   }
 
   // O layout raiz precisa saber que rota está sendo servida para poder mandar ao

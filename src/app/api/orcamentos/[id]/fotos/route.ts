@@ -4,6 +4,7 @@ import { uploadFotoOrcamento } from "@/lib/supabase-storage";
 import { comUrlAssinada } from "@/lib/fotos";
 import { FOTO_LEGENDA_MAX, FOTO_TIPO_ORCAMENTO, FOTO_TIPO_VALUES } from "@/lib/constants";
 import { FORMATOS_ACEITOS, tipoRealDaImagem } from "@/lib/imagem-upload";
+import { avisarSeArmazenamentoCheio } from "@/lib/armazenamento";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB (a compressão no cliente deixa bem abaixo disso)
 
@@ -59,8 +60,9 @@ export async function POST(
     const { path, url } = await uploadFotoOrcamento(id, bytes, tipoArquivo);
 
     const foto = await prisma.fotoOS.create({
-      data: { orcamentoId: id, path, url, legenda, tipo },
+      data: { orcamentoId: id, path, url, legenda, tipo, tamanhoBytes: bytes.byteLength },
     });
+    await avisarSeArmazenamentoCheio();
 
     const [comAssinatura] = await comUrlAssinada([foto]);
     return NextResponse.json(comAssinatura, { status: 201 });

@@ -82,7 +82,14 @@ export default async function RootLayout({
         <UsuarioProvider
           usuario={
             usuario
-              ? { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel }
+              ? {
+                  id: usuario.id,
+                  nome: usuario.nome,
+                  email: usuario.email,
+                  papel: usuario.papel,
+                  podeFinanceiro: usuario.podeFinanceiro,
+                  podeExcluir: usuario.podeExcluir,
+                }
               : null
           }
         >
@@ -102,11 +109,8 @@ async function AppComMenu({
   config: Awaited<ReturnType<typeof getConfiguracao>>;
   children: React.ReactNode;
 }) {
-  // Contas a receber é tela de dono; para o operador o contador nem é consultado.
-  const pendingCount =
-    usuario.papel === "ADMIN"
-      ? await contarPendencias()
-      : 0;
+  // Contas a receber é tela de financeiro; sem esse acesso o contador nem é consultado.
+  const pendingCount = usuario.podeFinanceiro ? await contarPendencias() : 0;
 
   // Quem rola agora é o documento, não um `main` de altura travada.
   //
@@ -123,7 +127,7 @@ async function AppComMenu({
         pendingCount={pendingCount}
         nome={nomeDoMenu(config)}
         logoUrl={config.logoUrl}
-        usuario={{ nome: usuario.nome, papel: usuario.papel }}
+        usuario={{ nome: usuario.nome, papel: usuario.papel, podeFinanceiro: usuario.podeFinanceiro }}
       />
       <main className="pt-14 pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-56 md:pt-0">
         <div className="mx-auto max-w-6xl">{children}</div>

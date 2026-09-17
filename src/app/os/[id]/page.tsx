@@ -19,11 +19,12 @@ import {
 import Fotos, { type Foto } from "@/components/Fotos";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
-import { useEhDono } from "@/components/UsuarioProvider";
+import { usePodeFinanceiro, usePodeExcluir } from "@/components/UsuarioProvider";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { CampoDinheiro, Entrada, Selecao } from "@/components/ui/Campos";
 import { Modal } from "@/components/ui/Modal";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
+import { valorReserva, type Configuracao } from "@/lib/configuracao";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
 
@@ -92,7 +93,8 @@ type PayMode = "TOTAL" | "PARCIAL" | "SEM_PAGAMENTO";
 export default function OSDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const ehDono = useEhDono();
+  const podeFinanceiro = usePodeFinanceiro();
+  const podeExcluir = usePodeExcluir();
   const [os, setOs] = useState<OS | null>(null);
   const [loading, setLoading] = useState(true);
   const [pgtoForm, setPgtoForm] = useState({ valor: "", formaPagamento: "DINHEIRO", obs: "" });
@@ -108,6 +110,7 @@ export default function OSDetailPage() {
   const [estornando, setEstornando] = useState<string | null>(null);
   const [estornoModal, setEstornoModal] = useState<{ pagamentoId?: string; valor: number } | null>(null);
   const [menuAberto, setMenuAberto] = useState(false);
+  const [config, setConfig] = useState<Configuracao | null>(null);
 
   const confirmar = useConfirmar();
   const avisar = useAvisar();
@@ -145,6 +148,16 @@ export default function OSDetailPage() {
       .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, [id]);
+
+  // Só o dono vê a "Visão interna" (onde a reserva sugerida aparece) — sem sentido
+  // buscar a configuração para o operador.
+  useEffect(() => {
+    if (!podeFinanceiro) return;
+    fetch("/api/configuracao")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Configuracao | null) => setConfig(data))
+      .catch(() => {});
+  }, [podeFinanceiro]);
 
   // Ajuste de impressão: encolhe só o que passa da largura da folha.
   //
@@ -460,7 +473,7 @@ export default function OSDetailPage() {
                     <BaixarOS os={os} comoItem />
                     {/* Excluir apaga faturamento junto — fica com o dono
                         (ver src/lib/permissoes.ts) e separado por um filete. */}
-                    {ehDono && (
+                    {podeExcluir && (
                       <>
                         <div className="my-1 border-t border-linha" />
                         <button
@@ -702,8 +715,8 @@ export default function OSDetailPage() {
 
       {/* Ferramentas de gestão — não aparecem na impressão */}
       <div className="no-print mt-6 space-y-5 lg:sticky lg:top-20 lg:mt-0 lg:self-start">
-        {/* Visão interna — lucros. Só o dono: a API nem envia estes campos ao operador. */}
-        {ehDono && ((os.custoTotalPecas ?? 0) > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
+        {/* Visão interna — lucros. Só quem tem financeiro: a API nem envia estes campos aos demais. */}
+        {podeFinanceiro && ((os.custoTotalPecas ?? 0) > 0 || os.totalPecas > 0 || os.totalMO > 0) && (
           <div className="rounded-xl border border-linha bg-superficie p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-tinta-3">
@@ -735,6 +748,12 @@ export default function OSDetailPage() {
               />
               <Metrica rotulo="Mão de obra" valor={formatCurrency(os.totalMO)} />
               <Metrica rotulo="Lucro real" valor={formatCurrency(os.lucroReal ?? 0)} tom="ok" />
+              {config && valorReserva(config, os.lucroReal ?? 0) !== null && (
+                <Metrica
+                  rotulo={`Guardar (${config.reservaLucroPercentual}%)`}
+                  valor={formatCurrency(valorReserva(config, os.lucroReal ?? 0) ?? 0)}
+                />
+              )}
             </div>
           </div>
         )}

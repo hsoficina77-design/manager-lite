@@ -62,6 +62,8 @@ export async function getConfiguracao(): Promise<Configuracao> {
       mensagemDocumento: row.mensagemDocumento,
       mostrarAssinatura: row.mostrarAssinatura,
       validadeOrcamentoDias: row.validadeOrcamentoDias,
+      reservaLucroAtiva: row.reservaLucroAtiva,
+      reservaLucroPercentual: row.reservaLucroPercentual,
     };
   } catch (err) {
     console.error("Configuração indisponível — usando padrão:", err);

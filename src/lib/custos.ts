@@ -28,10 +28,10 @@ function numeroOuNulo(valor: unknown): number | null {
  */
 export async function custosParaSalvar(
   itens: ItemEntrada[],
-  papel: string,
+  podeVerFinanceiro: boolean,
   pai: { os: string } | { orcamento: string }
 ): Promise<(number | null)[]> {
-  if (papel === "ADMIN") return itens.map((i) => numeroOuNulo(i.custoUnit));
+  if (podeVerFinanceiro) return itens.map((i) => numeroOuNulo(i.custoUnit));
 
   const ids = itens.map((i) => (typeof i.id === "string" ? i.id : null)).filter(Boolean) as string[];
   if (ids.length === 0) return itens.map(() => null);

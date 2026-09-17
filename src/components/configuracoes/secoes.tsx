@@ -10,7 +10,7 @@
 // Vale a pena manter cada seção curta: no celular ela vira uma tela inteira, e
 // tela curta é tela que não cansa.
 
-import { useRef, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { cn } from "@/lib/utils";
 import { rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
 import {
@@ -350,6 +350,122 @@ function Orcamento({ form, setCampo }: SecaoProps) {
   );
 }
 
+/* ── Reserva de lucro ───────────────────────────────────────────────────── */
+
+function ReservaDeLucro({ form, setCampo }: SecaoProps) {
+  return (
+    <Cartao>
+      <div className="space-y-4">
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-linha p-3 text-sm text-tinta-2 hover:bg-superficie-2">
+          <input
+            type="checkbox"
+            checked={form.reservaLucroAtiva}
+            onChange={(e) => setCampo("reservaLucroAtiva", e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+          />
+          <span>
+            Reserva de lucro sugerida
+            <span className="mt-0.5 block text-xs text-tinta-3">
+              Indica quanto guardar do lucro de cada OS (mão de obra + lucro em peça). Não
+              separa o dinheiro de fato — é só um número de apoio à gestão.
+            </span>
+          </span>
+        </label>
+
+        <Campo
+          label="Percentual sobre o lucro"
+          colunas={3}
+          ajuda="Aplicado ao lucro real de cada OS (mão de obra + lucro em peça)."
+        >
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              inputMode="numeric"
+              disabled={!form.reservaLucroAtiva}
+              value={form.reservaLucroPercentual}
+              onChange={(e) => setCampo("reservaLucroPercentual", e.target.value)}
+              className={cn(inputCls, "w-24", !form.reservaLucroAtiva && "opacity-50")}
+            />
+            <span className="text-sm text-tinta-3">%</span>
+          </div>
+        </Campo>
+      </div>
+    </Cartao>
+  );
+}
+
+/* ── Armazenamento ──────────────────────────────────────────────────────── */
+
+type StatusArmazenamento = { usados: number; limite: number; percentual: number };
+
+function Armazenamento() {
+  const [status, setStatus] = useState<StatusArmazenamento | null>(null);
+  const [erro, setErro] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/configuracao/armazenamento")
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then(setStatus)
+      .catch(() => setErro(true));
+  }, []);
+
+  if (erro) {
+    return (
+      <Cartao>
+        <p className="text-sm text-tinta-3">Não foi possível carregar o uso de armazenamento.</p>
+      </Cartao>
+    );
+  }
+
+  if (!status) {
+    return (
+      <Cartao>
+        <p className="text-sm text-tinta-3">Carregando...</p>
+      </Cartao>
+    );
+  }
+
+  const usadoMb = status.usados / (1024 * 1024);
+  const limiteMb = status.limite / (1024 * 1024);
+  const percentual = Math.min(100, Math.round(status.percentual * 100));
+  const perto = status.percentual >= 0.8;
+
+  return (
+    <Cartao
+      titulo="Fotos de OS e orçamentos"
+      ajuda="Quanto do espaço incluído no seu plano já foi usado."
+    >
+      <div className="space-y-2">
+        <div className="flex items-baseline justify-between text-sm">
+          <span className="font-medium text-tinta">
+            {usadoMb.toFixed(0)} MB de {limiteMb.toFixed(0)} MB usados
+          </span>
+          <span className={cn("text-xs font-semibold", perto ? "text-perigo" : "text-tinta-3")}>
+            {percentual}%
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-superficie-2">
+          <div
+            className={cn("h-full rounded-full", perto ? "bg-perigo" : "bg-brand-600")}
+            style={{ width: `${percentual}%` }}
+          />
+        </div>
+        {perto && (
+          <p className="text-xs text-perigo">
+            Perto do limite do plano — fotos novas podem parar de ser aceitas em breve.
+          </p>
+        )}
+      </div>
+    </Cartao>
+  );
+}
+
 /* ── A lista ────────────────────────────────────────────────────────────── */
 
 export const SECOES: Secao[] = [
@@ -444,6 +560,36 @@ export const SECOES: Secao[] = [
       </Icone>
     ),
     Conteudo: Orcamento,
+  },
+  {
+    id: "reserva-lucro",
+    titulo: "Reserva de lucro",
+    descricao: "Quanto guardar do lucro de cada OS.",
+    grupo: "Documentos",
+    palavras: ["reserva", "guardar", "poupança", "percentual", "lucro"],
+    icone: (
+      <Icone>
+        <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
+        <path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
+        <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+      </Icone>
+    ),
+    Conteudo: ReservaDeLucro,
+  },
+  {
+    id: "armazenamento",
+    titulo: "Armazenamento",
+    descricao: "Uso do espaço de fotos incluído no plano.",
+    grupo: "Plano",
+    palavras: ["armazenamento", "plano", "fotos", "limite", "espaço", "quota", "gigabyte"],
+    icone: (
+      <Icone>
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+        <path d="M3 12a9 3 0 0 0 18 0" />
+      </Icone>
+    ),
+    Conteudo: Armazenamento,
   },
 ];
 

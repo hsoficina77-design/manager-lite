@@ -10,6 +10,7 @@ export type Form = {
   corPrimaria: string; corMenu: string;
   rodapeDocumento: string; mensagemDocumento: string;
   mostrarAssinatura: boolean; validadeOrcamentoDias: string;
+  reservaLucroAtiva: boolean; reservaLucroPercentual: string;
 };
 
 export function paraForm(c: Configuracao): Form {
@@ -31,6 +32,8 @@ export function paraForm(c: Configuracao): Form {
     mensagemDocumento: c.mensagemDocumento ?? "",
     mostrarAssinatura: c.mostrarAssinatura,
     validadeOrcamentoDias: String(c.validadeOrcamentoDias),
+    reservaLucroAtiva: c.reservaLucroAtiva,
+    reservaLucroPercentual: String(c.reservaLucroPercentual),
   };
 }
 
@@ -57,6 +60,8 @@ export function paraConfig(form: Form, logoUrl: string | null): Configuracao {
     mensagemDocumento: texto(form.mensagemDocumento),
     mostrarAssinatura: form.mostrarAssinatura,
     validadeOrcamentoDias: Number(form.validadeOrcamentoDias) || CONFIG_PADRAO.validadeOrcamentoDias,
+    reservaLucroAtiva: form.reservaLucroAtiva,
+    reservaLucroPercentual: Number(form.reservaLucroPercentual) || CONFIG_PADRAO.reservaLucroPercentual,
   };
 }
 

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { labelPapel, type Papel } from "@/lib/permissoes";
 import { BarraInferior } from "./ui/BarraInferior";
+import { NotificacaoSino } from "./ui/Notificacoes";
 import { SeletorTema } from "./ui/Tema";
 import {
   Chevron,
@@ -29,6 +30,8 @@ type LinkDef = {
   Icone?: IconeNav;
   /** Só o dono vê. Esconder é conforto; quem barra de verdade é o proxy. */
   dono?: boolean;
+  /** Dono ou operador com o checkbox "Financeiro". */
+  financeiro?: boolean;
 };
 
 export function Sidebar({
@@ -40,7 +43,7 @@ export function Sidebar({
   pendingCount?: number;
   nome?: string;
   logoUrl?: string | null;
-  usuario: { nome: string; papel: Papel };
+  usuario: { nome: string; papel: Papel; podeFinanceiro: boolean };
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -88,14 +91,15 @@ export function Sidebar({
       href: "/contas-receber",
       label: "Contas a receber",
       badge: pendingCount,
-      dono: true,
+      financeiro: true,
       Icone: Dinheiro,
     },
-    { href: "/despesas", label: "Controle de gastos", dono: true, Icone: Recibo },
-    { href: "/caixa", label: "Caixa", dono: true, Icone: Dinheiro },
+    { href: "/despesas", label: "Controle de gastos", financeiro: true, Icone: Recibo },
+    { href: "/caixa", label: "Caixa", financeiro: true, Icone: Dinheiro },
   ];
 
-  const permitido = (link: LinkDef) => ehDono || !link.dono;
+  const permitido = (link: LinkDef) =>
+    (ehDono || !link.dono) && (usuario.podeFinanceiro || !link.financeiro);
 
   const links = todosOsLinks
     .filter(permitido)
@@ -271,7 +275,10 @@ export function Sidebar({
     <>
       {/* Menu lateral do desktop. Fixo, porque agora quem rola é o documento. */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-menu text-menu-fg md:flex">
-        <div className="border-b border-menu-borda px-4 py-5">{brand}</div>
+        <div className="flex items-center justify-between gap-2 border-b border-menu-borda px-4 py-5">
+          {brand}
+          <NotificacaoSino papel={usuario.papel} className="-mr-1" />
+        </div>
         {nav}
         {rodape}
       </aside>
@@ -294,6 +301,7 @@ export function Sidebar({
             {contador(pendingCount, "shrink-0")}
           </Link>
         )}
+        <NotificacaoSino papel={usuario.papel} />
       </header>
 
       {/* Gaveta do celular */}

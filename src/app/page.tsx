@@ -15,6 +15,8 @@ import {
 } from "@/lib/periodo";
 import { osEntreguesNoPeriodo, osNoPatio, dataProducao, diasParado } from "@/lib/os-periodo";
 import { custoDoIntervalo } from "@/lib/despesas";
+import { getConfiguracao } from "@/lib/configuracao-db";
+import { valorReserva } from "@/lib/configuracao";
 import { FaixaMetricas, Metrica, MetricaLink, Painel, Vazio } from "@/components/ui/Dados";
 import { BotaoLink } from "@/components/ui/Botao";
 import { Avancar, Mais, SetaDireita, Voltar } from "@/components/ui/Icones";
@@ -59,10 +61,10 @@ export default async function Dashboard({
 }) {
   const sp = await searchParams;
   const usuario = await exigirUsuario();
-  // Resultado é a aba do dinheiro (DRE, lucro, despesas): só o dono. Para o operador
-  // ela nem aparece, e um link direto cai na Operação.
-  const ehDono = usuario.papel === "ADMIN";
-  const aba = ehDono && sp.aba === "resultado" ? "resultado" : "operacao";
+  // Resultado é a aba do dinheiro (DRE, lucro, despesas): só quem tem financeiro. Para
+  // quem não tem ela nem aparece, e um link direto cai na Operação.
+  const podeVerFinanceiro = usuario.podeFinanceiro;
+  const aba = podeVerFinanceiro && sp.aba === "resultado" ? "resultado" : "operacao";
   const periodo: PeriodoKey = ehPeriodo(sp.periodo) ? sp.periodo : "mes";
   const offset = Number.parseInt(sp.offset ?? "0", 10) || 0;
 
@@ -72,7 +74,7 @@ export default async function Dashboard({
           título era ruído em toda página para quem abre o sistema todo dia. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-tinta">Dashboard</h1>
-        {ehDono && (
+        {podeVerFinanceiro && (
           <div className="flex gap-1 rounded-lg bg-superficie-3 p-1">
             <AbaLink href="/?aba=operacao" ativa={aba === "operacao"}>
               Operação
@@ -85,7 +87,7 @@ export default async function Dashboard({
       </div>
 
       {aba === "operacao" ? (
-        <Operacao ehDono={ehDono} />
+        <Operacao podeVerFinanceiro={podeVerFinanceiro} />
       ) : (
         <Resultado periodo={periodo} offset={offset} />
       )}
@@ -99,11 +101,20 @@ export default async function Dashboard({
 // 40 dias continua sendo trabalho a fazer, e o dinheiro dela continua sendo dinheiro a
 // entrar. O que separa o carro ativo do encalhado é o aging na lista, não um recorte
 // que faz ele desaparecer da conta.
-async function Operacao({ ehDono }: { ehDono: boolean }) {
+async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
   const agora = new Date();
   const hoje = janelaHoje(agora);
 
-  const [patio, entreguesHoje, devedoresOS, dividasDeCliente, dividasAvulsas] = await Promise.all([
+  const [
+    patio,
+    entreguesHoje,
+    devedoresOS,
+    dividasDeCliente,
+    dividasAvulsas,
+    recebidoHojeOS,
+    recebidoHojeDivida,
+    config,
+  ] = await Promise.all([
     prisma.ordemServico.findMany({
       where: osNoPatio,
       include: INCLUDE_LISTA,
@@ -132,6 +143,18 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
       where: { pago: false, clienteId: null },
       _sum: { valor: true, valorPago: true },
     }) as Promise<{ devedorNome: string | null; _sum: { valor: number; valorPago: number } }[]>,
+    // "Guardar hoje" é sobre o dinheiro que entrou hoje, não sobre o que foi entregue —
+    // um carro entregue ontem e pago hoje conta; um entregue hoje mas ainda não pago, não.
+    prisma.pagamentoOS.aggregate({
+      where: { data: { gte: hoje.inicio, lt: hoje.fim } },
+      _sum: { valor: true },
+    }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma as any).pagamentoDivida.aggregate({
+      where: { data: { gte: hoje.inicio, lt: hoje.fim } },
+      _sum: { valor: true },
+    }) as Promise<{ _sum: { valor: number | null } }>,
+    getConfiguracao(),
   ]);
 
   const emServico = patio.filter((o) => o.status !== "AGUARDANDO_PECA").length;
@@ -151,6 +174,9 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
     lucro: entreguesHoje.reduce((s, o) => s + o.lucroReal, 0),
   };
 
+  const recebidoHoje = (recebidoHojeOS._sum.valor ?? 0) + (recebidoHojeDivida._sum.valor ?? 0);
+  const guardarHoje = valorReserva(config, recebidoHoje);
+
   const { total: totalAReceber, quantidade: devedoresCount, top5 } = await resumoDevedores(
     devedoresOS,
     dividasDeCliente,
@@ -160,7 +186,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
   return (
     <>
       {/* Uma superfície com divisórias, não cinco cartões iguais empilhados. */}
-      <FaixaMetricas colunas={ehDono ? 5 : 3}>
+      <FaixaMetricas colunas={podeVerFinanceiro ? 5 : 3}>
         <MetricaLink
           href="/os?status=patio"
           rotulo="No pátio"
@@ -180,7 +206,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
           tamanho="grande"
           tom={agPeca > 0 ? "atencao" : "neutro"}
         />
-        {ehDono && (
+        {podeVerFinanceiro && (
           <>
             <MetricaLink
               href="/contas-receber"
@@ -202,7 +228,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
       </FaixaMetricas>
 
       {/* Previsibilidade de caixa: o resultado de fechar tudo que está no pátio. */}
-      {ehDono && (
+      {podeVerFinanceiro && (
         <Painel
           titulo="Se finalizar tudo do pátio"
           ajuda={`${patio.length} OS em aberto · custo de peças estimado pelo que já está lançado nas OS`}
@@ -224,7 +250,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
       <div className="rounded-xl border border-linha bg-superficie-2 p-4">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
           <Metrica rotulo="Entregue hoje" valor={`${hojeResumo.n} OS`} />
-          {ehDono && (
+          {podeVerFinanceiro && (
             <>
               <Metrica rotulo="Faturado" valor={formatCurrency(hojeResumo.faturado)} />
               <Metrica
@@ -232,6 +258,13 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
                 valor={formatCurrency(hojeResumo.lucro)}
                 tom={hojeResumo.lucro >= 0 ? "ok" : "perigo"}
               />
+              {guardarHoje !== null && (
+                <Metrica
+                  rotulo={`Guardar hoje (${config.reservaLucroPercentual}%)`}
+                  valor={formatCurrency(guardarHoje)}
+                  sub={`sobre ${formatCurrency(recebidoHoje)} recebidos`}
+                />
+              )}
             </>
           )}
         </div>
@@ -243,7 +276,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-4 lg:order-2">
           <AcoesRapidas />
-          {ehDono && <CardDevedores top5={top5} />}
+          {podeVerFinanceiro && <CardDevedores top5={top5} />}
         </div>
 
         <div className="space-y-3 lg:order-1 lg:col-span-2">
@@ -262,7 +295,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
             }
             patio
             agora={agora}
-            mostrarLucro={ehDono}
+            mostrarLucro={podeVerFinanceiro}
           />
         </div>
       </div>
@@ -285,7 +318,7 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
   // vez de truncar em "hoje" — que era o que quebrava o DRE de qualquer mês fechado.
   const fimDespesas = j.fim < agora ? j.fim : agora;
 
-  const [ordens, ordensAnterior, recebidoOS, recebidoDivida, totalDespesas] = await Promise.all([
+  const [ordens, ordensAnterior, recebidoOS, recebidoDivida, totalDespesas, config] = await Promise.all([
     prisma.ordemServico.findMany({
       where: osEntreguesNoPeriodo(j),
       include: INCLUDE_LISTA,
@@ -307,12 +340,14 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
     // materializa os lançamentos das despesas fixas do período. Sem isso, o mês que
     // ninguém abriu em /despesas entraria no DRE sem o aluguel.
     custoDoIntervalo(j.inicio, fimDespesas),
+    getConfiguracao(),
   ]);
 
   const receita = ordens.reduce((s, o) => s + o.total, 0);
   const custoPecas = ordens.reduce((s, o) => s + o.custoTotalPecas, 0);
   const lucroBruto = ordens.reduce((s, o) => s + o.lucroReal, 0);
   const lucroLiquido = lucroBruto - totalDespesas;
+  const reservaSugerida = valorReserva(config, lucroBruto);
   const recebido = (recebidoOS._sum.valor ?? 0) + (recebidoDivida._sum.valor ?? 0);
 
   const receitaAnterior = ordensAnterior.reduce((s, o) => s + o.total, 0);
@@ -398,6 +433,12 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
             valor={formatCurrency(lucroLiquido)}
             tom={lucroLiquido >= 0 ? "ok" : "perigo"}
           />
+          {reservaSugerida !== null && (
+            <Metrica
+              rotulo={`Reserva sugerida (${config.reservaLucroPercentual}%)`}
+              valor={formatCurrency(reservaSugerida)}
+            />
+          )}
         </div>
         {receita > 0 && recebido < receita && (
           <p className="mt-3 text-xs text-tinta-3">

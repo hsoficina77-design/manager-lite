@@ -9,7 +9,7 @@ import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import ClienteSelect from "./ClienteSelect";
 import { CampoDinheiro, CampoQuantidade } from "@/components/ui/Campos";
 import { Fechar } from "@/components/ui/Icones";
-import { useEhDono } from "@/components/UsuarioProvider";
+import { usePodeFinanceiro } from "@/components/UsuarioProvider";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Mecanico = { id: string; nome: string; especialidade: string | null };
@@ -50,7 +50,7 @@ export default function OSForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   // Custo e lucro só existem na tela do dono — a API nem manda esses campos ao operador.
-  const ehDono = useEhDono();
+  const podeFinanceiro = usePodeFinanceiro();
   const preClienteId = initial?.clienteId ?? searchParams.get("clienteId") ?? "";
   const preVeiculoId = initial?.veiculoId ?? searchParams.get("veiculoId") ?? "";
 
@@ -415,7 +415,7 @@ export default function OSForm({
                 onEnter={saveItem}
               />
             </div>
-            {ehDono && itemForm.tipo === "PECA" && (
+            {podeFinanceiro && itemForm.tipo === "PECA" && (
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs text-tinta-3 mb-1">Custo unit. (R$)</label>
                 <CampoDinheiro
@@ -429,7 +429,7 @@ export default function OSForm({
             <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs text-tinta-3 mb-1">
                 Venda unit. (R$)
-                {ehDono && itemMargem !== null && (
+                {podeFinanceiro && itemMargem !== null && (
                   <span className={`ml-1 font-medium ${itemMargem >= 0 ? "text-ok" : "text-perigo"}`}>
                     ({itemMargem.toFixed(0)}%)
                   </span>
@@ -462,7 +462,7 @@ export default function OSForm({
             </div>
           </div>
 
-          {ehDono && Number(itemForm.valorUnit) > 0 && (
+          {podeFinanceiro && Number(itemForm.valorUnit) > 0 && (
             <p className="text-xs text-tinta-3">
               Ganho deste item:{" "}
               <span className={`font-semibold ${itemGanho >= 0 ? "text-ok" : "text-perigo"}`}>
@@ -483,7 +483,7 @@ export default function OSForm({
                   <th className="text-right pb-2 font-medium">Qtd</th>
                   <th className="text-right pb-2 font-medium">Venda</th>
                   <th className="text-right pb-2 font-medium">Total</th>
-                  {ehDono && <th className="text-right pb-2 font-medium">Ganho</th>}
+                  {podeFinanceiro && <th className="text-right pb-2 font-medium">Ganho</th>}
                   <th className="pb-2"></th>
                 </tr>
               </thead>
@@ -495,7 +495,7 @@ export default function OSForm({
                     <td className="py-1.5 text-right text-tinta-2">{item.quantidade}</td>
                     <td className="py-1.5 text-right text-tinta-2">{formatCurrency(Number(item.valorUnit))}</td>
                     <td className="py-1.5 text-right font-medium text-tinta">{formatCurrency(Number(item.quantidade) * Number(item.valorUnit))}</td>
-                    {ehDono && <td className={`py-1.5 text-right font-medium ${ganhoItem(item) >= 0 ? "text-ok" : "text-perigo"}`}>{formatCurrency(ganhoItem(item))}</td>}
+                    {podeFinanceiro && <td className={`py-1.5 text-right font-medium ${ganhoItem(item) >= 0 ? "text-ok" : "text-perigo"}`}>{formatCurrency(ganhoItem(item))}</td>}
                     <td className="py-1 pl-2">
                       {/* Alvos de 36px e afastados: o dedo errava o lápis e acertava a lixeira. */}
                       <div className="flex items-center justify-end gap-2 sm:gap-1.5">
@@ -556,7 +556,7 @@ export default function OSForm({
                   </div>
                 </div>
 
-                {ehDono && (
+                {podeFinanceiro && (
                   <div className="space-y-1 text-sm rounded-lg bg-superficie-2 p-3">
                     <div className="flex justify-between text-tinta-3"><span>Custo das peças</span><span>{formatCurrency(custoTotalPecas)}</span></div>
                     <div className="flex justify-between font-semibold text-ok">

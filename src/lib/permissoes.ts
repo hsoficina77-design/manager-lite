@@ -25,28 +25,37 @@ export function labelPapel(papel: string): string {
   return PAPEIS.find((p) => p.value === papel)?.label ?? papel;
 }
 
-// Telas e APIs que tratam de dinheiro ou de configuração do sistema. O operador não
-// entra — nem pela navegação, nem digitando o endereço, nem chamando a API na mão.
+// Telas e APIs que ficam com o dono para sempre — configuração do sistema, metas e
+// gestão de acessos. Diferente do financeiro e da exclusão (abaixo), aqui não existe
+// checkbox: não dá para um operador configurar o sistema mesmo com ajuste fino.
 export const ROTAS_DE_DONO = [
   "/configuracoes",
-  "/caixa",
-  "/despesas",
-  "/contas-receber",
   "/produtividade",
-  "/api/caixa",
-  "/api/despesas",
-  "/api/dividas",
   "/api/metas",
   "/api/produtividade",
   "/api/usuarios",
+  "/api/exclusoes",
 ];
 
-// Excluir apaga histórico e, no caso da OS, faturamento junto. Fica com o dono.
-// (Para liberar ao operador, basta esvaziar esta lista.)
-const EXCLUSAO_SO_DO_DONO = ["/api/os/", "/api/clientes/", "/api/orcamentos/", "/api/veiculos/"];
+// Dinheiro: caixa, despesas, contas a receber. Todo dono já enxerga; um operador só
+// entra aqui com o checkbox "Financeiro" marcado nele (Usuario.podeFinanceiro).
+export const ROTAS_FINANCEIRO = [
+  "/caixa",
+  "/despesas",
+  "/contas-receber",
+  "/api/caixa",
+  "/api/despesas",
+  "/api/dividas",
+];
+
+// Excluir apaga histórico e, no caso da OS, faturamento junto. Todo dono já pode; um
+// operador só com o checkbox "Excluir" marcado nele (Usuario.podeExcluir). Toda
+// exclusão fica registrada no backlog (RegistroExclusao), então dá para rastrear quem
+// apagou o quê mesmo com o acesso liberado.
+const ROTAS_DE_EXCLUSAO = ["/api/os/", "/api/clientes/", "/api/orcamentos/", "/api/veiculos/"];
 
 /**
- * Esta rota exige o papel de dono?
+ * Esta rota exige o papel de dono — sem exceção por checkbox?
  *
  * `/api/configuracao` é o caso especial: qualquer um precisa **ler** (é de lá que sai o
  * cabeçalho da OS e o tema da tela), mas só o dono pode **gravar**.
@@ -56,10 +65,17 @@ export function exigeDono(pathname: string, metodo: string): boolean {
     return true;
   }
   if (pathname.startsWith("/api/configuracao") && metodo !== "GET") return true;
-  if (metodo === "DELETE" && EXCLUSAO_SO_DO_DONO.some((rota) => pathname.startsWith(rota))) {
-    return true;
-  }
   return false;
+}
+
+/** Esta rota é de financeiro — exige `podeFinanceiro` (dono sempre tem)? */
+export function exigeFinanceiro(pathname: string): boolean {
+  return ROTAS_FINANCEIRO.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));
+}
+
+/** Esta requisição é uma exclusão protegida — exige `podeExcluir` (dono sempre tem)? */
+export function exigeExclusao(pathname: string, metodo: string): boolean {
+  return metodo === "DELETE" && ROTAS_DE_EXCLUSAO.some((rota) => pathname.startsWith(rota));
 }
 
 /** Rotas abertas: é onde se entra no sistema, então não dá para exigir estar dentro. */
@@ -91,12 +107,13 @@ const CAMPOS_FINANCEIROS = [
 ] as const;
 
 /**
- * Remove custo, lucro e margem — de OS, orçamento, itens e listas — quando quem
- * pergunta não é o dono. Preço de venda continua: o operador precisa dele para falar
- * com o cliente; o que ele não pode saber é quanto a peça custou.
+ * Remove custo, lucro e margem — de OS, orçamento, itens e listas — de quem não pode
+ * ver financeiro (dono sempre pode; operador só com `podeFinanceiro`). Preço de venda
+ * continua: quem atende precisa dele para falar com o cliente; o que não pode saber é
+ * quanto a peça custou.
  */
-export function semFinanceiro<T>(dados: T, papel: string | null | undefined): T {
-  if (papel === "ADMIN") return dados;
+export function semFinanceiro<T>(dados: T, podeVerFinanceiro: boolean): T {
+  if (podeVerFinanceiro) return dados;
   return limpar(dados) as T;
 }
 

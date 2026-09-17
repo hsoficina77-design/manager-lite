@@ -22,6 +22,8 @@ export async function PUT(request: Request) {
       corMenu: body.corMenu?.toLowerCase() ?? COR_MENU_PADRAO,
       mostrarAssinatura: body.mostrarAssinatura ?? false,
       validadeOrcamentoDias: body.validadeOrcamentoDias,
+      reservaLucroAtiva: body.reservaLucroAtiva ?? false,
+      reservaLucroPercentual: body.reservaLucroPercentual,
     };
 
     // Upsert: a linha é criada pela migração, mas um banco restaurado de backup

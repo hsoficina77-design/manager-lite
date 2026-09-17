@@ -5,7 +5,8 @@ import { hashSenha, validarSenha } from "@/lib/senha";
 import { ehPapelValido } from "@/lib/permissoes";
 
 const CAMPOS = {
-  id: true, nome: true, email: true, papel: true, ativo: true,
+  id: true, nome: true, email: true, papel: true,
+  podeFinanceiro: true, podeExcluir: true, ativo: true,
   ultimoAcesso: true, createdAt: true,
 } as const;
 
@@ -55,6 +56,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
       if (body.papel !== alvo.papel) {
         dados.papel = body.papel;
+        derrubarSessoes = true;
+      }
+    }
+
+    // Checkboxes de financeiro/exclusão — só têm efeito prático no operador; no dono
+    // ficam ignorados (ele já tem tudo), mas o valor grava do mesmo jeito.
+    if (body.podeFinanceiro !== undefined) {
+      const valor = Boolean(body.podeFinanceiro);
+      if (valor !== alvo.podeFinanceiro) {
+        dados.podeFinanceiro = valor;
+        derrubarSessoes = true;
+      }
+    }
+
+    if (body.podeExcluir !== undefined) {
+      const valor = Boolean(body.podeExcluir);
+      if (valor !== alvo.podeExcluir) {
+        dados.podeExcluir = valor;
         derrubarSessoes = true;
       }
     }

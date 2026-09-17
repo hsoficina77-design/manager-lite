@@ -19,12 +19,29 @@ type Usuario = {
   nome: string;
   email: string;
   papel: Papel;
+  podeFinanceiro: boolean;
+  podeExcluir: boolean;
   ativo: boolean;
   ultimoAcesso: string | null;
   createdAt: string;
 };
 
-const NOVO = { nome: "", email: "", senha: "", papel: "OPERADOR" as Papel };
+type Exclusao = {
+  id: string;
+  tipo: string;
+  descricao: string;
+  usuarioNome: string;
+  createdAt: string;
+};
+
+const NOVO = {
+  nome: "",
+  email: "",
+  senha: "",
+  papel: "OPERADOR" as Papel,
+  podeFinanceiro: false,
+  podeExcluir: false,
+};
 
 export default function UsuariosPainel() {
   const eu = useUsuario();
@@ -33,6 +50,9 @@ export default function UsuariosPainel() {
   const [erro, setErro] = useState("");
   const confirmar = useConfirmar();
   const [aviso, setAviso] = useState("");
+
+  const [exclusoes, setExclusoes] = useState<Exclusao[]>([]);
+  const [carregandoExclusoes, setCarregandoExclusoes] = useState(true);
 
   const [modalNovo, setModalNovo] = useState(false);
   const [novo, setNovo] = useState(NOVO);
@@ -53,6 +73,11 @@ export default function UsuariosPainel() {
 
   useEffect(() => {
     carregar();
+    fetch("/api/exclusoes")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setExclusoes(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setCarregandoExclusoes(false));
   }, []);
 
   async function criar(e: React.FormEvent) {
@@ -180,6 +205,9 @@ export default function UsuariosPainel() {
             </div>
           ))}
         </dl>
+        <p className="mt-2 text-xs text-tinta-3">
+          Cada operador pode ganhar financeiro e/ou exclusão marcando as caixas abaixo do nome dele.
+        </p>
       </div>
 
       {carregando ? (
@@ -221,6 +249,32 @@ export default function UsuariosPainel() {
                         ? `Último acesso: ${formatDatetime(u.ultimoAcesso)}`
                         : "Nunca entrou"}
                     </p>
+
+                    {/* Dono já tem tudo; o ajuste fino só faz sentido para operador. */}
+                    {u.papel === "OPERADOR" && (
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+                        <label className="flex min-h-6 items-center gap-1.5 text-xs text-tinta-2">
+                          <input
+                            type="checkbox"
+                            checked={u.podeFinanceiro}
+                            disabled={travado}
+                            onChange={(e) => alterar(u, { podeFinanceiro: e.target.checked })}
+                            className="h-4 w-4 rounded border-linha-forte accent-brand-600"
+                          />
+                          Financeiro (caixa, despesas, contas a receber)
+                        </label>
+                        <label className="flex min-h-6 items-center gap-1.5 text-xs text-tinta-2">
+                          <input
+                            type="checkbox"
+                            checked={u.podeExcluir}
+                            disabled={travado}
+                            onChange={(e) => alterar(u, { podeExcluir: e.target.checked })}
+                            className="h-4 w-4 rounded border-linha-forte accent-brand-600"
+                          />
+                          Excluir OS, clientes, orçamentos e veículos
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-2 sm:shrink-0">
@@ -347,6 +401,30 @@ export default function UsuariosPainel() {
               </Selecao>
             </div>
 
+            {novo.papel === "OPERADOR" && (
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-tinta-2">Acessos extras</p>
+                <label className="flex min-h-6 items-center gap-1.5 text-sm text-tinta-2">
+                  <input
+                    type="checkbox"
+                    checked={novo.podeFinanceiro}
+                    onChange={(e) => setNovo({ ...novo, podeFinanceiro: e.target.checked })}
+                    className="h-4 w-4 rounded border-linha-forte accent-brand-600"
+                  />
+                  Financeiro (caixa, despesas, contas a receber)
+                </label>
+                <label className="flex min-h-6 items-center gap-1.5 text-sm text-tinta-2">
+                  <input
+                    type="checkbox"
+                    checked={novo.podeExcluir}
+                    onChange={(e) => setNovo({ ...novo, podeExcluir: e.target.checked })}
+                    className="h-4 w-4 rounded border-linha-forte accent-brand-600"
+                  />
+                  Excluir OS, clientes, orçamentos e veículos
+                </label>
+              </div>
+            )}
+
             <div>
               <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="novo-senha">
                 Senha inicial
@@ -413,6 +491,42 @@ export default function UsuariosPainel() {
           </form>
         </Modal>
       )}
+
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-tinta">Exclusões recentes</h2>
+        <p className="mt-1 text-sm text-tinta-3">
+          Rastro de quem apagou OS, cliente, orçamento ou veículo — o registro em si some, isto fica.
+        </p>
+
+        {carregandoExclusoes ? (
+          <div className="mt-3">
+            <EsqueletoLista linhas={3} />
+          </div>
+        ) : exclusoes.length === 0 ? (
+          <p className="mt-3 rounded-xl border border-linha bg-superficie p-4 text-sm text-tinta-3">
+            Nenhuma exclusão registrada ainda.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {exclusoes.map((ex) => (
+              <div
+                key={ex.id}
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-linha bg-superficie px-4 py-3 text-sm"
+              >
+                <div className="min-w-0">
+                  <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs font-medium text-tinta-2">
+                    {ex.tipo}
+                  </span>
+                  <span className="ml-2 text-tinta">{ex.descricao}</span>
+                </div>
+                <p className="shrink-0 text-xs text-tinta-3">
+                  {ex.usuarioNome} · {formatDatetime(ex.createdAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

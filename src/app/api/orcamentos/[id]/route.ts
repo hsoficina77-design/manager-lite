@@ -8,6 +8,7 @@ import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
 import { custosParaSalvar } from "@/lib/custos";
 import { planoDeItens } from "@/lib/itens";
+import { registrarExclusao } from "@/lib/exclusoes";
 
 export async function GET(
   _req: Request,
@@ -38,7 +39,7 @@ export async function GET(
   return NextResponse.json(
     semFinanceiro(
       { ...orcamento, fotos: await comUrlAssinada(orcamento.fotos) },
-      guarda.usuario.papel
+      guarda.usuario.podeFinanceiro
     )
   );
 }
@@ -93,7 +94,7 @@ export async function PUT(
 
     // Custo dos itens: do payload quando é o dono, do banco quando é o operador.
     const custos = itens
-      ? await custosParaSalvar(itens, guarda.usuario.papel, { orcamento: id })
+      ? await custosParaSalvar(itens, guarda.usuario.podeFinanceiro, { orcamento: id })
       : [];
 
     if (itens) {
@@ -162,7 +163,7 @@ export async function PUT(
     }
 
     const orcamento = await prisma.orcamento.findUnique({ where: { id } });
-    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel));
+    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.podeFinanceiro));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;
@@ -175,8 +176,19 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi({ exclusao: true });
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
+    const orcamento = await prisma.orcamento.findUnique({
+      where: { id },
+      select: { numero: true, clienteNome: true, cliente: { select: { nome: true } } },
+    });
+    if (!orcamento) {
+      return NextResponse.json({ error: "Orçamento não encontrado" }, { status: 404 });
+    }
+
     const fotos = await prisma.fotoOS.findMany({
       where: { orcamentoId: id },
       select: { id: true, path: true, ordemId: true },
@@ -195,6 +207,11 @@ export async function DELETE(
     await prisma.orcamento.delete({ where: { id } });
     // O cascade apaga as linhas; os arquivos no bucket saem aqui.
     await deleteFotos(fotos.filter((f) => !f.ordemId).map((f) => f.path));
+    await registrarExclusao(
+      "Orçamento",
+      `Orçamento #${orcamento.numero} — ${orcamento.cliente?.nome ?? orcamento.clienteNome ?? "sem cliente"}`,
+      guarda.usuario
+    );
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir orçamento" }, { status: 500 });

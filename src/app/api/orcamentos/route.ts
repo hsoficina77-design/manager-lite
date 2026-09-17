@@ -33,15 +33,15 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(semFinanceiro(orcamentos, guarda.usuario.papel));
+  return NextResponse.json(semFinanceiro(orcamentos, guarda.usuario.podeFinanceiro));
 }
 
 export async function POST(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
 
-  // Operador não vê custo — logo, também não define custo.
-  const podeDefinirCusto = guarda.usuario.papel === "ADMIN";
+  // Quem não vê custo também não o define.
+  const podeDefinirCusto = guarda.usuario.podeFinanceiro;
 
   try {
     const {
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.papel), { status: 201 });
+    return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.podeFinanceiro), { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

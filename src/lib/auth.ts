@@ -15,6 +15,10 @@ export type UsuarioSessao = {
   nome: string;
   email: string;
   papel: Papel;
+  /** Já resolvido com o papel: dono sempre `true`, mesmo que a coluna diga outra coisa. */
+  podeFinanceiro: boolean;
+  /** Idem — dono sempre pode excluir. */
+  podeExcluir: boolean;
   /** Sessão desta requisição — permite poupá-la ao derrubar as demais. */
   sessaoId: string;
 };
@@ -35,7 +39,17 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       where: { id: lido.sessaoId },
       select: {
         expiraEm: true,
-        usuario: { select: { id: true, nome: true, email: true, papel: true, ativo: true } },
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+            papel: true,
+            podeFinanceiro: true,
+            podeExcluir: true,
+            ativo: true,
+          },
+        },
       },
     });
 
@@ -45,11 +59,15 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
     }
 
     const { usuario } = sessao;
+    const papel = ehPapelValido(usuario.papel) ? usuario.papel : "OPERADOR";
+    const ehDono = papel === "ADMIN";
     return {
       id: usuario.id,
       nome: usuario.nome,
       email: usuario.email,
-      papel: ehPapelValido(usuario.papel) ? usuario.papel : "OPERADOR",
+      papel,
+      podeFinanceiro: ehDono || usuario.podeFinanceiro,
+      podeExcluir: ehDono || usuario.podeExcluir,
       sessaoId: lido.sessaoId,
     };
   } catch (err) {
@@ -122,7 +140,7 @@ import { NextResponse } from "next/server";
  *   if (guarda.resposta) return guarda.resposta;
  */
 export async function guardaApi(
-  opcoes: { dono?: boolean } = {}
+  opcoes: { dono?: boolean; financeiro?: boolean; exclusao?: boolean } = {}
 ): Promise<{ usuario: UsuarioSessao; resposta?: never } | { usuario?: never; resposta: NextResponse }> {
   const usuario = await getUsuarioAtual();
   if (!usuario) {
@@ -130,6 +148,12 @@ export async function guardaApi(
   }
   if (opcoes.dono && usuario.papel !== "ADMIN") {
     return { resposta: NextResponse.json({ error: "Acesso restrito ao dono" }, { status: 403 }) };
+  }
+  if (opcoes.financeiro && !usuario.podeFinanceiro) {
+    return { resposta: NextResponse.json({ error: "Acesso restrito ao financeiro" }, { status: 403 }) };
+  }
+  if (opcoes.exclusao && !usuario.podeExcluir) {
+    return { resposta: NextResponse.json({ error: "Sem permissão para excluir" }, { status: 403 }) };
   }
   return { usuario };
 }

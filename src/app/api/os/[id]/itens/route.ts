@@ -38,8 +38,9 @@ export async function POST(
           quantidade: entrada.quantidade,
           valorUnit: entrada.valorUnit,
           valorTotal: valorDoItem(entrada),
-          // Operador não vê nem define custo; item lançado por ele entra sem custo.
-          custoUnit: guarda.usuario.papel === "ADMIN" ? entrada.custoUnit ?? null : null,
+          // Quem não vê financeiro também não define custo; item lançado por essa
+          // pessoa entra sem custo.
+          custoUnit: guarda.usuario.podeFinanceiro ? entrada.custoUnit ?? null : null,
           fornecedor: entrada.fornecedor ?? null,
         },
       });
@@ -57,7 +58,7 @@ export async function POST(
       return item;
     });
 
-    return NextResponse.json(semFinanceiro(result, guarda.usuario.papel), { status: 201 });
+    return NextResponse.json(semFinanceiro(result, guarda.usuario.podeFinanceiro), { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

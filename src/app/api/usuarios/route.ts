@@ -6,7 +6,8 @@ import { ehPapelValido } from "@/lib/permissoes";
 
 // `senhaHash` nunca sai daqui.
 const CAMPOS = {
-  id: true, nome: true, email: true, papel: true, ativo: true,
+  id: true, nome: true, email: true, papel: true,
+  podeFinanceiro: true, podeExcluir: true, ativo: true,
   ultimoAcesso: true, createdAt: true,
 } as const;
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   if (guarda.resposta) return guarda.resposta;
 
   try {
-    const { nome, email, senha, papel } = await request.json();
+    const { nome, email, senha, papel, podeFinanceiro, podeExcluir } = await request.json();
 
     if (typeof nome !== "string" || !nome.trim()) {
       return NextResponse.json({ error: "Informe o nome" }, { status: 400 });
@@ -43,12 +44,16 @@ export async function POST(request: Request) {
     const problema = validarSenha(senha);
     if (problema) return NextResponse.json({ error: problema }, { status: 400 });
 
+    // Dono não precisa de checkbox (já tem tudo); operador nasce com o que for
+    // marcado no formulário, e sem marcação nasce sem financeiro nem exclusão.
     const usuario = await prisma.usuario.create({
       data: {
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
         senhaHash: await hashSenha(senha),
         papel,
+        podeFinanceiro: papel === "ADMIN" ? true : Boolean(podeFinanceiro),
+        podeExcluir: papel === "ADMIN" ? true : Boolean(podeExcluir),
       },
       select: CAMPOS,
     });

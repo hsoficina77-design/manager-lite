@@ -99,7 +99,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const token = await assinarToken(sessaoId, expiraEm, usuario.papel);
+    const token = await assinarToken(sessaoId, expiraEm, usuario.papel, true, true);
     (await cookies()).set(COOKIE_SESSAO, token, opcoesDoCookie(expiraEm));
 
     return NextResponse.json({ id: usuario.id, nome: usuario.nome, papel: usuario.papel }, { status: 201 });

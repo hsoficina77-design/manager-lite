@@ -405,4 +405,9 @@ export const configuracaoSchema = z.object({
     .int("A validade do orçamento deve ser de 1 a 365 dias")
     .min(1, "A validade do orçamento deve ser de 1 a 365 dias")
     .max(365, "A validade do orçamento deve ser de 1 a 365 dias"),
+  reservaLucroAtiva: z.boolean().optional(),
+  reservaLucroPercentual: z.coerce
+    .number()
+    .min(0, "O percentual de reserva deve ser de 0 a 100")
+    .max(100, "O percentual de reserva deve ser de 0 a 100"),
 });

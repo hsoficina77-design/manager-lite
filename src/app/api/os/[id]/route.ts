@@ -9,6 +9,7 @@ import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
 import { custosParaSalvar } from "@/lib/custos";
 import { planoDeItens } from "@/lib/itens";
+import { registrarExclusao } from "@/lib/exclusoes";
 
 export async function GET(
   _req: Request,
@@ -37,7 +38,7 @@ export async function GET(
   // Duas filtragens na saída: as fotos vão com URL assinada e temporária (lib/fotos),
   // e custo unitário, lucro e margem somem quando quem pede não é dono (lib/permissoes).
   return NextResponse.json(
-    semFinanceiro({ ...os, fotos: await comUrlAssinada(os.fotos) }, guarda.usuario.papel)
+    semFinanceiro({ ...os, fotos: await comUrlAssinada(os.fotos) }, guarda.usuario.podeFinanceiro)
   );
 }
 
@@ -84,7 +85,7 @@ export async function PUT(
 
     // Custo dos itens: do payload quando é o dono, do banco quando é o operador —
     // que não recebe custo na leitura e, sem isto, zeraria o lucro ao salvar.
-    const custos = itens ? await custosParaSalvar(itens, guarda.usuario.papel, { os: id }) : [];
+    const custos = itens ? await custosParaSalvar(itens, guarda.usuario.podeFinanceiro, { os: id }) : [];
 
     if (itens) {
       totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
@@ -183,7 +184,7 @@ export async function PUT(
     }
 
     const os = await prisma.ordemServico.findUnique({ where: { id } });
-    return NextResponse.json(semFinanceiro(os, guarda.usuario.papel));
+    return NextResponse.json(semFinanceiro(os, guarda.usuario.podeFinanceiro));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;
@@ -196,8 +197,19 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi({ exclusao: true });
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
+    const os = await prisma.ordemServico.findUnique({
+      where: { id },
+      select: { numero: true, cliente: { select: { nome: true } } },
+    });
+    if (!os) {
+      return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
+    }
+
     const fotos = await prisma.fotoOS.findMany({
       where: { ordemId: id },
       select: { id: true, path: true, orcamentoId: true },
@@ -215,6 +227,11 @@ export async function DELETE(
 
     await prisma.ordemServico.delete({ where: { id } });
     await deleteFotos(fotos.filter((f) => !f.orcamentoId).map((f) => f.path));
+    await registrarExclusao(
+      "OS",
+      `OS #${os.numero} — ${os.cliente.nome}`,
+      guarda.usuario
+    );
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir OS" }, { status: 500 });

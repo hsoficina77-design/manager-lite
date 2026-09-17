@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { corMargem, corStatus, labelStatus, margemOS } from "@/lib/constants";
-import { useEhDono } from "@/components/UsuarioProvider";
+import { corMargem, corStatus, labelStatus, margemOS, OS_STATUS } from "@/lib/constants";
+import { usePodeFinanceiro } from "@/components/UsuarioProvider";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Entrada, Selecao } from "@/components/ui/Campos";
 import { EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
@@ -51,11 +51,12 @@ const STATUS_DA_ABA: Record<string, string> = {
 function OSListContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const ehDono = useEhDono();
+  const podeFinanceiro = usePodeFinanceiro();
 
   const aba = searchParams.get("status") || "";
   const q = searchParams.get("q") || "";
   const mecanico = searchParams.get("mecanico") || "";
+  const situacao = searchParams.get("situacao") || "";
   const de = searchParams.get("de") || "";
   const ate = searchParams.get("ate") || "";
   const ordenacao = searchParams.get("ordenar") || "recentes";
@@ -65,7 +66,7 @@ function OSListContent() {
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [pagina, setPagina] = useState(0);
   const [mecanicos, setMecanicos] = useState<{ id: string; nome: string }[]>([]);
-  const [mostrarFiltros, setMostrarFiltros] = useState(!!(mecanico || de || ate));
+  const [mostrarFiltros, setMostrarFiltros] = useState(!!(mecanico || situacao || de || ate));
 
   const trocarParam = useCallback(
     (mudancas: Record<string, string>) => {
@@ -108,14 +109,17 @@ function OSListContent() {
         pagina: String(pag),
         ordenar: ordenacao,
       });
-      if (STATUS_DA_ABA[aba]) p.set("status", STATUS_DA_ABA[aba]);
+      // A situação (status exato) refina a aba: pedir "Ag. peça" dentro de "Pátio"
+      // não faz sentido junto do recorte amplo da aba, então ela manda quando presente.
+      if (situacao) p.set("status", situacao);
+      else if (STATUS_DA_ABA[aba]) p.set("status", STATUS_DA_ABA[aba]);
       if (q) p.set("q", q);
       if (mecanico) p.set("mecanico", mecanico);
       if (de) p.set("de", de);
       if (ate) p.set("ate", ate);
       return `/api/os?${p}`;
     },
-    [aba, q, mecanico, de, ate, ordenacao]
+    [aba, q, mecanico, situacao, de, ate, ordenacao]
   );
 
   useEffect(() => {
@@ -158,7 +162,7 @@ function OSListContent() {
     router.replace(aba ? `/os?status=${aba}` : "/os", { scroll: false });
   }
 
-  const temFiltro = !!(q || mecanico || de || ate);
+  const temFiltro = !!(q || mecanico || situacao || de || ate);
   const itens = dados?.itens ?? [];
   const resumo = dados?.resumo;
 
@@ -208,7 +212,7 @@ function OSListContent() {
           aria-label="Ordenação"
           className="sm:w-auto"
         >
-          {ORDENACOES.filter((o) => ehDono || !o.value.startsWith("lucro")).map((o) => (
+          {ORDENACOES.filter((o) => podeFinanceiro || !o.value.startsWith("lucro")).map((o) => (
             <option key={o.value} value={o.value}>
               Ordenar: {o.label}
             </option>
@@ -244,6 +248,17 @@ function OSListContent() {
               ))}
             </Selecao>
           </label>
+          <label className="min-w-40 flex-1">
+            <span className="mb-1 block text-xs font-medium text-tinta-2">Situação</span>
+            <Selecao value={situacao} onChange={(e) => trocarParam({ situacao: e.target.value })}>
+              <option value="">Todas</option>
+              {OS_STATUS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Selecao>
+          </label>
           <label className="min-w-32 flex-1">
             <span className="mb-1 block text-xs font-medium text-tinta-2">Aberta de</span>
             <Entrada type="date" value={de} onChange={(e) => trocarParam({ de: e.target.value })} />
@@ -263,10 +278,10 @@ function OSListContent() {
       {/* Resumo do filtro inteiro, não só da página em tela: somar o que veio
           daria um faturamento que muda conforme a pessoa rola. */}
       {resumo && resumo.quantidade > 0 && (
-        <FaixaMetricas colunas={ehDono ? 3 : 2}>
+        <FaixaMetricas colunas={podeFinanceiro ? 3 : 2}>
           <Metrica rotulo="OS no filtro" valor={String(resumo.quantidade)} />
           <Metrica rotulo="Faturamento" valor={formatCurrency(resumo.faturamento)} />
-          {ehDono && (
+          {podeFinanceiro && (
             <Metrica
               rotulo="Lucro real"
               valor={formatCurrency(resumo.lucro ?? 0)}
@@ -283,7 +298,7 @@ function OSListContent() {
         temFiltro ? (
           <Vazio
             titulo="Nenhuma OS com esse filtro"
-            texto="Ajuste a busca, o mecânico ou o período."
+            texto="Ajuste a busca, o mecânico, a situação ou o período."
             acao={
               <Botao variante="secundario" onClick={limparFiltros}>
                 Limpar filtros
@@ -305,7 +320,7 @@ function OSListContent() {
         <div className="space-y-3">
           <div className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
             {itens.map((os) => (
-              <OSRow key={os.id} os={os} ehDono={ehDono} />
+              <OSRow key={os.id} os={os} podeFinanceiro={podeFinanceiro} />
             ))}
           </div>
 
@@ -332,9 +347,9 @@ function corTom(margem: number | null | undefined): "ok" | "atencao" | "perigo" 
   return "perigo";
 }
 
-function OSRow({ os, ehDono }: { os: OS; ehDono: boolean }) {
+function OSRow({ os, podeFinanceiro }: { os: OS; podeFinanceiro: boolean }) {
   const margem = margemOS({ ...os, lucroReal: os.lucroReal ?? 0 });
-  const mostrarLucro = ehDono && os.status !== "CANCELADA" && os.total > 0;
+  const mostrarLucro = podeFinanceiro && os.status !== "CANCELADA" && os.total > 0;
   return (
     <Link
       href={`/os/${os.id}`}

@@ -79,7 +79,14 @@ export async function POST(request: Request) {
       .deleteMany({ where: { expiraEm: { lt: new Date() } } })
       .catch((err: unknown) => console.error("Falha ao limpar sessões vencidas:", err));
 
-    const token = await assinarToken(sessaoId, expiraEm, usuario.papel);
+    const ehDono = usuario.papel === "ADMIN";
+    const token = await assinarToken(
+      sessaoId,
+      expiraEm,
+      usuario.papel,
+      ehDono || usuario.podeFinanceiro,
+      ehDono || usuario.podeExcluir
+    );
     (await cookies()).set(COOKIE_SESSAO, token, opcoesDoCookie(expiraEm));
 
     return NextResponse.json({

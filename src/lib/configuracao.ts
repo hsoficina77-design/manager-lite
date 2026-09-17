@@ -30,6 +30,8 @@ export type Configuracao = {
   mensagemDocumento: string | null;
   mostrarAssinatura: boolean;
   validadeOrcamentoDias: number;
+  reservaLucroAtiva: boolean;
+  reservaLucroPercentual: number;
 };
 
 export const CONFIG_PADRAO: Configuracao = {
@@ -51,6 +53,8 @@ export const CONFIG_PADRAO: Configuracao = {
   mensagemDocumento: null,
   mostrarAssinatura: true,
   validadeOrcamentoDias: 7,
+  reservaLucroAtiva: false,
+  reservaLucroPercentual: 10,
 };
 
 /** Campos de texto editáveis pelo painel — a logo tem rota própria (upload). */
@@ -91,4 +95,14 @@ export function linhasDoCabecalho(config: Configuracao): string[] {
 export function rodapeDoDocumento(config: Configuracao): string {
   if (config.rodapeDocumento?.trim()) return config.rodapeDocumento.trim();
   return [config.nome, config.telefone].filter(Boolean).join(" · ");
+}
+
+/**
+ * Quanto sugerir guardar sobre uma base — o lucro de uma OS, o lucro bruto de um
+ * período, ou o valor recebido no dia —, ou `null` se a opção estiver desativada.
+ * É só indicação ao gestor — não reserva dinheiro de fato.
+ */
+export function valorReserva(config: Configuracao, base: number): number | null {
+  if (!config.reservaLucroAtiva) return null;
+  return base * (config.reservaLucroPercentual / 100);
 }

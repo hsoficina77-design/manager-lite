@@ -16,7 +16,7 @@ model Cliente {
   email     String?
   obs       String?
   apelido   String?
-  origem    String?   // "INDICACAO" | "GOOGLE" | "INSTAGRAM" | "FACEBOOK" | "FAIXADA" | "OUTRO"
+  origem    String? // "INDICACAO" | "GOOGLE" | "INSTAGRAM" | "FACEBOOK" | "FAIXADA" | "OUTRO"
   profissao String?
   telefones String[]
   cep       String?
@@ -33,22 +33,22 @@ model Cliente {
 }
 
 model Veiculo {
-  id           String   @id @default(cuid())
-  clienteId    String
-  marca        String
-  modelo       String
-  ano          Int?
-  placa        String?  @unique
-  cor          String?
-  km           Int?
-  motorizacao  String?
-  valvulas     String?   // "8V" | "16V" | "12V" | "20V" | "24V"
-  anoFabricacao Int?
-  anoModelo    Int?
-  combustivel  String?   // "GASOLINA" | "ETANOL" | "FLEX" | "DIESEL" | "ELETRICO" | "HIBRIDO" | "GNV"
+  id               String   @id @default(cuid())
+  clienteId        String
+  marca            String
+  modelo           String
+  ano              Int?
+  placa            String?  @unique
+  cor              String?
+  km               Int?
+  motorizacao      String?
+  valvulas         String? // "8V" | "16V" | "12V" | "20V" | "24V"
+  anoFabricacao    Int?
+  anoModelo        Int?
+  combustivel      String? // "GASOLINA" | "ETANOL" | "FLEX" | "DIESEL" | "ELETRICO" | "HIBRIDO" | "GNV"
   combustivelEmUso String? // para Flex/Híbrido: "GASOLINA" | "ETANOL"
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   cliente    Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordens     OrdemServico[]
@@ -79,9 +79,9 @@ model OrdemServico {
   valorPago        Float     @default(0)
   formaPagamento   String?
   obs              String?
-  mecanico         String?   // nome denormalizado (compat / OS antigas)
+  mecanico         String? // nome denormalizado (compat / OS antigas)
   mecanicoId       String?
-  nivelCombustivel String?   // "CHEIO" | "MEIO" | "VAZIO"
+  nivelCombustivel String? // "CHEIO" | "MEIO" | "VAZIO"
   combustivelEmUso String?
   custoTotalPecas  Float     @default(0)
   lucroReal        Float     @default(0)
@@ -124,7 +124,7 @@ model Meta {
   id         String   @id @default(cuid())
   mecanicoId String
   ano        Int
-  mes        Int      // 1-12
+  mes        Int // 1-12
   valorAlvo  Float
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -140,25 +140,25 @@ model Meta {
 // clienteId fica nulo e a identificação vive nos campos livres abaixo. O cadastro
 // de verdade só é exigido na conversão em OS.
 model Orcamento {
-  id         String    @id @default(cuid())
-  numero     Int       @unique
-  clienteId  String?
-  veiculoId  String?
+  id              String    @id @default(cuid())
+  numero          Int       @unique
+  clienteId       String?
+  veiculoId       String?
   // Dados soltos do rascunho — usados só enquanto não há cliente/veículo cadastrado.
   clienteNome     String?
   clienteTelefone String?
   veiculoDesc     String?
-  status     String    @default("PENDENTE")
-  descricao  String?
-  totalPecas Float     @default(0)
-  totalMO    Float     @default(0)
-  desconto   Float     @default(0)
-  total      Float     @default(0)
-  validade   DateTime?
-  obs        String?
-  ordemId    String?   @unique // OS gerada na conversão
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  status          String    @default("PENDENTE")
+  descricao       String?
+  totalPecas      Float     @default(0)
+  totalMO         Float     @default(0)
+  desconto        Float     @default(0)
+  total           Float     @default(0)
+  validade        DateTime?
+  obs             String?
+  ordemId         String?   @unique // OS gerada na conversão
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   cliente Cliente?        @relation(fields: [clienteId], references: [id])
   veiculo Veiculo?        @relation(fields: [veiculoId], references: [id])
@@ -239,12 +239,12 @@ model DividaAvulsa {
 }
 
 model PagamentoDivida {
-  id             Int          @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   dividaId       Int
   valor          Float
   formaPagamento String
   obs            String?
-  data           DateTime     @default(now())
+  data           DateTime @default(now())
 
   divida DividaAvulsa @relation(fields: [dividaId], references: [id])
 }
@@ -256,14 +256,15 @@ model PagamentoDivida {
 // o `orcamentoId`: a mesma foto passa a aparecer nos dois documentos, e o orçamento
 // impresso continua igual ao que o cliente aprovou.
 model FotoOS {
-  id          String   @id @default(cuid())
-  ordemId     String?
-  orcamentoId String?
-  path        String   // caminho do arquivo no bucket (usado para excluir)
-  url         String   // URL pública da imagem
-  legenda     String?
-  tipo        String   @default("SERVICO") // ENTRADA | SERVICO | SAIDA
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  ordemId      String?
+  orcamentoId  String?
+  path         String // caminho do arquivo no bucket (usado para excluir)
+  url          String // URL pública da imagem
+  legenda      String?
+  tipo         String   @default("SERVICO") // ENTRADA | SERVICO | SAIDA
+  tamanhoBytes Int      @default(0) // tamanho do arquivo, para o cálculo de uso do plano
+  createdAt    DateTime @default(now())
 
   ordem     OrdemServico? @relation(fields: [ordemId], references: [id], onDelete: Cascade)
   orcamento Orcamento?    @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
@@ -280,21 +281,43 @@ model Sequencia {
 // papel: ADMIN | OPERADOR
 //
 // ADMIN é o dono: vê dinheiro (lucro, margem, custo, caixa, contas) e configura o
-// sistema. OPERADOR toca a operação — clientes, OS, orçamentos, fotos — e nunca
-// enxerga custo nem lucro. A separação não é só de tela: as rotas de API filtram os
-// campos financeiros antes de responder, senão bastaria abrir o DevTools.
+// sistema — sempre, os dois campos abaixo não se aplicam a ele. OPERADOR toca a
+// operação — clientes, OS, orçamentos, fotos — e por padrão nem financeiro nem
+// exclusão. `podeFinanceiro`/`podeExcluir` dão o ajuste fino por pessoa, por cima do
+// papel: liberam um operador específico sem torná-lo dono. A separação não é só de
+// tela: as rotas de API filtram os campos financeiros antes de responder, senão
+// bastaria abrir o DevTools.
 model Usuario {
-  id           String    @id @default(cuid())
-  nome         String
-  email        String    @unique
-  senhaHash    String
-  papel        String    @default("OPERADOR")
-  ativo        Boolean   @default(true)
-  ultimoAcesso DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  nome           String
+  email          String    @unique
+  senhaHash      String
+  papel          String    @default("OPERADOR")
+  podeFinanceiro Boolean   @default(false)
+  podeExcluir    Boolean   @default(false)
+  ativo          Boolean   @default(true)
+  ultimoAcesso   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  sessoes Sessao[]
+  sessoes   Sessao[]
+  exclusoes RegistroExclusao[]
+}
+
+// Backlog de exclusões — rastro de quem apagou o quê, já que a exclusão em si some com
+// o registro original. `usuarioNome` é uma cópia congelada do nome: se a pessoa for
+// removida depois, o rastro continua legível (`usuarioId` fica nulo, mas o nome fica).
+model RegistroExclusao {
+  id          String   @id @default(cuid())
+  tipo        String
+  descricao   String
+  usuarioId   String?
+  usuarioNome String
+  createdAt   DateTime @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
 }
 
 // Sessão de login. Guardar no banco (em vez de só assinar um token) é o que permite
@@ -356,8 +379,33 @@ model Configuracao {
   mostrarAssinatura     Boolean @default(true)
   validadeOrcamentoDias Int     @default(7)
 
+  // Reserva de lucro: quanto do lucro (MO + lucro em peça) sugerir guardar. Só indicação — não move dinheiro.
+  reservaLucroAtiva      Boolean @default(false)
+  reservaLucroPercentual Float   @default(10)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Notificação persistente, para lembrar de algo que sumiria do toast em poucos
+// segundos (Avisos.tsx) — aviso de armazenamento, futuros alertas de vencimento etc.
+//
+// Linha global, sem `usuarioId`: como `Configuracao`, é uma tabela pequena de uma
+// oficina só, e não vale a complexidade de leitura por usuário para 1-3 pessoas de
+// acesso. `publico` decide quem vê — dado financeiro sempre fica em "ADMIN".
+model Notificacao {
+  id        String    @id @default(cuid())
+  tipo      String // "ARMAZENAMENTO" | "SISTEMA" | ...
+  titulo    String
+  mensagem  String
+  link      String? // ex.: "/configuracoes"
+  lida      Boolean   @default(false)
+  lidaEm    DateTime?
+  publico   String    @default("ADMIN") // "ADMIN" | "TODOS"
+  createdAt DateTime  @default(now())
+
+  @@index([lida, createdAt])
+  @@index([publico, lida])
 }
 
 // ─── Controle de gastos ──────────────────────────────────────────────────────
@@ -394,23 +442,23 @@ model CategoriaDespesa {
 
 // periodicidade: MENSAL | BIMESTRAL | TRIMESTRAL | SEMESTRAL | ANUAL
 model DespesaRecorrente {
-  id          String  @id @default(cuid())
-  categoriaId String
-  descricao   String
+  id            String    @id @default(cuid())
+  categoriaId   String
+  descricao     String
   /// Valor previsto. O lançamento do mês pode ser pago por outro valor (energia).
-  valor       Float
-  fornecedor  String?
+  valor         Float
+  fornecedor    String?
   /// 1–31. Cai no último dia do mês quando o mês é mais curto.
   diaVencimento Int
-  periodicidade String  @default("MENSAL")
+  periodicidade String    @default("MENSAL")
   /// Competência (1º dia do mês) em que a regra passa a valer.
-  inicio      DateTime
+  inicio        DateTime
   /// Competência do último mês, ou null enquanto a conta não tiver fim previsto.
-  fim         DateTime?
-  ativa       Boolean @default(true)
-  observacao  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  fim           DateTime?
+  ativa         Boolean   @default(true)
+  observacao    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   categoria   CategoriaDespesa @relation(fields: [categoriaId], references: [id])
   lancamentos Despesa[]

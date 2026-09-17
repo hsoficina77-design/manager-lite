@@ -7,7 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { labelStatus, corStatus, ORIGENS, anoVeiculo } from "@/lib/constants";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDe, type VeiculoForm } from "@/components/VeiculoCampos";
-import { useEhDono } from "@/components/UsuarioProvider";
+import { usePodeFinanceiro, usePodeExcluir } from "@/components/UsuarioProvider";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Esqueleto, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
@@ -65,7 +65,8 @@ const inputCls = "w-full rounded-lg border border-linha-forte px-3 py-2 text-sm 
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const ehDono = useEhDono();
+  const podeFinanceiro = usePodeFinanceiro();
+  const podeExcluir = usePodeExcluir();
   const confirmar = useConfirmar();
   const avisar = useAvisar();
   const [cliente, setCliente] = useState<Cliente | null>(null);
@@ -280,9 +281,11 @@ export default function ClienteDetailPage() {
             <button onClick={() => setEditing(!editing)} className="rounded-lg border border-linha-forte bg-superficie px-3 py-1.5 text-sm font-medium text-tinta-2 hover:bg-superficie-2">
               {editing ? "Cancelar" : "Editar"}
             </button>
-            <button onClick={deleteCliente} className="rounded-lg border border-perigo-linha bg-superficie px-3 py-1.5 text-sm font-medium text-perigo hover:bg-perigo-fraco">
-              Excluir
-            </button>
+            {podeExcluir && (
+              <button onClick={deleteCliente} className="rounded-lg border border-perigo-linha bg-superficie px-3 py-1.5 text-sm font-medium text-perigo hover:bg-perigo-fraco">
+                Excluir
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -298,7 +301,7 @@ export default function ClienteDetailPage() {
           <>
             <FaixaMetricas colunas={4}>
               <Metrica rotulo="Total faturado" valor={formatCurrency(stats.totalFaturado)} />
-              {ehDono && (
+              {podeFinanceiro && (
                 <Metrica
                   rotulo="Lucro bruto"
                   valor={formatCurrency(stats.lucroTotal ?? 0)}
@@ -529,7 +532,9 @@ export default function ClienteDetailPage() {
                   <CopiarVeiculo veiculo={v} label="Copiar" />
                   <button onClick={() => abrirEdicaoVeiculo(v)} className="text-sm text-brand-600 hover:underline">Editar</button>
                   <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-brand-600 hover:underline">Nova OS</Link>
-                  <button onClick={() => deleteVeiculo(v)} className="text-sm text-perigo hover:underline">Excluir</button>
+                  {podeExcluir && (
+                    <button onClick={() => deleteVeiculo(v)} className="text-sm text-perigo hover:underline">Excluir</button>
+                  )}
                 </div>
               </div>
             ))}
