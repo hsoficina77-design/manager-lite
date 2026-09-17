@@ -217,18 +217,25 @@ model PagamentoOS {
   @@index([ordemId])
 }
 
+// Uma dívida avulsa pode não ter cliente cadastrado: clienteId fica nulo e
+// devedorNome guarda o nome digitado na hora — mesma ideia do rascunho do
+// orçamento (ver Orcamento.clienteNome). Quem quiser cobrar por WhatsApp depois
+// precisa cadastrar o cliente; aqui só se registra a dívida em si.
 model DividaAvulsa {
-  id        Int      @id @default(autoincrement())
-  clienteId String
-  descricao String
-  valor     Float
-  valorPago Float    @default(0)
-  pago      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  clienteId   String?
+  devedorNome String?
+  descricao   String
+  valor       Float
+  valorPago   Float    @default(0)
+  pago        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  cliente    Cliente          @relation(fields: [clienteId], references: [id])
+  cliente    Cliente?          @relation(fields: [clienteId], references: [id])
   pagamentos PagamentoDivida[]
+
+  @@index([clienteId])
 }
 
 model PagamentoDivida {

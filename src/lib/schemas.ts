@@ -237,11 +237,19 @@ export const metaAtualizarSchema = z.object({
 
 // ── Dívida avulsa ───────────────────────────────────────────────────────────
 
-export const dividaCriarSchema = z.object({
-  clienteId: id("Cliente"),
-  descricao: obrigatorio("Descrição", LIMITES.descricao),
-  valor: dinheiroPositivo("Valor"),
-});
+// Sem cliente cadastrado, devedorNome é quem identifica a dívida — mesma ideia
+// do rascunho do orçamento (ver orcamentoCampos.clienteNome).
+export const dividaCriarSchema = z
+  .object({
+    clienteId: idNulavel("Cliente").optional(),
+    devedorNome: nulavel("Nome do devedor", LIMITES.nome).optional(),
+    descricao: obrigatorio("Descrição", LIMITES.descricao),
+    valor: dinheiroPositivo("Valor"),
+  })
+  .refine((d) => d.clienteId || d.devedorNome?.trim(), {
+    message: "Selecione um cliente cadastrado ou escreva o nome do devedor",
+    path: ["devedorNome"],
+  });
 
 export const dividaAtualizarSchema = z.object({
   descricao: obrigatorio("Descrição", LIMITES.descricao).optional(),

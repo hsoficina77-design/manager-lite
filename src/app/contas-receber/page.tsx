@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn, formatCurrency, formatDate, formatDatetime } from "@/lib/utils";
 import { FORMAS_PAGAMENTO, labelFormaPagamento, labelStatus } from "@/lib/constants";
 import { Botao } from "@/components/ui/Botao";
+import ClienteSelect from "@/components/ClienteSelect";
 import { CampoDinheiro, Entrada, Selecao } from "@/components/ui/Campos";
 import { Modal } from "@/components/ui/Modal";
 import { EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
@@ -39,7 +40,8 @@ type DividaAvulsa = {
 };
 type VeiculoInfo = { marca: string; modelo: string; placa: string | null };
 type ClienteDevedor = {
-  id: string; nome: string; apelido: string | null; telefone: string | null;
+  // Vazio quando é um devedor avulso, sem cadastro de cliente — ver `id` da API.
+  id: string; clienteId: string | null; nome: string; apelido: string | null; telefone: string | null;
   veiculos: VeiculoInfo[];
   ordens: OSPendente[];
   dividasAvulsas: DividaAvulsa[];
@@ -82,7 +84,7 @@ function whatsappLink(telefone: string, nome: string, saldo: number) {
 export default function ContasReceberPage() {
   const [clientes, setClientes] = useState<ClienteDevedor[]>([]);
   const [resumo, setResumo] = useState<Resumo>(RESUMO_VAZIO);
-  const [allClientes, setAllClientes] = useState<{ id: string; nome: string }[]>([]);
+  const [allClientes, setAllClientes] = useState<{ id: string; nome: string; telefone: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [faixaFiltro, setFaixaFiltro] = useState<Faixa | null>(null);
@@ -92,7 +94,7 @@ export default function ContasReceberPage() {
   const [novaDividaModal, setNovaDividaModal] = useState(false);
   const [pgtoForm, setPgtoForm] = useState({ valor: "", formaPagamento: "DINHEIRO", obs: "" });
   const [savingPgto, setSavingPgto] = useState(false);
-  const [novaDividaForm, setNovaDividaForm] = useState({ clienteId: "", descricao: "", valor: "" });
+  const [novaDividaForm, setNovaDividaForm] = useState({ clienteId: "", devedorNome: "", descricao: "", valor: "" });
   const [savingDivida, setSavingDivida] = useState(false);
   const [estornandoId, setEstornandoId] = useState<string | number | null>(null);
 
@@ -121,7 +123,7 @@ export default function ContasReceberPage() {
   useEffect(() => {
     fetch("/api/clientes")
       .then((r) => (r.ok ? r.json() : []))
-      .then((data: { id: string; nome: string }[]) => setAllClientes(data))
+      .then((data: { id: string; nome: string; telefone: string | null }[]) => setAllClientes(data))
       .catch(() => setAllClientes([]));
   }, []);
 
@@ -252,7 +254,7 @@ export default function ContasReceberPage() {
         return;
       }
       setNovaDividaModal(false);
-      setNovaDividaForm({ clienteId: "", descricao: "", valor: "" });
+      setNovaDividaForm({ clienteId: "", devedorNome: "", descricao: "", valor: "" });
       avisar("Dívida avulsa criada.");
       load();
     } catch {
@@ -406,15 +408,27 @@ export default function ContasReceberPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/clientes/${c.id}`}
-                          className="font-semibold text-tinta hover:underline"
-                        >
-                          {c.nome}
-                        </Link>
+                        {c.clienteId ? (
+                          <Link
+                            href={`/clientes/${c.clienteId}`}
+                            className="font-semibold text-tinta hover:underline"
+                          >
+                            {c.nome}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-tinta">{c.nome}</span>
+                        )}
                         {c.apelido && (
                           <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-2">
                             {c.apelido}
+                          </span>
+                        )}
+                        {!c.clienteId && (
+                          <span
+                            className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-2"
+                            title="Dívida avulsa sem cadastro de cliente"
+                          >
+                            Sem cadastro
                           </span>
                         )}
                         <span className={`idade idade-${FAIXA_NIVEL[c.faixa]}`}>
@@ -702,23 +716,32 @@ export default function ContasReceberPage() {
           <form id="form-divida" onSubmit={submitNovaDivida} className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="divida-cliente">
-                Cliente <span className="text-perigo">*</span>
+                Cliente
               </label>
-              <Selecao
-                id="divida-cliente"
+              <ClienteSelect
+                clientes={allClientes}
                 value={novaDividaForm.clienteId}
-                onChange={(e) => setNovaDividaForm({ ...novaDividaForm, clienteId: e.target.value })}
-                required
-                data-foco-inicial
-              >
-                <option value="">Selecionar...</option>
-                {allClientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-              </Selecao>
+                onChange={(id) => setNovaDividaForm({ ...novaDividaForm, clienteId: id })}
+                emptyLabel="Sem cadastro — anotar só o nome"
+              />
             </div>
+
+            {!novaDividaForm.clienteId && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="divida-devedor">
+                  Nome do devedor <span className="text-perigo">*</span>
+                </label>
+                <Entrada
+                  id="divida-devedor"
+                  value={novaDividaForm.devedorNome}
+                  onChange={(e) => setNovaDividaForm({ ...novaDividaForm, devedorNome: e.target.value })}
+                  placeholder="Ex: Nilcio do Fusca azul"
+                  required
+                  data-foco-inicial
+                />
+              </div>
+            )}
+
             <div>
               <label className="mb-1 block text-xs font-medium text-tinta-2" htmlFor="divida-desc">
                 Descrição <span className="text-perigo">*</span>

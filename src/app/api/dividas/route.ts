@@ -14,10 +14,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { clienteId, descricao, valor } = await lerJson(request, dividaCriarSchema);
+    const { clienteId, devedorNome, descricao, valor } = await lerJson(request, dividaCriarSchema);
 
     const divida = await prisma.dividaAvulsa.create({
-      data: { clienteId, descricao, valor },
+      // Um dos dois identifica o devedor — o refine do schema já garante que ao
+      // menos um veio preenchido.
+      data: {
+        clienteId: clienteId ?? null,
+        devedorNome: clienteId ? null : (devedorNome ?? null),
+        descricao,
+        valor,
+      },
     });
 
     return NextResponse.json(divida, { status: 201 });

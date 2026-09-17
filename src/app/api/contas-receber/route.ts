@@ -25,7 +25,7 @@ export async function GET() {
     prisma.dividaAvulsa.findMany({
       where: { pago: false },
       select: {
-        id: true, descricao: true, valor: true, valorPago: true, createdAt: true,
+        id: true, descricao: true, valor: true, valorPago: true, createdAt: true, devedorNome: true,
         cliente: { select: { id: true, nome: true, apelido: true, telefone: true } },
       },
       orderBy: { createdAt: "asc" },
@@ -36,7 +36,10 @@ export async function GET() {
   type OSPendente = { id: string; numero: number; status: string; total: number; valorPago: number; abertura: Date; veiculo: Veiculo };
   type DividaAvulsa = { id: number; descricao: string; valor: number; valorPago: number; createdAt: Date };
   type ClienteDevedor = {
-    id: string; nome: string; apelido: string | null; telefone: string | null;
+    // Cliente cadastrado: o próprio id. Devedor avulso (sem cadastro): uma chave
+    // sintética por nome, para juntar dívidas repetidas para a mesma pessoa sem
+    // criar um cliente de verdade. `clienteId` distingue os dois casos na tela.
+    id: string; clienteId: string | null; nome: string; apelido: string | null; telefone: string | null;
     veiculos: Veiculo[];
     ordens: OSPendente[];
     dividasAvulsas: DividaAvulsa[];
@@ -53,7 +56,7 @@ export async function GET() {
     const c = os.cliente;
     if (!map.has(c.id)) {
       map.set(c.id, {
-        id: c.id, nome: c.nome, apelido: c.apelido, telefone: c.telefone,
+        id: c.id, clienteId: c.id, nome: c.nome, apelido: c.apelido, telefone: c.telefone,
         veiculos: [], ordens: [], dividasAvulsas: [], totalSaldo: 0, diasEmAberto: 0, faixa: "0-15",
       });
     }
@@ -70,13 +73,18 @@ export async function GET() {
     const saldo = div.valor - div.valorPago;
     if (saldo <= 0) continue;
     const c = div.cliente;
-    if (!map.has(c.id)) {
-      map.set(c.id, {
-        id: c.id, nome: c.nome, apelido: c.apelido, telefone: c.telefone,
+    // Sem cliente cadastrado, agrupa pelo nome digitado — mesmo nome junta na
+    // mesma linha, sem misturar com um cliente cadastrado de nome parecido.
+    const key = c ? c.id : `avulso:${(div.devedorNome ?? "").trim().toLowerCase()}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        id: key, clienteId: c?.id ?? null,
+        nome: c?.nome ?? div.devedorNome ?? "Sem nome",
+        apelido: c?.apelido ?? null, telefone: c?.telefone ?? null,
         veiculos: [], ordens: [], dividasAvulsas: [], totalSaldo: 0, diasEmAberto: 0, faixa: "0-15",
       });
     }
-    const entry = map.get(c.id)!;
+    const entry = map.get(key)!;
     entry.dividasAvulsas.push(div);
     entry.totalSaldo += saldo;
   }

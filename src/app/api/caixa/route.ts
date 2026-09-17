@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     }),
     prisma.pagamentoDivida.findMany({
       where: { data: { gte: inicio, lt: fim } },
-      include: { divida: { select: { descricao: true, cliente: { select: { nome: true } } } } },
+      include: { divida: { select: { descricao: true, devedorNome: true, cliente: { select: { nome: true } } } } },
       orderBy: { data: "desc" },
     }),
   ]);
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       data: p.data,
       obs: p.obs,
       referencia: p.divida.descricao,
-      cliente: p.divida.cliente.nome,
+      cliente: p.divida.cliente?.nome ?? p.divida.devedorNome ?? "Sem nome",
       link: null as string | null,
     })),
   ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());

@@ -103,7 +103,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
   const agora = new Date();
   const hoje = janelaHoje(agora);
 
-  const [patio, entreguesHoje, devedoresOS, dividasAvulsas] = await Promise.all([
+  const [patio, entreguesHoje, devedoresOS, dividasDeCliente, dividasAvulsas] = await Promise.all([
     prisma.ordemServico.findMany({
       where: osNoPatio,
       include: INCLUDE_LISTA,
@@ -121,9 +121,17 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma as any).dividaAvulsa.groupBy({
       by: ["clienteId"],
-      where: { pago: false },
+      where: { pago: false, clienteId: { not: null } },
       _sum: { valor: true, valorPago: true },
     }) as Promise<{ clienteId: string; _sum: { valor: number; valorPago: number } }[]>,
+    // Dívida avulsa sem cliente cadastrado: agrupa pelo nome digitado, não dá
+    // para juntar por clienteId porque não existe.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma as any).dividaAvulsa.groupBy({
+      by: ["devedorNome"],
+      where: { pago: false, clienteId: null },
+      _sum: { valor: true, valorPago: true },
+    }) as Promise<{ devedorNome: string | null; _sum: { valor: number; valorPago: number } }[]>,
   ]);
 
   const emServico = patio.filter((o) => o.status !== "AGUARDANDO_PECA").length;
@@ -145,6 +153,7 @@ async function Operacao({ ehDono }: { ehDono: boolean }) {
 
   const { total: totalAReceber, quantidade: devedoresCount, top5 } = await resumoDevedores(
     devedoresOS,
+    dividasDeCliente,
     dividasAvulsas
   );
 
@@ -449,7 +458,8 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
 // período: uma dívida não deixa de existir por ter sido aberta fora do período.
 async function resumoDevedores(
   devedoresOS: { clienteId: string; _sum: { total: number | null; valorPago: number | null } }[],
-  dividas: { clienteId: string; _sum: { valor: number | null; valorPago: number | null } }[]
+  dividasDeCliente: { clienteId: string; _sum: { valor: number | null; valorPago: number | null } }[],
+  dividasAvulsas: { devedorNome: string | null; _sum: { valor: number | null; valorPago: number | null } }[]
 ) {
   const saldoPorCliente = new Map<string, number>();
   const somar = (clienteId: string, saldo: number) => {
@@ -457,24 +467,44 @@ async function resumoDevedores(
   };
 
   for (const row of devedoresOS) somar(row.clienteId, (row._sum.total ?? 0) - (row._sum.valorPago ?? 0));
-  for (const row of dividas) somar(row.clienteId, (row._sum.valor ?? 0) - (row._sum.valorPago ?? 0));
+  for (const row of dividasDeCliente) somar(row.clienteId, (row._sum.valor ?? 0) - (row._sum.valorPago ?? 0));
 
-  const total = [...saldoPorCliente.values()].reduce((s, v) => s + v, 0);
-  const ids = [...saldoPorCliente.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([id]) => id);
+  // Dívida avulsa sem cliente cadastrado: mesma conta, mas pelo nome digitado —
+  // não há linha em Cliente para juntar.
+  const saldoPorAvulso = new Map<string, number>();
+  for (const row of dividasAvulsas) {
+    const saldo = (row._sum.valor ?? 0) - (row._sum.valorPago ?? 0);
+    if (saldo <= 0) continue;
+    const nome = row.devedorNome?.trim() || "Sem nome";
+    saldoPorAvulso.set(nome, (saldoPorAvulso.get(nome) ?? 0) + saldo);
+  }
 
+  const total =
+    [...saldoPorCliente.values()].reduce((s, v) => s + v, 0) +
+    [...saldoPorAvulso.values()].reduce((s, v) => s + v, 0);
+  const quantidade = saldoPorCliente.size + saldoPorAvulso.size;
+
+  // Ranking unificado antes de buscar nome: um avulso grande não pode empurrar
+  // um cliente cadastrado para fora do top 5 só por vir de uma fonte diferente.
+  const candidatos = [
+    ...[...saldoPorCliente.entries()].map(([clienteId, saldo]) => ({ clienteId, nome: null as string | null, saldo })),
+    ...[...saldoPorAvulso.entries()].map(([nome, saldo]) => ({ clienteId: null as string | null, nome, saldo })),
+  ]
+    .sort((a, b) => b.saldo - a.saldo)
+    .slice(0, 5);
+
+  const ids = candidatos.filter((c) => c.clienteId).map((c) => c.clienteId!);
   const clientes =
     ids.length > 0
       ? await prisma.cliente.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } })
       : [];
+  const nomePorId = new Map(clientes.map((c) => [c.id, c.nome]));
 
-  const top5 = clientes
-    .map((c) => ({ nome: c.nome, saldo: saldoPorCliente.get(c.id) ?? 0 }))
+  const top5 = candidatos
+    .map((c) => ({ nome: c.clienteId ? (nomePorId.get(c.clienteId) ?? "") : c.nome!, saldo: c.saldo }))
     .sort((a, b) => b.saldo - a.saldo);
 
-  return { total, quantidade: saldoPorCliente.size, top5 };
+  return { total, quantidade, top5 };
 }
 
 // Sem base de comparação (período anterior zerado) não há percentual honesto a mostrar.
