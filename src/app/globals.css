@@ -22,6 +22,12 @@
 
 @layer base {
   :root {
+    /* Sem isto, o navegador não sabe que a página tem tema escuro próprio e
+       tenta adivinhar — no Chrome/Android isso repinta o fundo e a borda dos
+       campos de formulário com a paleta dele, por cima das cores daqui,
+       deixando fundo quase branco com letra cinza-clara ilegível. */
+    color-scheme: light;
+
     /* --- identidade padrão (vermelho + menu preto) ------------------------ */
     --brand-50: 254 241 241;
     --brand-100: 252 227 227;
@@ -118,6 +124,8 @@
      escolhido claro explicitamente. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-tema="claro"]) {
+      color-scheme: dark;
+
       --fundo: 14 19 23;
       --superficie: 22 29 36;
       --superficie-2: 28 36 44;
@@ -178,6 +186,8 @@
 
   /* Escolha explícita do usuário vence os dois lados. */
   :root[data-tema="escuro"] {
+    color-scheme: dark;
+
     --fundo: 14 19 23;
     --superficie: 22 29 36;
     --superficie-2: 28 36 44;
@@ -268,6 +278,24 @@
     select,
     textarea {
       font-size: 16px;
+    }
+
+    /* Alvo de toque de 44 px, a mesma régua que o botão do sistema segue.
+       Os campos ficavam em torno de 38 px — abaixo do confortável justamente
+       nos formulários preenchidos em pé, com o celular numa das mãos.
+       Vale aqui, e não na classe base de `Campos.tsx`, porque vinte campos
+       espalhados pelos formulários de OS, orçamento, cliente e gastos
+       desenham as próprias classes sem passar por aquele arquivo; o piso
+       alcança todos. `:where()` mantém especificidade zero, então qualquer
+       utilitário do Tailwind ainda vence quando o campo precisa ser outro.
+       Cor e arquivo ficam de fora: não são caixas de digitar, e esticá-los
+       deformaria a amostra de cor do painel de configurações. */
+    :where(
+      input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="color"]):not([type="file"]),
+      select,
+      textarea
+    ) {
+      min-height: 2.75rem;
     }
   }
 

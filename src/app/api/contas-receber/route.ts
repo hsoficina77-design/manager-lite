@@ -19,6 +19,11 @@ export async function GET() {
         id: true, numero: true, status: true, total: true, valorPago: true, abertura: true,
         veiculo: { select: { marca: true, modelo: true, placa: true } },
         cliente: { select: { id: true, nome: true, apelido: true, telefone: true } },
+        // Para o botão "Baixar comprovante" direto na lista, sem precisar abrir a OS.
+        pagamentos: {
+          select: { id: true, valor: true, formaPagamento: true, data: true, obs: true },
+          orderBy: { data: "desc" },
+        },
       },
       orderBy: { abertura: "asc" },
     }),
@@ -27,14 +32,19 @@ export async function GET() {
       select: {
         id: true, descricao: true, valor: true, valorPago: true, createdAt: true, devedorNome: true,
         cliente: { select: { id: true, nome: true, apelido: true, telefone: true } },
+        pagamentos: {
+          select: { id: true, valor: true, formaPagamento: true, data: true, obs: true },
+          orderBy: { data: "desc" },
+        },
       },
       orderBy: { createdAt: "asc" },
     }),
   ]);
 
   type Veiculo = { marca: string; modelo: string; placa: string | null };
-  type OSPendente = { id: string; numero: number; status: string; total: number; valorPago: number; abertura: Date; veiculo: Veiculo };
-  type DividaAvulsa = { id: number; descricao: string; valor: number; valorPago: number; createdAt: Date };
+  type Pagamento = { id: string | number; valor: number; formaPagamento: string; data: Date; obs: string | null };
+  type OSPendente = { id: string; numero: number; status: string; total: number; valorPago: number; abertura: Date; veiculo: Veiculo; pagamentos: Pagamento[] };
+  type DividaAvulsa = { id: number; descricao: string; valor: number; valorPago: number; createdAt: Date; pagamentos: Pagamento[] };
   type ClienteDevedor = {
     // Cliente cadastrado: o próprio id. Devedor avulso (sem cadastro): uma chave
     // sintética por nome, para juntar dívidas repetidas para a mesma pessoa sem

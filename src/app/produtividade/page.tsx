@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatCurrency, cn } from "@/lib/utils";
 import { labelStatus, OS_EM_ABERTO } from "@/lib/constants";
-import { Selecao } from "@/components/ui/Campos";
+import { janela, type PeriodoKey } from "@/lib/periodo";
 import { EsqueletoFaixa, EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
 import { BotaoLink } from "@/components/ui/Botao";
-import { SetaDireita } from "@/components/ui/Icones";
+import { Avancar, SetaDireita, Voltar } from "@/components/ui/Icones";
 
 type Linha = {
   mecanicoId: string;
@@ -32,9 +32,17 @@ type Oficina = {
 type EvolucaoItem = { ano: number; mes: number; faturamento: number; lucroReal: number };
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-// O pátio é sempre o de agora, não o do mês selecionado: OS em aberto não tem data de
-// entrega, então não pertence a mês nenhum.
+// O pátio é sempre o de agora, não o do período selecionado: OS em aberto não tem data
+// de entrega, então não pertence a período nenhum.
 const PATIO_STATUS = OS_EM_ABERTO;
+
+// Período próprio da Produtividade — "semana" e "trimestre" do Dashboard não fazem
+// sentido aqui (produtividade de mecânico se lê melhor em mês, semestre ou ano).
+const PERIODOS_PRODUTIVIDADE: { value: PeriodoKey; label: string }[] = [
+  { value: "mes", label: "Mês" },
+  { value: "semestre", label: "Semestre" },
+  { value: "ano", label: "Ano" },
+];
 
 function fmtPct(v: number | null): string {
   return v === null ? "—" : `${v.toFixed(0)}%`;
@@ -47,9 +55,8 @@ function fmtNps(v: number | null): string {
 }
 
 export default function ProdutividadePage() {
-  const now = new Date();
-  const [ano, setAno] = useState(now.getFullYear());
-  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [periodo, setPeriodo] = useState<PeriodoKey>("mes");
+  const [offset, setOffset] = useState(0);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [oficina, setOficina] = useState<Oficina | null>(null);
   const [evolucaoMensal, setEvolucaoMensal] = useState<EvolucaoItem[]>([]);
@@ -57,7 +64,7 @@ export default function ProdutividadePage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/produtividade?ano=${ano}&mes=${mes}`)
+    fetch(`/api/produtividade?periodo=${periodo}&offset=${offset}`)
       .then((r) => r.json())
       .then((d) => {
         setLinhas(d.mecanicos ?? []);
@@ -65,24 +72,69 @@ export default function ProdutividadePage() {
         setEvolucaoMensal(d.evolucaoMensal ?? []);
       })
       .finally(() => setLoading(false));
-  }, [ano, mes]);
+  }, [periodo, offset]);
 
-  const anos = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
+  // Trocar de período volta pro atual: "6 meses atrás" de um semestre não equivale a
+  // "6 meses atrás" de um mês, e manter o offset confundiria — igual ao Dashboard.
+  function mudarPeriodo(p: PeriodoKey) {
+    setPeriodo(p);
+    setOffset(0);
+  }
+
+  const j = janela(periodo, offset);
+  const podeAvancar = offset < 0;
 
   // Maior faturamento primeiro
   const ordenadas = [...linhas].sort((a, b) => b.faturamento - a.faturamento);
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl sm:text-2xl font-bold text-tinta">Produtividade</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-tinta">Produtividade</h1>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <Selecao value={mes} onChange={(e) => setMes(Number(e.target.value))} aria-label="Mês" className="w-auto">
-            {MESES.map((nome, i) => <option key={i} value={i + 1}>{nome}</option>)}
-          </Selecao>
-          <Selecao value={ano} onChange={(e) => setAno(Number(e.target.value))} aria-label="Ano" className="w-auto">
-            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
-          </Selecao>
+          <button
+            type="button"
+            onClick={() => setOffset((o) => o - 1)}
+            aria-label="Período anterior"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie text-tinta-2 hover:bg-superficie-2 sm:h-9 sm:w-9"
+          >
+            <Voltar tamanho={16} />
+          </button>
+          <span className="min-w-36 text-center text-sm font-semibold text-tinta">{j.label}</span>
+          {podeAvancar ? (
+            <button
+              type="button"
+              onClick={() => setOffset((o) => o + 1)}
+              aria-label="Próximo período"
+              className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie text-tinta-2 hover:bg-superficie-2 sm:h-9 sm:w-9"
+            >
+              <Avancar tamanho={16} />
+            </button>
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 items-center justify-center rounded-lg border border-linha bg-superficie-2 text-tinta-3 opacity-50 sm:h-9 sm:w-9"
+            >
+              <Avancar tamanho={16} />
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-1 rounded-lg bg-superficie-3 p-1">
+          {PERIODOS_PRODUTIVIDADE.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => mudarPeriodo(opt.value)}
+              className={cn(
+                "shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                periodo === opt.value ? "bg-superficie text-tinta shadow-sm" : "text-tinta-3 hover:text-tinta-2"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -99,7 +151,7 @@ export default function ProdutividadePage() {
             <Metrica rotulo="Lucro real" valor={formatCurrency(oficina.lucroReal)} tom="ok" />
             <Metrica rotulo="Margem" valor={fmtPct(oficina.margem)} />
             <Metrica rotulo="Mão de obra" valor={formatCurrency(oficina.maoDeObra)} />
-            <Metrica rotulo="OS entregues no mês" valor={String(oficina.nOS)} />
+            <Metrica rotulo="OS entregues no período" valor={String(oficina.nOS)} />
             <Metrica rotulo="NPS médio" valor={fmtNps(oficina.npsMedio)} />
             <Metrica rotulo="Tempo médio de execução" valor={fmtDias(oficina.tempoMedioDias)} />
           </FaixaMetricas>
@@ -146,7 +198,7 @@ export default function ProdutividadePage() {
                   {l.progresso !== null ? (
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-tinta-3">
-                        <span>Meta: {formatCurrency(l.meta)}</span>
+                        <span>Meta de lucro: {formatCurrency(l.meta)}</span>
                         <span className={cn("font-semibold", l.progresso >= 100 ? "text-ok" : "text-tinta-2")}>{l.progresso.toFixed(0)}%</span>
                       </div>
                       <div className="h-2.5 w-full rounded-full bg-superficie-3 overflow-hidden">
@@ -183,7 +235,7 @@ function EvolucaoChart({ dados }: { dados: EvolucaoItem[] }) {
   return (
     <div className="rounded-xl border border-linha bg-superficie p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h2 className="font-semibold text-tinta">Evolução — últimos 6 meses</h2>
+        <h2 className="font-semibold text-tinta">Evolução mensal</h2>
         <div className="flex items-center gap-3 text-xs text-tinta-3">
           <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-tinta-3" /> Faturamento</span>
           <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-ok" /> Lucro real</span>
@@ -223,7 +275,7 @@ function Patio({ patio }: { patio: Record<string, number> }) {
     <div className="rounded-xl border border-linha bg-superficie p-5 space-y-2.5">
       <div className="mb-1">
         <h2 className="font-semibold text-tinta">Pátio agora</h2>
-        <p className="text-xs text-tinta-3">Estado atual, independente do mês selecionado</p>
+        <p className="text-xs text-tinta-3">Estado atual, independente do período selecionado</p>
       </div>
       {PATIO_STATUS.map((s) => {
         const n = patio[s] ?? 0;

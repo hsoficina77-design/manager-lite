@@ -32,7 +32,19 @@ function tempoRelativo(iso: string): string {
   return `há ${d}d`;
 }
 
-export function NotificacaoSino({ papel, className }: { papel: Papel; className?: string }) {
+export function NotificacaoSino({
+  papel,
+  className,
+  painelDesktop = "direita",
+}: {
+  papel: Papel;
+  className?: string;
+  /** De que lado do sino a borda do painel (320px) fica presa, a partir de `sm:`.
+   * O menu lateral fixa o sino perto da borda esquerda da tela — presa à direita
+   * (o padrão, certo para o cabeçalho mobile, que fica perto da borda direita)
+   * o painel estoura para fora da viewport pela esquerda. */
+  painelDesktop?: "esquerda" | "direita";
+}) {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
   const [aberto, setAberto] = useState(false);
@@ -180,7 +192,10 @@ export function NotificacaoSino({ papel, className }: { papel: Papel; className?
         <div
           ref={painelRef}
           role="menu"
-          className="fixed inset-x-4 top-16 z-50 max-h-[70vh] overflow-y-auto rounded-xl border border-linha bg-superficie shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80"
+          className={cn(
+            "fixed inset-x-4 top-16 z-50 max-h-[70vh] overflow-y-auto rounded-xl border border-linha bg-superficie shadow-xl sm:absolute sm:inset-x-auto sm:top-auto sm:mt-2 sm:w-80",
+            painelDesktop === "esquerda" ? "sm:left-0" : "sm:right-0"
+          )}
         >
           {cabecalho}
           {lista}

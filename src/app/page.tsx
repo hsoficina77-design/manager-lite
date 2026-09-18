@@ -246,9 +246,14 @@ async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
         </Painel>
       )}
 
-      {/* O único número com data nesta aba: o realizado do dia. */}
+      {/* O único número com data nesta aba: o realizado do dia.
+          Em grade, e não em `flex-wrap`: com quatro números e duas colunas de
+          celular, a fileira quebrava onde a largura de cada rótulo mandasse —
+          "Lucro" nascia embaixo de "Entregue hoje" numa tela e ao lado dele na
+          seguinte, e nenhum número ficava alinhado com o de cima. */}
       <div className="rounded-xl border border-linha bg-superficie-2 p-4">
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-tinta-3">Hoje</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Metrica rotulo="Entregue hoje" valor={`${hojeResumo.n} OS`} />
           {podeVerFinanceiro && (
             <>
@@ -296,6 +301,9 @@ async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
             patio
             agora={agora}
             mostrarLucro={podeVerFinanceiro}
+            limite={8}
+            verTodasHref="/os?status=patio"
+            verTodasLabel="Ver o pátio inteiro"
           />
         </div>
       </div>
@@ -487,6 +495,9 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
             </BotaoLink>
           }
           agora={agora}
+          limite={10}
+          verTodasHref="/os?status=entregues"
+          verTodasLabel="Ver todas as entregues"
         />
       </div>
     </>
@@ -651,6 +662,9 @@ function ListaOS({
   patio,
   agora,
   mostrarLucro = true,
+  limite,
+  verTodasHref,
+  verTodasLabel = "Ver todas",
 }: {
   ordens: OSLista[];
   vazio: string;
@@ -660,14 +674,25 @@ function ListaOS({
   agora: Date;
   /** Lucro e margem por OS são coisa de dono. */
   mostrarLucro?: boolean;
+  /** Quantas linhas cabem no dashboard antes de virar rolagem. */
+  limite?: number;
+  verTodasHref?: string;
+  verTodasLabel?: string;
 }) {
   if (ordens.length === 0) {
     return <Vazio titulo={vazio} texto={vazioTexto} acao={vazioAcao} compacto />;
   }
 
+  // O dashboard é um resumo, não a tela de listagem. Sem corte ele imprimia uma
+  // linha por OS: numa oficina com trinta carros no pátio, o card de devedores e
+  // o botão de Nova OS ficavam a trinta linhas de rolagem no celular, e a lista
+  // deixava de ser "o que está parado há mais tempo" para virar o /os inteiro.
+  const visiveis = limite ? ordens.slice(0, limite) : ordens;
+  const restantes = ordens.length - visiveis.length;
+
   return (
     <div className="overflow-hidden rounded-xl border border-linha bg-superficie divide-y divide-linha">
-      {ordens.map((os) => {
+      {visiveis.map((os) => {
         const dias = diasParado(os.abertura, agora);
         const margem = margemOS(os);
         const lucroTitulo = patio
@@ -738,6 +763,15 @@ function ListaOS({
           </Link>
         );
       })}
+
+      {restantes > 0 && verTodasHref && (
+        <Link
+          href={verTodasHref}
+          className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-600 transition-colors hover:bg-superficie-2"
+        >
+          {verTodasLabel} · mais {restantes} <SetaDireita tamanho={14} />
+        </Link>
+      )}
     </div>
   );
 }

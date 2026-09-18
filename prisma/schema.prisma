@@ -119,7 +119,7 @@ model Mecanico {
   metas  Meta[]
 }
 
-// Meta de faturamento total por mecânico, por mês.
+// Meta de lucro real por mecânico, por mês.
 model Meta {
   id         String   @id @default(cuid())
   mecanicoId String

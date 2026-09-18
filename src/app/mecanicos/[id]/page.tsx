@@ -91,7 +91,7 @@ export default function MecanicoDetailPage() {
   const ticketMedio = nOS > 0 ? faturamento / nOS : 0;
 
   const metaAtual = mecanico?.metas.find((m) => m.ano === ano && m.mes === mes);
-  const progresso = metaAtual && metaAtual.valorAlvo > 0 ? (faturamento / metaAtual.valorAlvo) * 100 : null;
+  const progresso = metaAtual && metaAtual.valorAlvo > 0 ? (lucroReal / metaAtual.valorAlvo) * 100 : null;
 
   useEffect(() => {
     setMetaInput(metaAtual ? String(metaAtual.valorAlvo) : "");
@@ -237,7 +237,7 @@ export default function MecanicoDetailPage() {
       {/* Meta do mês */}
       <div className="bg-superficie rounded-xl border border-linha p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-tinta">Meta de faturamento · {MESES[mes - 1]}/{ano}</h2>
+          <h2 className="font-semibold text-tinta">Meta de lucro · {MESES[mes - 1]}/{ano}</h2>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex-1 min-w-40">
@@ -251,7 +251,7 @@ export default function MecanicoDetailPage() {
         {progresso !== null && metaAtual && (
           <div className="space-y-1">
             <div className="flex justify-between text-sm text-tinta-2">
-              <span>{formatCurrency(faturamento)} de {formatCurrency(metaAtual.valorAlvo)}</span>
+              <span>{formatCurrency(lucroReal)} de {formatCurrency(metaAtual.valorAlvo)}</span>
               <span className={cn("font-semibold", progresso >= 100 ? "text-ok" : "text-tinta-2")}>{progresso.toFixed(0)}%</span>
             </div>
             <div className="h-3 w-full rounded-full bg-superficie-3 overflow-hidden">

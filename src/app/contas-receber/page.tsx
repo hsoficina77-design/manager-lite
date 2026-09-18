@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Alerta, Mais } from "@/components/ui/Icones";
+import BaixarComprovante from "@/components/BaixarComprovante";
 
 type Faixa = "0-15" | "16-30" | "31-60" | "60+";
 
@@ -34,9 +35,11 @@ const FAIXAS: Faixa[] = ["0-15", "16-30", "31-60", "60+"];
 type OSPendente = {
   id: string; numero: number; status: string; total: number; valorPago: number; abertura: string;
   veiculo: { marca: string; modelo: string; placa: string | null };
+  pagamentos: Pagamento[];
 };
 type DividaAvulsa = {
   id: number; descricao: string; valor: number; valorPago: number; createdAt: string;
+  pagamentos: Pagamento[];
 };
 type VeiculoInfo = { marca: string; modelo: string; placa: string | null };
 type ClienteDevedor = {
@@ -71,14 +74,6 @@ function csvEscape(v: string) {
     return `"${v.replace(/"/g, '""')}"`;
   }
   return v;
-}
-
-function whatsappLink(telefone: string, nome: string, saldo: number) {
-  const digits = telefone.replace(/\D/g, "");
-  const numero = digits.startsWith("55") ? digits : `55${digits}`;
-  const primeiroNome = nome.trim().split(/\s+/)[0];
-  const msg = `Olá ${primeiroNome}, tudo bem? Aqui é da oficina. Identificamos um saldo em aberto de ${formatCurrency(saldo)}. Poderia verificar a possibilidade de acerto? Qualquer dúvida, estou à disposição!`;
-  return `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`;
 }
 
 export default function ContasReceberPage() {
@@ -452,23 +447,11 @@ export default function ContasReceberPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    <div className="text-left sm:text-right">
-                      <p className="text-xs text-tinta-3">Total em aberto</p>
-                      <p className="font-bold tabular-nums text-perigo">
-                        {formatCurrency(c.totalSaldo)}
-                      </p>
-                    </div>
-                    {c.telefone && (
-                      <a
-                        href={whatsappLink(c.telefone, c.nome, c.totalSaldo)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-ok-linha bg-ok-fraco px-3 text-xs font-medium text-ok hover:opacity-90 sm:min-h-9"
-                      >
-                        Cobrar no WhatsApp
-                      </a>
-                    )}
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs text-tinta-3">Total em aberto</p>
+                    <p className="font-bold tabular-nums text-perigo">
+                      {formatCurrency(c.totalSaldo)}
+                    </p>
                   </div>
                 </div>
 
@@ -503,7 +486,7 @@ export default function ContasReceberPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
                             <span className="font-semibold tabular-nums text-perigo">
                               {formatCurrency(saldo)}
                             </span>
@@ -514,6 +497,17 @@ export default function ContasReceberPage() {
                             >
                               Histórico
                             </Botao>
+                            <BaixarComprovante
+                              os={{
+                                numero: os.numero,
+                                cliente: { nome: c.nome },
+                                veiculo: os.veiculo,
+                                total: os.total,
+                                valorPago: os.valorPago,
+                                pago: false,
+                                pagamentos: os.pagamentos,
+                              }}
+                            />
                             <Botao
                               variante="sucesso"
                               tamanho="denso"
@@ -558,6 +552,16 @@ export default function ContasReceberPage() {
                             >
                               Histórico
                             </Botao>
+                            <BaixarComprovante
+                              os={{
+                                descricao: div.descricao,
+                                cliente: { nome: c.nome },
+                                total: div.valor,
+                                valorPago: div.valorPago,
+                                pago: false,
+                                pagamentos: div.pagamentos,
+                              }}
+                            />
                             <Botao
                               variante="sucesso"
                               tamanho="denso"

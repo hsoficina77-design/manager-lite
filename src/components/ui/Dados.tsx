@@ -85,16 +85,27 @@ export function FaixaMetricas({
     6: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
   }[colunas];
 
+  // As divisórias não saem de `divide-x`/`divide-y`. Aquelas regras desenham a
+  // linha em todo filho menos o primeiro, sem saber em que coluna cada um caiu —
+  // e a faixa quebra em duas colunas no celular. O resultado eram filetes soltos:
+  // um traço horizontal sob a borda de cima, na segunda métrica da primeira
+  // fileira, e um traço vertical colado na borda esquerda a cada fileira nova.
+  //
+  // Aqui a linha vem de `border-l`/`border-t` em TODOS os filhos, e a grade
+  // inteira anda 1px para cima e para a esquerda: as bordas da primeira fileira e
+  // da primeira coluna caem exatamente em cima da moldura e desaparecem, sobrando
+  // só as de dentro. Vale para qualquer número de colunas, em qualquer largura, e
+  // a métrica órfã da última fileira (5 números em 2 colunas) fica limpa.
   return (
-    <div
-      className={cn(
-        "grid overflow-hidden rounded-xl border border-linha bg-superficie",
-        "divide-x divide-y divide-linha [&>*]:p-4",
-        grade,
-        className
-      )}
-    >
-      {children}
+    <div className={cn("overflow-hidden rounded-xl border border-linha bg-superficie", className)}>
+      <div
+        className={cn(
+          "-ml-px -mt-px grid [&>*]:border-l [&>*]:border-t [&>*]:border-linha [&>*]:p-4",
+          grade
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }

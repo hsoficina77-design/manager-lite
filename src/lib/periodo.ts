@@ -18,7 +18,7 @@ const MESES = [
 const MESES_CURTO = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const DIAS_CURTO = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-export type PeriodoKey = "semana" | "mes" | "trimestre" | "ano";
+export type PeriodoKey = "semana" | "mes" | "trimestre" | "semestre" | "ano";
 
 export type Janela = {
   inicio: Date;
@@ -27,6 +27,8 @@ export type Janela = {
   label: string;
 };
 
+// "semestre" fica de fora de propósito: é usado pela Produtividade, que tem seu
+// próprio seletor de período — colocar aqui também o traria para o Dashboard.
 export const PERIODOS: { value: PeriodoKey; label: string }[] = [
   { value: "semana", label: "Semana" },
   { value: "mes", label: "Mês" },
@@ -89,6 +91,15 @@ export function janela(periodo: PeriodoKey, offset = 0, agora = new Date()): Jan
       // Trimestre móvel: os três meses civis terminando no mês atual.
       const inicio = brMidnightUTC(ano, mes - 2 + offset * 3, 1);
       const fim = brMidnightUTC(ano, mes + 1 + offset * 3, 1);
+      const ci = camposBR(inicio);
+      const cf = camposBR(new Date(fim.getTime() - 1));
+      return { inicio, fim, label: `${MESES_CURTO[ci.mes]} – ${MESES_CURTO[cf.mes]}/${cf.ano}` };
+    }
+    case "semestre": {
+      // Semestre móvel: os seis meses civis terminando no mês atual — mesma ideia do
+      // trimestre acima, só que com uma janela maior.
+      const inicio = brMidnightUTC(ano, mes - 5 + offset * 6, 1);
+      const fim = brMidnightUTC(ano, mes + 1 + offset * 6, 1);
       const ci = camposBR(inicio);
       const cf = camposBR(new Date(fim.getTime() - 1));
       return { inicio, fim, label: `${MESES_CURTO[ci.mes]} – ${MESES_CURTO[cf.mes]}/${cf.ano}` };
@@ -298,4 +309,21 @@ export function ehPeriodoAtual(j: Janela, agora = new Date()): boolean {
 
 export function dentro(data: Date, j: Janela): boolean {
   return data >= j.inicio && data < j.fim;
+}
+
+/**
+ * Meses civis (ano, mês 1-12) cobertos pela janela, um por bucket.
+ *
+ * Só faz sentido para janelas cujos limites caem em início de mês — é o caso de
+ * "mes", "trimestre", "semestre" e "ano", mas não de "semana".
+ */
+export function mesesDaJanela(j: Janela): { ano: number; mes: number }[] {
+  const meses: { ano: number; mes: number }[] = [];
+  let cursor = j.inicio;
+  while (cursor < j.fim) {
+    const c = camposBR(cursor);
+    meses.push({ ano: c.ano, mes: c.mes + 1 });
+    cursor = brMidnightUTC(c.ano, c.mes + 1, 1);
+  }
+  return meses;
 }

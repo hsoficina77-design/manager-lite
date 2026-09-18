@@ -3,6 +3,9 @@
 import { useEffect, useId, useState } from "react";
 import { cn, formatarValorBR, paraNumero } from "@/lib/utils";
 
+// A altura mínima de toque não está aqui: vale para todo campo do sistema, e
+// metade deles ainda desenha as próprias classes sem passar por este arquivo.
+// Quem garante os 44 px no celular é o piso em globals.css.
 export const BASE_CAMPO =
   "w-full rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm text-tinta placeholder:text-tinta-3 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-superficie-2 disabled:text-tinta-3";
 

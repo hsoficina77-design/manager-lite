@@ -83,9 +83,10 @@ export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
   );
 }
 
-/** Ex.: "Comprovante - OS 123 - João Silva" */
+/** Ex.: "Comprovante - OS 123 - João Silva" ou "Comprovante - Dívida - João Silva" */
 function nomeArquivo(os: ComprovanteOS) {
-  return [`Comprovante - OS ${os.numero}`, limparNome(os.cliente.nome)].filter(Boolean).join(" - ");
+  const identificacao = os.numero != null ? `OS ${os.numero}` : "Dívida";
+  return [`Comprovante - ${identificacao}`, limparNome(os.cliente.nome)].filter(Boolean).join(" - ");
 }
 
 function IconeDownload({ className }: { className?: string }) {

@@ -9,12 +9,16 @@ import { BarraInferior } from "./ui/BarraInferior";
 import { NotificacaoSino } from "./ui/Notificacoes";
 import { SeletorTema } from "./ui/Tema";
 import {
+  Chave,
   Chevron,
+  Cofre,
+  Despesa,
   Dinheiro,
   Engrenagem,
   Fechar,
   Menu as IconeMenu,
   Patio,
+  Pessoas,
   Recibo,
   Sair,
 } from "./ui/Icones";
@@ -72,9 +76,12 @@ export function Sidebar({
     };
   }, [open]);
 
+  // Um ícone por destino, e o mesmo ícone que a barra inferior do celular usa
+  // para o mesmo lugar — quem aprende a nota de dinheiro como "A receber" no
+  // celular reencontra a mesma nota no menu do computador.
   const todosOsLinks: LinkDef[] = [
     { href: "/", label: "Dashboard", exact: true, Icone: Patio },
-    { href: "/clientes", label: "Clientes", Icone: Dinheiro },
+    { href: "/clientes", label: "Clientes", Icone: Pessoas },
     {
       href: "/os",
       label: "Ordens de serviço",
@@ -84,7 +91,7 @@ export function Sidebar({
     {
       href: "/mecanicos",
       label: "Mecânicos",
-      Icone: IconeMenu,
+      Icone: Chave,
       children: [{ href: "/produtividade", label: "Produtividade", dono: true }],
     },
     {
@@ -94,8 +101,8 @@ export function Sidebar({
       financeiro: true,
       Icone: Dinheiro,
     },
-    { href: "/despesas", label: "Controle de gastos", financeiro: true, Icone: Recibo },
-    { href: "/caixa", label: "Caixa", financeiro: true, Icone: Dinheiro },
+    { href: "/despesas", label: "Controle de gastos", financeiro: true, Icone: Despesa },
+    { href: "/caixa", label: "Caixa", financeiro: true, Icone: Cofre },
   ];
 
   const permitido = (link: LinkDef) =>
@@ -187,6 +194,7 @@ export function Sidebar({
             >
               <Link
                 href={link.href}
+                aria-current={isActive ? "page" : undefined}
                 className="flex min-h-11 flex-1 items-center gap-2.5 px-3 py-2.5 text-sm font-medium"
               >
                 {Icone && <Icone tamanho={17} className="shrink-0 opacity-80" />}
@@ -214,6 +222,7 @@ export function Sidebar({
                   <Link
                     key={child.href}
                     href={child.href}
+                    aria-current={isLinkActive(child) ? "page" : undefined}
                     className={cn(
                       "flex min-h-11 items-center rounded-md px-3 py-2 text-sm transition-colors",
                       isLinkActive(child)
@@ -277,7 +286,7 @@ export function Sidebar({
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-menu text-menu-fg md:flex">
         <div className="flex items-center justify-between gap-2 border-b border-menu-borda px-4 py-5">
           {brand}
-          <NotificacaoSino papel={usuario.papel} className="-mr-1" />
+          <NotificacaoSino papel={usuario.papel} className="-mr-1" painelDesktop="esquerda" />
         </div>
         {nav}
         {rodape}

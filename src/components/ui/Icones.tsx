@@ -212,6 +212,41 @@ export const Despesa = (p: Props) => (
   </Base>
 );
 
+/* --- ícones do menu lateral -------------------------------------------------
+   Existem pelo mesmo motivo de `Despesa`: no menu, Clientes, Contas a receber e
+   Caixa desenhavam a mesma nota de dinheiro, Gastos repetia o recibo das OS e
+   Mecânicos usava o hambúrguer do próprio botão de menu. Ícone que se repete não
+   distingue nada — quem procura "Caixa" acaba lendo os sete rótulos. */
+
+/** Clientes. */
+export const Pessoas = (p: Props) => (
+  <Base {...p}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </Base>
+);
+
+/** Mecânicos — chave de boca. */
+export const Chave = (p: Props) => (
+  <Base {...p}>
+    <path d="M14.7 6.3a4.5 4.5 0 0 0 5.9 5.9l-8 8a2.8 2.8 0 0 1-4-4l8-8a4.5 4.5 0 0 0-1.9-1.9Z" />
+  </Base>
+);
+
+/** Caixa — o cofre da oficina. */
+export const Cofre = (p: Props) => (
+  <Base {...p}>
+    <rect x="3" y="4" width="18" height="15" rx="2" />
+    <circle cx="10.5" cy="11.5" r="3.5" />
+    <path d="M10.5 11.5h.01" />
+    <path d="M18 9.5v4" />
+    <path d="M6 19v2" />
+    <path d="M18 19v2" />
+  </Base>
+);
+
 /* --- tema ------------------------------------------------------------------ */
 
 export const Sol = (p: Props) => (

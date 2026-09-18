@@ -3,12 +3,17 @@ import { labelFormaPagamento } from "@/lib/constants";
 import { CONFIG_PADRAO, rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
 
 type Pagamento = {
-  id: string; valor: number; formaPagamento: string; data: string; obs: string | null;
+  id: string | number; valor: number; formaPagamento: string; data: string; obs: string | null;
 };
+/**
+ * Uma OS tem `numero` e `veiculo`; uma dívida avulsa não tem nenhum dos dois — usa
+ * `descricao` no lugar. Nunca os dois ao mesmo tempo.
+ */
 export type ComprovanteOS = {
-  numero: number;
+  numero?: number;
+  descricao?: string;
   cliente: { nome: string };
-  veiculo: { marca: string; modelo: string; placa: string | null };
+  veiculo?: { marca: string; modelo: string; placa: string | null };
   total: number;
   valorPago: number;
   pago: boolean;
@@ -89,10 +94,11 @@ export function ComprovantePagamentoPdfDocument({
 }) {
   const saldo = Math.max(0, os.total - os.valorPago);
   const marca = config.corPrimaria;
-  const veiculo = [os.veiculo.marca, os.veiculo.modelo].filter(Boolean).join(" ");
+  const veiculo = os.veiculo ? [os.veiculo.marca, os.veiculo.modelo].filter(Boolean).join(" ") : "";
+  const identificacao = os.numero != null ? `OS Nº ${os.numero}` : (os.descricao ?? "Dívida avulsa");
 
   return (
-    <Document title={`Comprovante - OS ${os.numero} - ${os.cliente.nome}`} author={config.nome}>
+    <Document title={`Comprovante - ${identificacao} - ${os.cliente.nome}`} author={config.nome}>
       <Page size={{ width: LARGURA_PAGINA }} style={s.page}>
         <View style={s.header}>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
@@ -107,8 +113,8 @@ export function ComprovantePagamentoPdfDocument({
 
         <Text style={s.title}>Comprovante de Pagamento</Text>
         <Text style={s.subtitle}>
-          OS Nº {os.numero} · {os.cliente.nome}
-          {veiculo ? `\n${veiculo}${os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}` : ""}
+          {identificacao} · {os.cliente.nome}
+          {veiculo ? `\n${veiculo}${os.veiculo?.placa ? ` · ${os.veiculo.placa}` : ""}` : ""}
         </Text>
 
         <View style={s.grid}>
