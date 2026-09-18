@@ -19,6 +19,7 @@ import { getConfiguracao } from "@/lib/configuracao-db";
 import { valorReserva } from "@/lib/configuracao";
 import { FaixaMetricas, Metrica, MetricaLink, Painel, Vazio } from "@/components/ui/Dados";
 import { BotaoLink } from "@/components/ui/Botao";
+import { MaisDaLista } from "@/components/MaisDaLista";
 import { Avancar, Mais, SetaDireita, Voltar } from "@/components/ui/Icones";
 
 // O dashboard responde duas perguntas de naturezas diferentes, e por isso são duas abas:
@@ -61,10 +62,11 @@ export default async function Dashboard({
 }) {
   const sp = await searchParams;
   const usuario = await exigirUsuario();
-  // Resultado é a aba do dinheiro (DRE, lucro, despesas): só quem tem financeiro. Para
-  // quem não tem ela nem aparece, e um link direto cai na Operação.
+  // Resultado é a aba do dinheiro (DRE, lucro, despesas): só quem tem financeiro. É ela
+  // que abre por padrão — é a pergunta que o dono faz primeiro. Operação fica a um
+  // clique. Para quem não tem financeiro a aba nem aparece, e tudo cai na Operação.
   const podeVerFinanceiro = usuario.podeFinanceiro;
-  const aba = podeVerFinanceiro && sp.aba === "resultado" ? "resultado" : "operacao";
+  const aba = podeVerFinanceiro && sp.aba !== "operacao" ? "resultado" : "operacao";
   const periodo: PeriodoKey = ehPeriodo(sp.periodo) ? sp.periodo : "mes";
   const offset = Number.parseInt(sp.offset ?? "0", 10) || 0;
 
@@ -76,11 +78,11 @@ export default async function Dashboard({
         <h1 className="text-2xl font-bold text-tinta">Dashboard</h1>
         {podeVerFinanceiro && (
           <div className="flex gap-1 rounded-lg bg-superficie-3 p-1">
-            <AbaLink href="/?aba=operacao" ativa={aba === "operacao"}>
-              Operação
-            </AbaLink>
             <AbaLink href={`/?aba=resultado&periodo=${periodo}`} ativa={aba === "resultado"}>
               Resultado
+            </AbaLink>
+            <AbaLink href="/?aba=operacao" ativa={aba === "operacao"}>
+              Operação
             </AbaLink>
           </div>
         )}
@@ -383,7 +385,10 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
     <>
       <NavegacaoPeriodo periodo={periodo} offset={offset} janela={j} podeAvancar={offset < 0} />
 
-      <FaixaMetricas colunas={5}>
+      {/* Seis números em duas fileiras de três, e não uma fileira de seis: a faixa de
+          uma linha só espremia "R$ 14.459,96" em coluna de ~130px no notebook, e o
+          valor quebrava no meio do número. */}
+      <FaixaMetricas colunas={3}>
         <MetricaLink
           href="/os?status=entregues"
           rotulo="OS entregues"
@@ -410,11 +415,23 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
           sub="dinheiro que entrou"
           tamanho="grande"
         />
+        {/* Os dois lucros são números diferentes e ficam lado a lado de propósito: o
+            bruto é o que a oficina ganhou no serviço, o líquido é o que sobrou depois
+            do aluguel e afins. Antes o bruto vivia na letra miúda do líquido, e o
+            gestor não tinha onde ler "quanto a oficina rendeu" sem fazer conta. */}
+        <MetricaLink
+          href="/os?status=entregues"
+          rotulo="Lucro bruto"
+          valor={formatCurrency(lucroBruto)}
+          sub="serviços − peças"
+          tamanho="grande"
+          tom={lucroBruto >= 0 ? "neutro" : "perigo"}
+        />
         <MetricaLink
           href="/despesas"
           rotulo="Lucro líquido"
           valor={formatCurrency(lucroLiquido)}
-          sub={`bruto ${formatCurrency(lucroBruto)} − despesas`}
+          sub={`depois de ${formatCurrency(totalDespesas)} em despesas`}
           tamanho="grande"
           tom={lucroLiquido >= 0 ? "ok" : "perigo"}
         />
@@ -432,12 +449,18 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
           </Link>
         }
       >
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {/* Lê na ordem da conta: Receita − Peças = Lucro bruto − Despesas = Lucro líquido. */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <Metrica rotulo="Receita" valor={formatCurrency(receita)} />
           <Metrica rotulo="Custo de peças" valor={`- ${formatCurrency(custoPecas)}`} />
+          <Metrica
+            rotulo="= Lucro bruto"
+            valor={formatCurrency(lucroBruto)}
+            tom={lucroBruto >= 0 ? "neutro" : "perigo"}
+          />
           <Metrica rotulo="Despesas fixas" valor={`- ${formatCurrency(totalDespesas)}`} />
           <Metrica
-            rotulo="Lucro líquido"
+            rotulo="= Lucro líquido"
             valor={formatCurrency(lucroLiquido)}
             tom={lucroLiquido >= 0 ? "ok" : "perigo"}
           />
@@ -496,8 +519,7 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
           }
           agora={agora}
           limite={10}
-          verTodasHref="/os?status=entregues"
-          verTodasLabel="Ver todas as entregues"
+          expansivel
         />
       </div>
     </>
@@ -663,6 +685,7 @@ function ListaOS({
   agora,
   mostrarLucro = true,
   limite,
+  expansivel,
   verTodasHref,
   verTodasLabel = "Ver todas",
 }: {
@@ -676,6 +699,8 @@ function ListaOS({
   mostrarLucro?: boolean;
   /** Quantas linhas cabem no dashboard antes de virar rolagem. */
   limite?: number;
+  /** O resto abre aqui mesmo, em lotes, em vez de mandar para outra tela. */
+  expansivel?: boolean;
   verTodasHref?: string;
   verTodasLabel?: string;
 }) {
@@ -688,90 +713,97 @@ function ListaOS({
   // o botão de Nova OS ficavam a trinta linhas de rolagem no celular, e a lista
   // deixava de ser "o que está parado há mais tempo" para virar o /os inteiro.
   const visiveis = limite ? ordens.slice(0, limite) : ordens;
-  const restantes = ordens.length - visiveis.length;
+  const extras = limite ? ordens.slice(limite) : [];
+
+  const linha = (os: OSLista) => {
+    const dias = diasParado(os.abertura, agora);
+    const margem = margemOS(os);
+    const lucroTitulo = patio
+      ? "Lucro previsto se a OS fechar com os valores atuais"
+      : "Lucro real (após custo de peças)";
+    return (
+      <Link
+        key={os.id}
+        href={`/os/${os.id}`}
+        className="flex flex-col gap-1.5 px-4 py-3 hover:bg-superficie-2 transition-colors sm:flex-row sm:items-center sm:gap-3"
+      >
+        <div className="flex items-center gap-3 sm:contents">
+          <div className="shrink-0 text-center w-10">
+            <p className="text-xs text-tinta-3">OS</p>
+            <p className="font-bold text-tinta text-sm">#{os.numero}</p>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-tinta text-sm truncate">{os.cliente.nome}</p>
+              {os.cliente.apelido && (
+                <span className="shrink-0 rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-3">
+                  {os.cliente.apelido}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-tinta-3 truncate">
+              {os.veiculo.marca} {os.veiculo.modelo}
+              {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
+              {os.mecanico ? ` · ${os.mecanico}` : ""}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+            {patio && (
+              <span className={corAging(dias)}>
+                <span className="idade-ponto" aria-hidden="true" />
+                {dias}d
+              </span>
+            )}
+            <span className={corStatus(os.status)}>{labelStatus(os.status)}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-start">
+          {mostrarLucro && (
+            <div className="text-right text-xs tabular-nums sm:w-24" title={lucroTitulo}>
+              <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
+              <p className={cn("text-xs", corMargem(margem))}>
+                {margem === null ? "—" : `${margem.toFixed(0)}% margem`}
+              </p>
+            </div>
+          )}
+          {patio && (
+            <span
+              className={cn("hidden sm:inline-flex", corAging(dias))}
+              title={`No pátio há ${dias} dia${dias === 1 ? "" : "s"}`}
+            >
+              <span className="idade-ponto" aria-hidden="true" />
+              {dias}d
+            </span>
+          )}
+          <span className={cn("hidden sm:inline-flex", corStatus(os.status))}>
+            {labelStatus(os.status)}
+          </span>
+          <div className="text-right text-xs tabular-nums">
+            <p className="font-semibold text-tinta">{formatCurrency(os.total)}</p>
+            {!os.pago && <p className="text-perigo">Pendente</p>}
+          </div>
+        </div>
+      </Link>
+    );
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-linha bg-superficie divide-y divide-linha">
-      {visiveis.map((os) => {
-        const dias = diasParado(os.abertura, agora);
-        const margem = margemOS(os);
-        const lucroTitulo = patio
-          ? "Lucro previsto se a OS fechar com os valores atuais"
-          : "Lucro real (após custo de peças)";
-        return (
-          <Link
-            key={os.id}
-            href={`/os/${os.id}`}
-            className="flex flex-col gap-1.5 px-4 py-3 hover:bg-superficie-2 transition-colors sm:flex-row sm:items-center sm:gap-3"
-          >
-            <div className="flex items-center gap-3 sm:contents">
-              <div className="shrink-0 text-center w-10">
-                <p className="text-xs text-tinta-3">OS</p>
-                <p className="font-bold text-tinta text-sm">#{os.numero}</p>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-tinta text-sm truncate">{os.cliente.nome}</p>
-                  {os.cliente.apelido && (
-                    <span className="shrink-0 rounded-full bg-superficie-3 px-2 py-0.5 text-xs text-tinta-3">
-                      {os.cliente.apelido}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-tinta-3 truncate">
-                  {os.veiculo.marca} {os.veiculo.modelo}
-                  {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
-                  {os.mecanico ? ` · ${os.mecanico}` : ""}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
-                {patio && (
-                  <span className={corAging(dias)}>
-                    <span className="idade-ponto" aria-hidden="true" />
-                    {dias}d
-                  </span>
-                )}
-                <span className={corStatus(os.status)}>{labelStatus(os.status)}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-start">
-              {mostrarLucro && (
-                <div className="text-right text-xs tabular-nums sm:w-24" title={lucroTitulo}>
-                  <p className={cn("font-semibold", corMargem(margem))}>{formatCurrency(os.lucroReal)}</p>
-                  <p className={cn("text-xs", corMargem(margem))}>
-                    {margem === null ? "—" : `${margem.toFixed(0)}% margem`}
-                  </p>
-                </div>
-              )}
-              {patio && (
-                <span
-                  className={cn("hidden sm:inline-flex", corAging(dias))}
-                  title={`No pátio há ${dias} dia${dias === 1 ? "" : "s"}`}
-                >
-                  <span className="idade-ponto" aria-hidden="true" />
-                  {dias}d
-                </span>
-              )}
-              <span className={cn("hidden sm:inline-flex", corStatus(os.status))}>
-                {labelStatus(os.status)}
-              </span>
-              <div className="text-right text-xs tabular-nums">
-                <p className="font-semibold text-tinta">{formatCurrency(os.total)}</p>
-                {!os.pago && <p className="text-perigo">Pendente</p>}
-              </div>
-            </div>
-          </Link>
-        );
-      })}
+      {visiveis.map(linha)}
 
-      {restantes > 0 && verTodasHref && (
-        <Link
-          href={verTodasHref}
-          className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-600 transition-colors hover:bg-superficie-2"
-        >
-          {verTodasLabel} · mais {restantes} <SetaDireita tamanho={14} />
-        </Link>
-      )}
+      {extras.length > 0 &&
+        (expansivel ? (
+          <MaisDaLista linhas={extras.map(linha)} passo={limite} />
+        ) : (
+          verTodasHref && (
+            <Link
+              href={verTodasHref}
+              className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-600 transition-colors hover:bg-superficie-2"
+            >
+              {verTodasLabel} · mais {extras.length} <SetaDireita tamanho={14} />
+            </Link>
+          )
+        ))}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { corMargem, corStatus, labelStatus, margemOS, OS_STATUS } from "@/lib/co
 import { usePodeFinanceiro } from "@/components/UsuarioProvider";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Entrada, Selecao } from "@/components/ui/Campos";
-import { EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
+import { EsqueletoLista, Vazio } from "@/components/ui/Dados";
 import { Busca, Chevron, Mais } from "@/components/ui/Icones";
 
 const TABS = [
@@ -164,7 +164,6 @@ function OSListContent() {
 
   const temFiltro = !!(q || mecanico || situacao || de || ate);
   const itens = dados?.itens ?? [];
-  const resumo = dados?.resumo;
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
@@ -275,23 +274,6 @@ function OSListContent() {
         </div>
       )}
 
-      {/* Resumo do filtro inteiro, não só da página em tela: somar o que veio
-          daria um faturamento que muda conforme a pessoa rola. */}
-      {resumo && resumo.quantidade > 0 && (
-        <FaixaMetricas colunas={podeFinanceiro ? 3 : 2}>
-          <Metrica rotulo="OS no filtro" valor={String(resumo.quantidade)} />
-          <Metrica rotulo="Faturamento" valor={formatCurrency(resumo.faturamento)} />
-          {podeFinanceiro && (
-            <Metrica
-              rotulo="Lucro real"
-              valor={formatCurrency(resumo.lucro ?? 0)}
-              sub={resumo.margem == null ? undefined : `${resumo.margem.toFixed(0)}% de margem`}
-              tom={corTom(resumo.margem)}
-            />
-          )}
-        </FaixaMetricas>
-      )}
-
       {carregando ? (
         <EsqueletoLista linhas={6} />
       ) : itens.length === 0 ? (
@@ -338,13 +320,6 @@ function OSListContent() {
       )}
     </div>
   );
-}
-
-function corTom(margem: number | null | undefined): "ok" | "atencao" | "perigo" {
-  if (margem == null) return "perigo";
-  if (margem >= 40) return "ok";
-  if (margem >= 20) return "atencao";
-  return "perigo";
 }
 
 function OSRow({ os, podeFinanceiro }: { os: OS; podeFinanceiro: boolean }) {

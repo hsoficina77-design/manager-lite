@@ -291,7 +291,7 @@ function Patio({ patio }: { patio: Record<string, number> }) {
       })}
       <p className="pt-1 text-xs text-tinta-3">
         {total} OS em aberto ·{" "}
-        <Link href="/" className="inline-flex items-center gap-1 hover:underline">
+        <Link href="/?aba=operacao" className="inline-flex items-center gap-1 hover:underline">
           ver no dashboard <SetaDireita tamanho={12} />
         </Link>
       </p>
