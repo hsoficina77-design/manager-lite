@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { labelPapel, type Papel } from "@/lib/permissoes";
 import { BarraInferior } from "./ui/BarraInferior";
 import { NotificacaoSino } from "./ui/Notificacoes";
+import { usePedirSaida } from "./ui/SaidaSegura";
 import { SeletorTema } from "./ui/Tema";
 import {
   Chave,
@@ -51,6 +52,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const pedirSaida = usePedirSaida();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [saindo, setSaindo] = useState(false);
@@ -113,6 +115,9 @@ export function Sidebar({
     .map((link) => ({ ...link, children: link.children?.filter(permitido) }));
 
   async function sair() {
+    // Sair da conta é o único jeito de deixar a tela que não é um link — sem
+    // isto, o logout levaria embora a OS meio preenchida sem perguntar nada.
+    if (!(await pedirSaida())) return;
     setSaindo(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });

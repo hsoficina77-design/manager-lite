@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { UsuarioProvider } from "@/components/UsuarioProvider";
 import { AvisosProvider } from "@/components/ui/Avisos";
+import { SaidaSeguraProvider } from "@/components/ui/SaidaSegura";
 import { SCRIPT_TEMA } from "@/components/ui/Tema";
 import { prisma } from "@/lib/prisma";
 import { getUsuarioAtual } from "@/lib/auth";
@@ -93,7 +94,10 @@ export default async function RootLayout({
               : null
           }
         >
-          <AvisosProvider>{conteudo}</AvisosProvider>
+          <AvisosProvider>
+            {/* Por dentro do menu: o "Sair" da conta também passa pela pergunta. */}
+            <SaidaSeguraProvider>{conteudo}</SaidaSeguraProvider>
+          </AvisosProvider>
         </UsuarioProvider>
       </body>
     </html>

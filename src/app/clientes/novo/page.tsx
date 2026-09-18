@@ -7,6 +7,7 @@ import { ORIGENS } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDeRascunho } from "@/components/VeiculoCampos";
 import { Fechar, Voltar } from "@/components/ui/Icones";
+import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -47,6 +48,20 @@ export default function NovoClientePage() {
     (d) => Object.values(d.form).every((v) => !v.trim()) && d.telefones.every((t) => !t.trim()) && !d.addVeiculo
   );
 
+  // Sair sem salvar pede confirmação. Aqui a referência é simples: a tela nasce
+  // em branco, então qualquer campo preenchido já é trabalho a perder.
+  const sujo =
+    Object.values(form).some((v) => v.trim() !== "") ||
+    telefones.some((t) => t.trim() !== "") ||
+    addVeiculo;
+
+  useSaidaSegura({
+    sujo,
+    salvar: () => salvar(false),
+    aviso:
+      "Este cliente ainda não foi cadastrado. O que você preencheu fica guardado como rascunho neste aparelho, mas não entra no sistema enquanto não salvar.",
+  });
+
   function restoreDraft() {
     if (!pendingDraft) return;
     setForm(pendingDraft.form);
@@ -56,8 +71,17 @@ export default function NovoClientePage() {
     discardPending();
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    void salvar(true);
+  }
+
+  /**
+   * `navegar` separa os dois jeitos de salvar: pelo botão da tela, que segue
+   * para o cliente novo; e pelo aviso de saída, onde quem escolhe o destino é o
+   * próprio aviso — se esta função também navegasse, as duas idas brigariam.
+   */
+  async function salvar(navegar: boolean): Promise<boolean> {
     setError("");
     setSaving(true);
     try {
@@ -72,9 +96,10 @@ export default function NovoClientePage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Erro ao salvar"); return; }
+      if (!res.ok) { setError(data.error || "Erro ao salvar"); return false; }
       clearDraft();
-      router.push(`/clientes/${data.id}`);
+      if (navegar) router.push(`/clientes/${data.id}`);
+      return true;
     } finally {
       setSaving(false);
     }

@@ -20,6 +20,7 @@ import { compressLogo } from "@/lib/image-compress";
 import { CONFIG_PADRAO, type Configuracao } from "@/lib/configuracao";
 import { invalidarConfiguracao } from "@/lib/useConfiguracao";
 import { variaveisDoTema } from "@/lib/tema";
+import { useSaidaSegura } from "./ui/SaidaSegura";
 import { Icone } from "./configuracoes/campos";
 import { PreviaDocumento, PreviaSistema } from "./configuracoes/previa";
 import { SECOES, acharSecao, gruposDeSecoes, type Secao } from "./configuracoes/secoes";
@@ -93,14 +94,19 @@ export default function ConfiguracoesPainel() {
     };
   }, [form.corPrimaria, form.corMenu, carregando]);
 
-  // Fechar a aba com edição pendente pede confirmação: cor e texto digitados aqui
-  // não têm rascunho salvo em lugar nenhum.
-  useEffect(() => {
-    if (!sujo) return;
-    const avisar = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", avisar);
-    return () => window.removeEventListener("beforeunload", avisar);
-  }, [sujo]);
+  // Sair daqui com edição pendente pede confirmação: cor e texto digitados nesta
+  // tela não têm rascunho salvo em lugar nenhum — fechar perde mesmo.
+  //
+  // O "voltar" fica de fora da guarda porque esta tela já usa o histórico por
+  // conta própria: cada seção aberta no celular é uma entrada (`#marca`), e é o
+  // voltar que devolve o índice. Uma entrada-sentinela no meio disso quebraria
+  // a navegação entre seções para proteger uma saída que nem está acontecendo.
+  useSaidaSegura({
+    sujo,
+    salvar: enviar,
+    guardarVoltar: false,
+    aviso: "As configurações mudadas nesta tela ainda não foram salvas. Sair agora desfaz tudo.",
+  });
 
   const setCampo = useCallback(<K extends keyof Form>(campo: K, valor: Form[K]) => {
     setForm((f) => ({ ...f, [campo]: valor }));
@@ -169,9 +175,13 @@ export default function ConfiguracoesPainel() {
     }
   }
 
-  async function salvar(e: React.FormEvent) {
+  function salvar(e: React.FormEvent) {
     e.preventDefault();
-    if (!sujo || salvando) return;
+    void enviar();
+  }
+
+  async function enviar(): Promise<boolean> {
+    if (!sujo || salvando) return true;
     setErro("");
     setSalvando(true);
     try {
@@ -192,8 +202,10 @@ export default function ConfiguracoesPainel() {
       invalidarConfiguracao();
       // Recarrega o layout do servidor para o menu e o tema virem do banco.
       router.refresh();
+      return true;
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao salvar");
+      return false;
     } finally {
       setSalvando(false);
     }

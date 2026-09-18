@@ -9,6 +9,7 @@ import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import ClienteSelect from "./ClienteSelect";
 import { CampoDinheiro, CampoQuantidade } from "@/components/ui/Campos";
 import { Fechar } from "@/components/ui/Icones";
+import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 import { usePodeFinanceiro } from "@/components/UsuarioProvider";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
@@ -116,6 +117,36 @@ export default function OSForm({
       !d.kmEntrada.trim() && !d.obs.trim() && !d.mecanicoId && d.itens.length === 0
   );
 
+  // Sair sem salvar pede confirmação. A referência é o que veio do servidor (ou,
+  // numa OS nova, o formulário em branco mais o que o link já trouxe). O veículo
+  // que o formulário escolhe sozinho quando o cliente só tem um entra na
+  // referência: quem não digitou nada não pode ser parado na porta.
+  const baseDoFormulario = {
+    clienteId: preClienteId,
+    veiculoId: preVeiculoId || (veiculos.length === 1 ? veiculos[0].id : ""),
+    descricao: initial?.descricao ?? "",
+    defeitoRelatado: initial?.defeitoRelatado ?? "",
+    kmEntrada: initial?.kmEntrada ?? "",
+    obs: initial?.obs ?? "",
+    mecanicoId: initial?.mecanicoId ?? "",
+    nivelCombustivel: initial?.nivelCombustivel ?? "",
+    combustivelEmUso: initial?.combustivelEmUso ?? "",
+    itens: initial?.itens ?? [],
+  };
+  // O item em digitação não entra no rascunho nem na OS — mas é trabalho que
+  // some do mesmo jeito, então também segura a saída.
+  const sujo =
+    JSON.stringify(draftData) !== JSON.stringify(baseDoFormulario) ||
+    itemForm.descricao.trim() !== "";
+
+  useSaidaSegura({
+    sujo,
+    salvar: () => salvar(false),
+    aviso: mode === "edit"
+      ? "As alterações desta OS ainda não foram salvas. Elas ficam guardadas como rascunho neste aparelho, mas a OS só muda depois de salvar."
+      : "Esta OS ainda não foi criada. O que você preencheu fica guardado como rascunho neste aparelho, mas não entra no sistema enquanto não salvar.",
+  });
+
   function restoreDraft() {
     if (!pendingDraft) return;
     setClienteId(pendingDraft.clienteId);
@@ -188,11 +219,20 @@ export default function OSForm({
       ? ((Number(itemForm.valorUnit) - Number(itemForm.custoUnit)) / Number(itemForm.valorUnit)) * 100
       : null;
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
+    void salvar(true);
+  }
+
+  /**
+   * `navegar` separa os dois jeitos de salvar: pelo botão da tela, que segue
+   * para a OS; e pelo aviso de saída, onde quem escolhe o destino é o próprio
+   * aviso — se esta função também navegasse, as duas idas brigariam.
+   */
+  async function salvar(navegar: boolean): Promise<boolean> {
     if (!clienteId || !veiculoId || !descricao.trim()) {
       setError("Cliente, veículo e descrição são obrigatórios.");
-      return;
+      return false;
     }
     setError("");
     setSaving(true);
@@ -223,10 +263,10 @@ export default function OSForm({
           }),
         });
         const data = await res.json();
-        if (!res.ok) { setError(data.error || "Erro ao salvar OS"); return; }
+        if (!res.ok) { setError(data.error || "Erro ao salvar OS"); return false; }
         clearDraft();
-        router.push(`/os/${osId}`);
-        return;
+        if (navegar) router.push(`/os/${osId}`);
+        return true;
       }
 
       const res = await fetch("/api/os", {
@@ -244,9 +284,10 @@ export default function OSForm({
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Erro ao criar OS"); return; }
+      if (!res.ok) { setError(data.error || "Erro ao criar OS"); return false; }
       clearDraft();
-      router.push(`/os/${data.id}`);
+      if (navegar) router.push(`/os/${data.id}`);
+      return true;
     } finally {
       setSaving(false);
     }

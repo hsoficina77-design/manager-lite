@@ -12,6 +12,7 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Esqueleto, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Fechar, Mais, Voltar } from "@/components/ui/Icones";
+import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS",
@@ -42,6 +43,17 @@ type Cliente = {
   cidade: string | null; estado: string | null; createdAt: string;
   veiculos: Veiculo[]; ordens: OS[]; stats: ClienteStats;
 };
+
+/** O cadastro como o formulário o representa — a mesma forma serve de rascunho e de referência. */
+function formDoCliente(c: Cliente) {
+  return {
+    nome: c.nome || "", telefone: c.telefone || "",
+    cpfCnpj: c.cpfCnpj || "", email: c.email || "", obs: c.obs || "",
+    apelido: c.apelido || "", profissao: c.profissao || "",
+    origem: c.origem || "", cep: c.cep || "", endereco: c.endereco || "",
+    cidade: c.cidade || "", estado: c.estado || "",
+  };
+}
 
 function tempoDesde(dateStr: string): string {
   const dias = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
@@ -88,23 +100,41 @@ export default function ClienteDetailPage() {
   const [veiculoErro, setVeiculoErro] = useState("");
   const [savingVeiculo, setSavingVeiculo] = useState(false);
   const veiculoFormRef = useRef<HTMLFormElement>(null);
+  // Como o formulário de veículo nasceu: em branco, num veículo novo; com os
+  // dados do carro, numa edição. É contra isto que se sabe se há algo a perder.
+  const veiculoOriginal = useRef(JSON.stringify(VEICULO_FORM_VAZIO));
 
   function setField(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
+
+  // ── Sair sem salvar ───────────────────────────────────────────────────────
+  // Os dois formulários desta tela são independentes, mas a pergunta é uma só:
+  // quem está saindo quer saber se perde algo, não qual bloco estava aberto.
+  const cadastroSujo =
+    editing &&
+    !!cliente &&
+    (JSON.stringify(form) !== JSON.stringify(formDoCliente(cliente)) ||
+      JSON.stringify(telefones) !== JSON.stringify(cliente.telefones ?? []));
+  const veiculoSujo =
+    showVeiculoForm && JSON.stringify(veiculoForm) !== veiculoOriginal.current;
+
+  useSaidaSegura({
+    sujo: cadastroSujo || veiculoSujo,
+    salvar: async () => {
+      if (cadastroSujo && !(await enviarCadastro())) return false;
+      if (veiculoSujo && !(await enviarVeiculo())) return false;
+      return true;
+    },
+    aviso: "O que você mudou nesta tela ainda não foi salvo. Sair agora desfaz a alteração.",
+  });
 
   const load = () =>
     fetch(`/api/clientes/${id}`)
       .then((r) => r.json())
       .then((data: Cliente) => {
         setCliente(data);
-        setForm({
-          nome: data.nome || "", telefone: data.telefone || "",
-          cpfCnpj: data.cpfCnpj || "", email: data.email || "", obs: data.obs || "",
-          apelido: data.apelido || "", profissao: data.profissao || "",
-          origem: data.origem || "", cep: data.cep || "", endereco: data.endereco || "",
-          cidade: data.cidade || "", estado: data.estado || "",
-        });
+        setForm(formDoCliente(data));
         setTelefones(data.telefones || []);
       })
       .finally(() => setLoading(false));
@@ -128,8 +158,12 @@ export default function ClienteDetailPage() {
     } catch {}
   }
 
-  async function saveEdit(e: React.FormEvent) {
+  function saveEdit(e: React.FormEvent) {
     e.preventDefault();
+    void enviarCadastro();
+  }
+
+  async function enviarCadastro(): Promise<boolean> {
     setError("");
     setSaving(true);
     try {
@@ -139,9 +173,10 @@ export default function ClienteDetailPage() {
         body: JSON.stringify({ ...form, telefones: telefones.filter(Boolean) }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Erro"); return; }
+      if (!res.ok) { setError(data.error || "Erro"); return false; }
       setEditing(false);
       load();
+      return true;
     } finally {
       setSaving(false);
     }
@@ -171,13 +206,16 @@ export default function ClienteDetailPage() {
   function abrirNovoVeiculo() {
     setVeiculoEditando(null);
     setVeiculoForm(VEICULO_FORM_VAZIO);
+    veiculoOriginal.current = JSON.stringify(VEICULO_FORM_VAZIO);
     setVeiculoErro("");
     setShowVeiculoForm(true);
   }
 
   function abrirEdicaoVeiculo(v: Veiculo) {
+    const doCarro = veiculoFormDe(v);
     setVeiculoEditando(v.id);
-    setVeiculoForm(veiculoFormDe(v));
+    setVeiculoForm(doCarro);
+    veiculoOriginal.current = JSON.stringify(doCarro);
     setVeiculoErro("");
     setShowVeiculoForm(true);
     // No celular a lista é longa: leva o formulário para a tela em vez de
@@ -193,8 +231,12 @@ export default function ClienteDetailPage() {
     setVeiculoErro("");
   }
 
-  async function saveVeiculo(e: React.FormEvent) {
+  function saveVeiculo(e: React.FormEvent) {
     e.preventDefault();
+    void enviarVeiculo();
+  }
+
+  async function enviarVeiculo(): Promise<boolean> {
     setVeiculoErro("");
     setSavingVeiculo(true);
     try {
@@ -207,9 +249,10 @@ export default function ClienteDetailPage() {
         }
       );
       const data = await res.json();
-      if (!res.ok) { setVeiculoErro(data.error || "Erro ao salvar veículo"); return; }
+      if (!res.ok) { setVeiculoErro(data.error || "Erro ao salvar veículo"); return false; }
       fecharVeiculoForm();
       load();
+      return true;
     } finally {
       setSavingVeiculo(false);
     }

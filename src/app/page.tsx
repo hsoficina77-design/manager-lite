@@ -372,6 +372,10 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
     return {
       label: sub.label,
       receita: doBucket.reduce((s, o) => s + o.total, 0),
+      // Bruto, e não líquido: as despesas fixas entram por vencimento no período
+      // inteiro (`custoDoIntervalo`), então não existe fatia delas por sub-janela —
+      // ratear o aluguel por semana seria número inventado.
+      lucro: doBucket.reduce((s, o) => s + o.lucroReal, 0),
       n: doBucket.length,
     };
   });
@@ -482,21 +486,34 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
 
       {/* Distribuição interna: é aqui que dá pra ver qual semana rendeu. */}
       {partes.length > 1 && (
-        <Painel titulo="Distribuição no período">
+        <Painel titulo="Distribuição no período" ajuda="Faturado e, ao lado, o lucro bruto da fatia">
           <div className="space-y-2">
+            {/* Duas colunas de dinheiro porque volume e resultado são perguntas
+                diferentes: a barra diz qual fatia girou mais, o número verde diz
+                se ela rendeu. No celular os números caem para a linha de baixo —
+                lado a lado eles não cabem sem espremer a barra a nada. */}
             {partes.map((p) => (
-              <div key={p.label} className="flex items-center gap-3 text-xs">
+              <div key={p.label} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="w-10 shrink-0 text-tinta-3">{p.label}</span>
-                <div className="h-5 flex-1 overflow-hidden rounded bg-superficie-3">
+                <div className="h-5 flex-1 basis-20 overflow-hidden rounded bg-superficie-3">
                   <div
                     className="h-full rounded bg-contraste"
                     style={{ width: `${(p.receita / maiorBucket) * 100}%` }}
                   />
                 </div>
-                <span className="w-24 shrink-0 text-right font-medium tabular-nums text-tinta">
-                  {formatCurrency(p.receita)}
-                </span>
-                <span className="w-12 shrink-0 text-right tabular-nums text-tinta-3">{p.n} OS</span>
+                <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
+                  <span className="w-24 text-right font-medium tabular-nums text-tinta">
+                    {formatCurrency(p.receita)}
+                  </span>
+                  <span
+                    className={`w-24 text-right font-medium tabular-nums ${
+                      p.lucro >= 0 ? "text-ok" : "text-perigo"
+                    }`}
+                  >
+                    {formatCurrency(p.lucro)}
+                  </span>
+                  <span className="w-12 text-right tabular-nums text-tinta-3">{p.n} OS</span>
+                </div>
               </div>
             ))}
           </div>

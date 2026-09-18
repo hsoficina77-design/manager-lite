@@ -13,6 +13,7 @@ import { Botao } from "@/components/ui/Botao";
 import { CampoDinheiro, CampoQuantidade, Entrada } from "@/components/ui/Campos";
 import { Modal } from "@/components/ui/Modal";
 import { Fechar } from "@/components/ui/Icones";
+import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Veiculo = {
@@ -103,6 +104,35 @@ export default function OrcamentoForm({
       !d.clienteId && !d.clienteNome.trim() && !d.veiculoDesc.trim() &&
       !d.descricao.trim() && !d.obs.trim() && d.itens.length === 0
   );
+
+  // Sair sem salvar pede confirmação. A referência é o que veio do servidor (ou,
+  // num orçamento novo, o formulário em branco mais o que o link já trouxe). O
+  // veículo que o formulário escolhe sozinho quando o cliente só tem um entra na
+  // referência: quem não digitou nada não pode ser parado na porta.
+  const baseDoFormulario = {
+    clienteId: preClienteId,
+    veiculoId: preVeiculoId || (veiculos.length === 1 ? veiculos[0].id : ""),
+    clienteNome: initial?.clienteNome ?? "",
+    clienteTelefone: initial?.clienteTelefone ?? "",
+    veiculoDesc: initial?.veiculoDesc ?? "",
+    descricao: initial?.descricao ?? "",
+    validade: initial?.validade ?? "",
+    obs: initial?.obs ?? "",
+    itens: initial?.itens ?? [],
+  };
+  // O item em digitação não entra no rascunho nem no orçamento — mas é trabalho
+  // que some do mesmo jeito, então também segura a saída.
+  const sujo =
+    JSON.stringify(draftData) !== JSON.stringify(baseDoFormulario) ||
+    itemForm.descricao.trim() !== "";
+
+  useSaidaSegura({
+    sujo,
+    salvar: () => salvar(false),
+    aviso: mode === "edit"
+      ? "As alterações deste orçamento ainda não foram salvas. Elas ficam guardadas como rascunho neste aparelho, mas o orçamento só muda depois de salvar."
+      : "Este orçamento ainda não foi criado. O que você preencheu fica guardado como rascunho neste aparelho, mas não entra no sistema enquanto não salvar.",
+  });
 
   function restoreDraft() {
     if (!pendingDraft) return;
@@ -233,15 +263,24 @@ export default function OrcamentoForm({
       ? ((Number(itemForm.valorUnit) - Number(itemForm.custoUnit)) / Number(itemForm.valorUnit)) * 100
       : null;
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
+    void salvar(true);
+  }
+
+  /**
+   * `navegar` separa os dois jeitos de salvar: pelo botão da tela, que segue
+   * para o orçamento; e pelo aviso de saída, onde quem escolhe o destino é o
+   * próprio aviso — se esta função também navegasse, as duas idas brigariam.
+   */
+  async function salvar(navegar: boolean): Promise<boolean> {
     if (!clienteId && !clienteNome.trim()) {
       setError("Selecione um cliente cadastrado ou escreva um nome de referência.");
-      return;
+      return false;
     }
     if (!descricao.trim() && itens.length === 0) {
       setError("Descreva o serviço ou adicione ao menos um item.");
-      return;
+      return false;
     }
     setError("");
     setSaving(true);
@@ -269,10 +308,10 @@ export default function OrcamentoForm({
           }),
         });
         const data = await res.json();
-        if (!res.ok) { setError(data.error || "Erro ao salvar orçamento"); return; }
+        if (!res.ok) { setError(data.error || "Erro ao salvar orçamento"); return false; }
         clearDraft();
-        router.push(`/orcamentos/${orcamentoId}`);
-        return;
+        if (navegar) router.push(`/orcamentos/${orcamentoId}`);
+        return true;
       }
 
       const res = await fetch("/api/orcamentos", {
@@ -287,9 +326,10 @@ export default function OrcamentoForm({
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Erro ao criar orçamento"); return; }
+      if (!res.ok) { setError(data.error || "Erro ao criar orçamento"); return false; }
       clearDraft();
-      router.push(`/orcamentos/${data.id}`);
+      if (navegar) router.push(`/orcamentos/${data.id}`);
+      return true;
     } finally {
       setSaving(false);
     }
