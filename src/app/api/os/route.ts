@@ -4,6 +4,7 @@ import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { osCriarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
+import { produtosDosItens, vinculoDoItem } from "@/lib/estoque";
 
 export async function GET(request: Request) {
   const guarda = await guardaApi();
@@ -133,13 +134,7 @@ export async function POST(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
 
-  // Quem não vê custo também não o define. OS aberta por essa pessoa nasce sem custo
-  // de peça, e quem tem financeiro preenche depois.
   const podeDefinirCusto = guarda.usuario.podeFinanceiro;
-  const custoDoItem = (item: { custoUnit?: unknown }) =>
-    podeDefinirCusto && item.custoUnit != null && item.custoUnit !== ""
-      ? Number(item.custoUnit)
-      : null;
 
   try {
     const {
@@ -154,6 +149,21 @@ export async function POST(request: Request) {
       combustivelEmUso,
       itens,
     } = await lerJson(request, osCriarSchema);
+
+    // Peças que vieram da prateleira: é daqui que sai o custo de quem não pode
+    // digitá-lo, e é este vínculo que dá a baixa no estoque lá embaixo. Produto que
+    // não existe mais vira item sem vínculo, em vez de erro de chave estrangeira.
+    const produtos = await produtosDosItens(itens);
+    const vinculoDe = (item: { produtoId?: string | null }) => vinculoDoItem(item, produtos);
+
+    // Quem não vê custo também não o define — exceto quando a peça saiu do estoque:
+    // aí o custo é o do produto, e não o que veio (ou não veio) da tela. Sem isto, a
+    // OS aberta pelo operador entraria com peça a custo zero e lucro inflado.
+    const custoDoItem = (item: { custoUnit?: number | null; produtoId?: string | null }) => {
+      if (podeDefinirCusto && item.custoUnit != null) return item.custoUnit;
+      const produtoId = vinculoDe(item);
+      return produtoId ? produtos.get(produtoId)!.custoUnit : null;
+    };
 
     // Resolve o nome do mecânico para gravar denormalizado (compat com PDF/listas).
     let mecanicoNome: string | null = null;
@@ -188,7 +198,7 @@ export async function POST(request: Request) {
         create: { id: "os", ultimo: 1 },
       });
 
-      return tx.ordemServico.create({
+      const criada = await tx.ordemServico.create({
         data: {
           numero: seq.ultimo,
           clienteId,
@@ -216,6 +226,7 @@ export async function POST(request: Request) {
               valorTotal: valorDoItem(item),
               custoUnit: custoDoItem(item),
               fornecedor: item.fornecedor ?? null,
+              produtoId: vinculoDe(item),
             })),
           },
         },
@@ -225,6 +236,11 @@ export async function POST(request: Request) {
           itens: true,
         },
       });
+
+      // Nada sai da prateleira aqui: a OS nasce ABERTA e a baixa acontece na entrega
+      // (ver `consomeEstoque` em lib/constants). O que esta rota grava é só o vínculo
+      // da peça com o produto — é ele que a entrega vai ler.
+      return criada;
     });
 
     return NextResponse.json(semFinanceiro(os, guarda.usuario.podeFinanceiro), { status: 201 });

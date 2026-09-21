@@ -9,6 +9,7 @@ import { semFinanceiro } from "@/lib/permissoes";
 import { custosParaSalvar } from "@/lib/custos";
 import { planoDeItens } from "@/lib/itens";
 import { registrarExclusao } from "@/lib/exclusoes";
+import { produtosDosItens, vinculoDoItem } from "@/lib/estoque";
 
 export async function GET(
   _req: Request,
@@ -25,7 +26,12 @@ export async function GET(
       cliente: true,
       veiculo: true,
       ordem: { select: { id: true, numero: true } },
-      itens: { orderBy: { createdAt: "asc" } },
+      itens: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          produto: { select: { id: true, nome: true, unidade: true, quantidade: true } },
+        },
+      },
       fotos: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -97,6 +103,11 @@ export async function PUT(
       ? await custosParaSalvar(itens, guarda.usuario.podeFinanceiro, { orcamento: id })
       : [];
 
+    // De onde veio cada peça. O orçamento não dá baixa — o vínculo existe para a
+    // conversão em OS herdá-lo (ver rota converter).
+    const produtos = itens ? await produtosDosItens(itens) : new Map();
+    const vinculos = itens ? itens.map((i) => vinculoDoItem(i, produtos)) : [];
+
     if (itens) {
       totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
       totalMO = itens.filter((i) => i.tipo !== "PECA").reduce((s, i) => s + valorDoItem(i), 0);
@@ -140,7 +151,7 @@ export async function PUT(
           where: { orcamentoId: id },
           select: { id: true },
         });
-        const plano = planoDeItens(itens, custos, new Set(noBanco.map((i) => i.id)));
+        const plano = planoDeItens(itens, custos, new Set(noBanco.map((i) => i.id)), vinculos);
 
         for (const { id: itemId, dados } of plano.atualizar) {
           await tx.itemOrcamento.update({ where: { id: itemId }, data: dados });

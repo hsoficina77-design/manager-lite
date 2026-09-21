@@ -10,6 +10,7 @@ import { NotificacaoSino } from "./ui/Notificacoes";
 import { usePedirSaida } from "./ui/SaidaSegura";
 import { SeletorTema } from "./ui/Tema";
 import {
+  Caixa,
   Chave,
   Chevron,
   Cofre,
@@ -96,6 +97,9 @@ export function Sidebar({
       Icone: Chave,
       children: [{ href: "/produtividade", label: "Produtividade", dono: true }],
     },
+    // Aberto ao operador: é ele que precisa saber se tem a peça na prateleira ao
+    // montar a OS. Custo e lucro da tela somem sozinhos — a API os apaga na resposta.
+    { href: "/estoque", label: "Estoque", Icone: Caixa },
     {
       href: "/contas-receber",
       label: "Contas a receber",

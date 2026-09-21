@@ -199,6 +199,72 @@ export function tipoDaFoto(tipo: string): FotoTipo {
   return FOTO_TIPOS.find((t) => t.value === tipo)?.value ?? FOTO_TIPO_PADRAO;
 }
 
+// ─── Estoque ─────────────────────────────────────────────────────────────────
+
+// Unidade de compra da peça. Lista curta de propósito: é um dropdown que o
+// balconista percorre com o polegar, não um cadastro de unidades de medida.
+export const UNIDADES = [
+  { value: "UN", label: "UN — unidade" },
+  { value: "PC", label: "PC — peça" },
+  { value: "L", label: "L — litro" },
+  { value: "ML", label: "ML — mililitro" },
+  { value: "KG", label: "KG — quilo" },
+  { value: "G", label: "G — grama" },
+  { value: "M", label: "M — metro" },
+  { value: "CX", label: "CX — caixa" },
+  { value: "JG", label: "JG — jogo" },
+  { value: "PAR", label: "PAR" },
+] as const;
+
+export const UNIDADE_VALUES: string[] = UNIDADES.map((u) => u.value);
+
+export const UNIDADE_PADRAO = "UN";
+
+/** Como o movimento entrou no estoque. O sinal de `quantidade` é que manda; o tipo
+ *  é o motivo, e é o que a tela mostra. */
+export const MOVIMENTO_TIPOS = [
+  { value: "ENTRADA", label: "Entrada", ajuda: "Compra, devolução do cliente, sobra de serviço" },
+  { value: "SAIDA", label: "Saída", ajuda: "Uso interno, perda, quebra" },
+  { value: "AJUSTE", label: "Ajuste", ajuda: "Acerto de contagem: o saldo passa a ser o que você contou" },
+] as const;
+
+export type MovimentoTipo = (typeof MOVIMENTO_TIPOS)[number]["value"];
+
+export const MOVIMENTO_TIPO_VALUES: string[] = MOVIMENTO_TIPOS.map((t) => t.value);
+
+export function labelMovimento(tipo: string): string {
+  return MOVIMENTO_TIPOS.find((t) => t.value === tipo)?.label ?? tipo;
+}
+
+/** Quantidade sem casas inúteis: "10 UN", mas "2,5 L". */
+export function formatQuantidade(valor: number, unidade?: string | null): string {
+  const numero = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(valor);
+  return unidade ? `${numero} ${unidade}` : numero;
+}
+
+/** Situação da prateleira. Vale para a cor da pílula e para o aviso de reposição. */
+export type SituacaoEstoque = "SEM" | "BAIXO" | "OK";
+
+export function situacaoEstoque(p: { quantidade: number; estoqueMinimo: number }): SituacaoEstoque {
+  if (p.quantidade <= 0) return "SEM";
+  if (p.estoqueMinimo > 0 && p.quantidade <= p.estoqueMinimo) return "BAIXO";
+  return "OK";
+}
+
+// A peça sai da prateleira na ENTREGA do veículo, não na abertura da OS.
+//
+// É a mesma régua que o resto do sistema já usa para dizer que o serviço aconteceu
+// (ver OS_CONCLUIDA e o comentário de `fechamento` em OrdemServico): enquanto o carro
+// está no pátio, a OS é uma intenção — ela muda de peça, ganha item, perde item, e
+// baixar a cada rascunho faria o saldo dançar o dia inteiro. Na entrega o serviço
+// virou fato, e é aí que o estoque acerta as contas de uma vez.
+//
+// Como a baixa é calculada por diferença (ver lib/estoque), a volta também funciona:
+// reabrir ou cancelar uma OS entregue devolve as peças para a prateleira.
+export function consomeEstoque(status: string): boolean {
+  return OS_CONCLUIDA.includes(status);
+}
+
 // Combustíveis que admitem "combustível em uso" (motor bicombustível).
 export const COMBUSTIVEIS_BICOMBUSTIVEL = ["FLEX", "HIBRIDO"];
 

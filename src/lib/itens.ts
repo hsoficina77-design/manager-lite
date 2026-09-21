@@ -25,6 +25,7 @@ export type DadosItem = {
   valorTotal: number;
   custoUnit: number | null;
   fornecedor: string | null;
+  produtoId: string | null;
 };
 
 export type PlanoDeItens = {
@@ -42,11 +43,16 @@ export type PlanoDeItens = {
  * `custos` vem de `custosParaSalvar()` e é posicional: o custo de `itens[i]` está em
  * `custos[i]`. `idsNoBanco` limita o que conta como "já existe" aos itens do próprio
  * documento — id de outra OS enviado de propósito é tratado como item novo.
+ *
+ * `vinculos` é o `produtoId` de cada item já conferido contra o estoque (ver
+ * `vinculoDoItem` em lib/estoque): id de produto que não existe mais chega aqui como
+ * null, e o item entra sem vínculo em vez de derrubar a gravação com erro de chave.
  */
 export function planoDeItens(
   itens: ItemValidado[],
   custos: (number | null)[],
-  idsNoBanco: Set<string>
+  idsNoBanco: Set<string>,
+  vinculos: (string | null)[] = []
 ): PlanoDeItens {
   const plano: PlanoDeItens = { atualizar: [], criar: [], manter: [] };
 
@@ -59,6 +65,7 @@ export function planoDeItens(
       valorTotal: valorDoItem(item),
       custoUnit: custos[idx] ?? null,
       fornecedor: item.fornecedor ?? null,
+      produtoId: vinculos[idx] ?? null,
     };
 
     if (item.id && idsNoBanco.has(item.id)) {

@@ -52,7 +52,13 @@ export const ROTAS_FINANCEIRO = [
 // operador só com o checkbox "Excluir" marcado nele (Usuario.podeExcluir). Toda
 // exclusão fica registrada no backlog (RegistroExclusao), então dá para rastrear quem
 // apagou o quê mesmo com o acesso liberado.
-const ROTAS_DE_EXCLUSAO = ["/api/os/", "/api/clientes/", "/api/orcamentos/", "/api/veiculos/"];
+const ROTAS_DE_EXCLUSAO = [
+  "/api/os/",
+  "/api/clientes/",
+  "/api/orcamentos/",
+  "/api/veiculos/",
+  "/api/produtos/",
+];
 
 /**
  * Esta rota exige o papel de dono — sem exceção por checkbox?

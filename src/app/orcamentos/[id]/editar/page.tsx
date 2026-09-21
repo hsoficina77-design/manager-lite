@@ -16,6 +16,19 @@ export default function EditarOrcamentoPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((o: any) => {
+        // Nome e saldo das peças de estoque citadas, para o selo do vínculo.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const produtos = (o.itens ?? []).reduce((acc: any, i: any) => {
+          if (i.produto) {
+            acc[i.produto.id] = {
+              nome: i.produto.nome,
+              unidade: i.produto.unidade,
+              quantidade: i.produto.quantidade,
+            };
+          }
+          return acc;
+        }, {});
+
         setInitial({
           clienteId: o.clienteId ?? o.cliente?.id ?? "",
           veiculoId: o.veiculoId ?? o.veiculo?.id ?? "",
@@ -28,12 +41,14 @@ export default function EditarOrcamentoPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           itens: (o.itens ?? []).map((i: any) => ({
             id: i.id,
+            produtoId: i.produtoId ?? undefined,
             tipo: i.tipo,
             descricao: i.descricao,
             quantidade: String(i.quantidade),
             valorUnit: String(i.valorUnit),
             custoUnit: i.custoUnit != null ? String(i.custoUnit) : "",
           })),
+          produtos,
         });
       })
       .catch(() => setErro(true))

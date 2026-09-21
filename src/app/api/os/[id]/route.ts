@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
 import { comUrlAssinada } from "@/lib/fotos";
-import { OS_CONCLUIDA } from "@/lib/constants";
+import { OS_CONCLUIDA, consomeEstoque } from "@/lib/constants";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { osAtualizarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -10,6 +10,7 @@ import { semFinanceiro } from "@/lib/permissoes";
 import { custosParaSalvar } from "@/lib/custos";
 import { planoDeItens } from "@/lib/itens";
 import { registrarExclusao } from "@/lib/exclusoes";
+import { aplicarConsumo, consumoLiquido, produtosDosItens, vinculoDoItem } from "@/lib/estoque";
 
 export async function GET(
   _req: Request,
@@ -25,7 +26,14 @@ export async function GET(
     include: {
       cliente: true,
       veiculo: true,
-      itens: { orderBy: { createdAt: "asc" } },
+      // O produto vem junto para a tela de edição saber que aquela peça veio da
+      // prateleira — e mostrar o saldo de lá ao mexer na quantidade.
+      itens: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          produto: { select: { id: true, nome: true, unidade: true, quantidade: true } },
+        },
+      },
       pagamentos: { orderBy: { data: "desc" } },
       fotos: { orderBy: { createdAt: "asc" } },
     },
@@ -71,12 +79,18 @@ export async function PUT(
 
     const current = await prisma.ordemServico.findUnique({
       where: { id },
-      select: { totalPecas: true, totalMO: true, desconto: true, custoTotalPecas: true, valorPago: true, status: true },
+      select: { numero: true, totalPecas: true, totalMO: true, desconto: true, custoTotalPecas: true, valorPago: true, status: true },
     });
 
     if (!current) {
       return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
     }
+
+    // Peças da prateleira citadas na lista nova. `vinculos` é posicional, como
+    // `custos`: id de produto que não existe mais chega como null e o item fica sem
+    // vínculo, em vez de derrubar a gravação inteira com erro de chave estrangeira.
+    const produtos = itens ? await produtosDosItens(itens) : new Map();
+    const vinculos = itens ? itens.map((i) => vinculoDoItem(i, produtos)) : [];
 
     // Quando os itens são enviados (edição completa), recalcula os totais a partir deles.
     let totalPecas = current.totalPecas;
@@ -153,38 +167,65 @@ export async function PUT(
       }
     }
 
-    if (itens) {
-      await prisma.$transaction(async (tx) => {
+    // O que o estoque mexeu nesta gravação, para a tela poder confirmar a baixa em vez
+    // de o saldo mudar em silêncio.
+    let estoque = { baixados: 0, devolvidos: 0 };
+
+    // Uma transação só, e não apenas quando a lista de itens vem junto: cancelar a OS
+    // devolve as peças para a prateleira, e a devolução não pode acontecer separada da
+    // mudança de status.
+    await prisma.$transaction(async (tx) => {
+      if (itens !== undefined || status !== undefined) {
         // Item que já existe é atualizado no lugar, e não recriado: trocar o id a cada
         // gravação quebraria a recuperação de custo do operador — ver lib/itens.
         const noBanco = await tx.itemOrdem.findMany({
           where: { ordemId: id },
-          select: { id: true },
+          select: { id: true, produtoId: true, quantidade: true },
         });
-        const plano = planoDeItens(itens, custos, new Set(noBanco.map((i) => i.id)));
 
-        for (const { id: itemId, dados } of plano.atualizar) {
-          await tx.itemOrdem.update({ where: { id: itemId }, data: dados });
+        // O estoque enxerga a OS como "o que ela segura da prateleira", e só a
+        // DIFERENÇA é escrita: salvar duas vezes seguidas não baixa a peça duas vezes,
+        // trocar 2 por 3 tira 1, e apagar o item devolve os 2. OS cancelada não segura
+        // nada — daí o `consomeEstoque` dos dois lados.
+        const antes = consomeEstoque(current.status) ? noBanco : [];
+        const listaNova = itens
+          ? itens.map((item, idx) => ({ produtoId: vinculos[idx], quantidade: item.quantidade }))
+          : noBanco;
+        const depois = consomeEstoque(status ?? current.status) ? listaNova : [];
+
+        estoque = await aplicarConsumo(tx, consumoLiquido(antes, depois), {
+          ordemId: id,
+          ordemNumero: current.numero,
+          usuarioNome: guarda.usuario.nome,
+        });
+
+        if (itens) {
+          const plano = planoDeItens(itens, custos, new Set(noBanco.map((i) => i.id)), vinculos);
+
+          for (const { id: itemId, dados } of plano.atualizar) {
+            await tx.itemOrdem.update({ where: { id: itemId }, data: dados });
+          }
+
+          // Antes de criar os novos: `manter` não os conhece, e apagar depois levaria
+          // junto o que acabou de entrar.
+          await tx.itemOrdem.deleteMany({ where: { ordemId: id, id: { notIn: plano.manter } } });
+
+          if (plano.criar.length > 0) {
+            await tx.itemOrdem.createMany({
+              data: plano.criar.map((dados) => ({ ordemId: id, ...dados })),
+            });
+          }
         }
+      }
 
-        // Antes de criar os novos: `manter` não os conhece, e apagar depois levaria
-        // junto o que acabou de entrar.
-        await tx.itemOrdem.deleteMany({ where: { ordemId: id, id: { notIn: plano.manter } } });
-
-        if (plano.criar.length > 0) {
-          await tx.itemOrdem.createMany({
-            data: plano.criar.map((dados) => ({ ordemId: id, ...dados })),
-          });
-        }
-
-        await tx.ordemServico.update({ where: { id }, data });
-      });
-    } else {
-      await prisma.ordemServico.update({ where: { id }, data });
-    }
+      await tx.ordemServico.update({ where: { id }, data });
+    });
 
     const os = await prisma.ordemServico.findUnique({ where: { id } });
-    return NextResponse.json(semFinanceiro(os, guarda.usuario.podeFinanceiro));
+    return NextResponse.json({
+      ...semFinanceiro(os, guarda.usuario.podeFinanceiro),
+      estoque,
+    });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;
@@ -204,7 +245,12 @@ export async function DELETE(
   try {
     const os = await prisma.ordemServico.findUnique({
       where: { id },
-      select: { numero: true, cliente: { select: { nome: true } } },
+      select: {
+        numero: true,
+        status: true,
+        cliente: { select: { nome: true } },
+        itens: { select: { produtoId: true, quantidade: true } },
+      },
     });
     if (!os) {
       return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
@@ -225,7 +271,22 @@ export async function DELETE(
       });
     }
 
-    await prisma.ordemServico.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      // A OS some, mas a peça que ela segurava não evaporou: volta para a prateleira
+      // antes da exclusão. O movimento fica sem `ordemId` de propósito — a OS não vai
+      // mais existir —, e `ordemNumero` é o que mantém o rastro legível.
+      await aplicarConsumo(
+        tx,
+        consumoLiquido(consomeEstoque(os.status) ? os.itens : [], []),
+        {
+          ordemNumero: os.numero,
+          usuarioNome: guarda.usuario.nome,
+          motivo: `Devolução — OS #${os.numero} excluída`,
+        }
+      );
+      await tx.ordemServico.delete({ where: { id } });
+    });
+
     await deleteFotos(fotos.filter((f) => !f.orcamentoId).map((f) => f.path));
     await registrarExclusao(
       "OS",

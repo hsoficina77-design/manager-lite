@@ -7,8 +7,13 @@ import { formatCurrency } from "@/lib/utils";
 import { anoVeiculo } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import ClienteSelect from "./ClienteSelect";
+import ProdutoBusca, {
+  VinculoEstoque,
+  type ProdutoBuscado,
+  type ProdutoResumo,
+} from "./ProdutoBusca";
 import { CampoDinheiro, CampoQuantidade } from "@/components/ui/Campos";
-import { Fechar } from "@/components/ui/Icones";
+import { Caixa, Fechar } from "@/components/ui/Icones";
 import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 import { usePodeFinanceiro } from "@/components/UsuarioProvider";
 
@@ -22,6 +27,8 @@ export type ItemForm = {
   /** Item que já existe no banco. O operador não enxerga custo, então é por este id
    *  que o servidor sabe qual custo preservar ao salvar. Item novo não tem. */
   id?: string;
+  /** Peça que saiu da prateleira. É este vínculo que dá a baixa no estoque ao salvar. */
+  produtoId?: string;
   tipo: string; descricao: string; quantidade: string;
   valorUnit: string; custoUnit: string;
 };
@@ -37,6 +44,17 @@ export type OSFormInitial = {
   nivelCombustivel: string;
   combustivelEmUso: string;
   itens: ItemForm[];
+  /** Nome e saldo dos produtos já usados pela OS, para o selo do vínculo. */
+  produtos?: Record<string, ProdutoResumo>;
+  /**
+   * Esta OS já baixou as peças do estoque (ou seja, já foi entregue)?
+   *
+   * Muda o que "disponível" significa no aviso de saldo: numa OS ainda no pátio o
+   * saldo da prateleira está intacto, e o aviso é uma previsão do que vai faltar na
+   * entrega. Numa OS já entregue o saldo veio descontado dela, e o que ela segura
+   * precisa ser somado de volta para o aviso não acusar falta que não existe.
+   */
+  seguraEstoque?: boolean;
 };
 
 export default function OSForm({
@@ -69,6 +87,9 @@ export default function OSForm({
   const [combustivelEmUso, setCombustivelEmUso] = useState(initial?.combustivelEmUso ?? "");
   const [itens, setItens] = useState<ItemForm[]>(initial?.itens ?? []);
   const [itemForm, setItemForm] = useState<ItemForm>({ tipo: "PECA", descricao: "", quantidade: "1", valorUnit: "", custoUnit: "" });
+  // Nome e saldo das peças de estoque em jogo nesta tela. Fica fora dos itens de
+  // propósito: o que vai para o rascunho e para o servidor é só o `produtoId`.
+  const [produtos, setProdutos] = useState<Record<string, ProdutoResumo>>(initial?.produtos ?? {});
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [itemError, setItemError] = useState("");
   // Último item removido, guardado para o "Desfazer". A remoção é de um toque só,
@@ -167,6 +188,39 @@ export default function OSForm({
     setEditingIdx(null);
   }
 
+  /** Peça escolhida na busca do estoque: preenche a linha inteira e amarra o vínculo. */
+  function escolherProduto(p: ProdutoBuscado) {
+    setProdutos((mapa) => ({
+      ...mapa,
+      [p.id]: { nome: p.nome, unidade: p.unidade, quantidade: p.quantidade },
+    }));
+    setItemForm((f) => ({
+      ...f,
+      produtoId: p.id,
+      descricao: p.nome,
+      valorUnit: String(p.valorVenda),
+      // O custo só chega para quem pode vê-lo. Para o operador não há o que preencher:
+      // na gravação o servidor usa o custo do próprio produto (ver lib/custos).
+      custoUnit: p.custoUnit != null ? String(p.custoUnit) : f.custoUnit,
+    }));
+  }
+
+  // Quanto de cada peça esta OS já tirou da prateleira — zero enquanto o carro está no
+  // pátio, porque a baixa só acontece na entrega. Numa OS já entregue, o saldo que o
+  // servidor manda vem descontado dela, e somar de volta é o que responde "quanto ainda
+  // dá para lançar aqui sem o estoque ficar negativo".
+  const seguradoPelaOS = initial?.seguraEstoque
+    ? (initial.itens ?? []).reduce<Record<string, number>>((acc, i) => {
+        if (i.produtoId) acc[i.produtoId] = (acc[i.produtoId] ?? 0) + Number(i.quantidade);
+        return acc;
+      }, {})
+    : {};
+
+  const disponivelDe = (produtoId: string) =>
+    produtos[produtoId]
+      ? produtos[produtoId].quantidade + (seguradoPelaOS[produtoId] ?? 0)
+      : undefined;
+
   function saveItem() {
     setItemError("");
     if (!itemForm.descricao.trim()) { setItemError("Informe a descrição do item."); return; }
@@ -239,6 +293,7 @@ export default function OSForm({
     try {
       const itensPayload = itens.map((i) => ({
         id: i.id,
+        produtoId: i.produtoId,
         tipo: i.tipo,
         descricao: i.descricao,
         quantidade: Number(i.quantidade),
@@ -438,7 +493,20 @@ export default function OSForm({
               <div className={`grid grid-cols-2 sm:grid-cols-12 gap-2 items-end rounded-lg transition-colors ${editingIdx !== null ? "ring-2 ring-atencao-linha bg-atencao-fraco/40 p-2 -m-2" : ""}`}>
             <div className="col-span-2 sm:col-span-2">
               <label className="block text-xs text-tinta-3 mb-1">Tipo</label>
-              <select value={itemForm.tipo} onChange={(e) => setItemForm({ ...itemForm, tipo: e.target.value })} className="w-full rounded-lg border border-linha-forte px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <select
+                value={itemForm.tipo}
+                onChange={(e) => {
+                  const tipo = e.target.value;
+                  // O estoque é prateleira de peça: virar mão de obra solta o vínculo,
+                  // senão a baixa continuaria acontecendo numa linha que já não é peça.
+                  setItemForm({
+                    ...itemForm,
+                    tipo,
+                    produtoId: tipo === "PECA" ? itemForm.produtoId : undefined,
+                  });
+                }}
+                className="w-full rounded-lg border border-linha-forte px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
                 <option value="PECA">Peça</option>
                 <option value="MAO_DE_OBRA">M.O.</option>
                 <option value="SERVICO">Serviço</option>
@@ -446,7 +514,16 @@ export default function OSForm({
             </div>
             <div className={itemForm.tipo === "PECA" ? "col-span-2 sm:col-span-3" : "col-span-2 sm:col-span-5"}>
               <label className="block text-xs text-tinta-3 mb-1">Descrição</label>
-              <input value={itemForm.descricao} onChange={(e) => setItemForm({ ...itemForm, descricao: e.target.value })} placeholder="Ex: Filtro de óleo" className="w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+              {itemForm.tipo === "PECA" ? (
+                <ProdutoBusca
+                  valor={itemForm.descricao}
+                  onTexto={(t) => setItemForm({ ...itemForm, descricao: t })}
+                  onEscolher={escolherProduto}
+                  onEnter={saveItem}
+                />
+              ) : (
+              <input value={itemForm.descricao} onChange={(e) => setItemForm({ ...itemForm, descricao: e.target.value })} placeholder="Ex: Alinhamento e balanceamento" className="w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), saveItem())} />
+              )}
             </div>
             <div className="col-span-1 sm:col-span-1">
               <label className="block text-xs text-tinta-3 mb-1">Qtd</label>
@@ -503,6 +580,16 @@ export default function OSForm({
             </div>
           </div>
 
+          {itemForm.produtoId && (
+            <VinculoEstoque
+              nome={produtos[itemForm.produtoId]?.nome ?? itemForm.descricao}
+              unidade={produtos[itemForm.produtoId]?.unidade ?? ""}
+              disponivel={disponivelDe(itemForm.produtoId)}
+              pedido={Number(itemForm.quantidade)}
+              onDesvincular={() => setItemForm({ ...itemForm, produtoId: undefined })}
+            />
+          )}
+
           {podeFinanceiro && Number(itemForm.valorUnit) > 0 && (
             <p className="text-xs text-tinta-3">
               Ganho deste item:{" "}
@@ -532,7 +619,19 @@ export default function OSForm({
                 {itens.map((item, idx) => (
                   <tr key={idx} className={editingIdx === idx ? "bg-atencao-fraco" : "group"}>
                     <td className="py-1.5 text-tinta-3 text-xs">{item.tipo === "PECA" ? "Peça" : item.tipo === "MAO_DE_OBRA" ? "M.O." : "Serviço"}</td>
-                    <td className="py-1.5 text-tinta">{item.descricao}</td>
+                    <td className="py-1.5 text-tinta">
+                      <span className="flex items-center gap-1.5">
+                        {/* A caixinha diz que esta linha vai baixar do estoque ao salvar. */}
+                        {item.produtoId && (
+                          <Caixa
+                            tamanho={13}
+                            className="shrink-0 text-tinta-3"
+                            aria-label="Baixa do estoque"
+                          />
+                        )}
+                        <span className="min-w-0">{item.descricao}</span>
+                      </span>
+                    </td>
                     <td className="py-1.5 text-right text-tinta-2">{item.quantidade}</td>
                     <td className="py-1.5 text-right text-tinta-2">{formatCurrency(Number(item.valorUnit))}</td>
                     <td className="py-1.5 text-right font-medium text-tinta">{formatCurrency(Number(item.quantidade) * Number(item.valorUnit))}</td>

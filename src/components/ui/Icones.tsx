@@ -235,6 +235,15 @@ export const Chave = (p: Props) => (
   </Base>
 );
 
+/** Estoque — caixa de peça na prateleira. */
+export const Caixa = (p: Props) => (
+  <Base {...p}>
+    <path d="M21 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" />
+    <rect x="2" y="4" width="20" height="4" rx="1" />
+    <path d="M10 12h4" />
+  </Base>
+);
+
 /** Caixa — o cofre da oficina. */
 export const Cofre = (p: Props) => (
   <Base {...p}>

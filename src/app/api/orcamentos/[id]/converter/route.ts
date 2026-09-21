@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 
 // Converte um orçamento em Ordem de Serviço.
 // Copia os itens, gera o número de OS e marca o orçamento como CONVERTIDO.
+//
+// O vínculo com o estoque é copiado junto, mas nada sai da prateleira aqui: a OS nasce
+// aberta, e a baixa acontece na entrega do veículo (ver `consomeEstoque`).
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+
   const { id } = await params;
   try {
     const orcamento = await prisma.orcamento.findUnique({
@@ -77,6 +84,7 @@ export async function POST(
           margemPecas,
           itens: {
             create: orcamento.itens.map((i) => ({
+              produtoId: i.produtoId,
               tipo: i.tipo,
               descricao: i.descricao,
               quantidade: i.quantidade,

@@ -20,7 +20,13 @@ import {
   nulavel,
   obrigatorio,
 } from "@/lib/validacao";
-import { OS_STATUS, type OSStatus } from "@/lib/constants";
+import {
+  MOVIMENTO_TIPOS,
+  OS_STATUS,
+  UNIDADES,
+  UNIDADE_PADRAO,
+  type OSStatus,
+} from "@/lib/constants";
 
 // "Categoria: valor inválido" em vez de "Categoria inválido" — a forma com dois
 // pontos concorda com rótulo masculino e feminino, e é a mesma dos limites.
@@ -53,6 +59,9 @@ export const itemSchema = z.object({
   // que o operador não recebeu — e salvar zeraria o lucro do dono. Como o zod remove
   // o que não está declarado, tirar esta linha reintroduz esse bug em silêncio.
   id: id("Id do item").optional(),
+  // Peça que saiu da prateleira: é este vínculo que dá a baixa no estoque ao gravar
+  // (lib/estoque). Vazio é o caso normal de mão de obra e de peça comprada na hora.
+  produtoId: idNulavel("Produto").optional(),
   tipo: enumComPadrao("Tipo do item", TIPOS_ITEM, "PECA"),
   descricao: obrigatorio("Descrição do item", LIMITES.descricao),
   quantidade: dinheiro("Quantidade").max(LIMITES.quantidade, "Quantidade acima do limite"),
@@ -205,6 +214,60 @@ export const orcamentoAtualizarSchema = z.object({
   desconto: dinheiro("Desconto").optional(),
   itens: listaDeItens.optional(),
 });
+
+// ── Estoque ─────────────────────────────────────────────────────────────────
+
+const UNIDADES_PRODUTO = UNIDADES.map((u) => u.value) as [string, ...string[]];
+const TIPOS_MOVIMENTO = MOVIMENTO_TIPOS.map((t) => t.value) as [string, ...string[]];
+
+const quantidadeEstoque = (rotulo: string) =>
+  dinheiro(rotulo).max(LIMITES.quantidade, `${rotulo} acima do limite`);
+
+const produtoCampos = {
+  nome: obrigatorio("Nome do produto", LIMITES.nome),
+  codigo: nulavel("Código", LIMITES.identidade).optional(),
+  unidade: enumComPadrao("Unidade", UNIDADES_PRODUTO, UNIDADE_PADRAO),
+  custoUnit: dinheiro("Custo unitário").optional(),
+  valorVenda: dinheiro("Valor de venda").optional(),
+  estoqueMinimo: quantidadeEstoque("Estoque mínimo").optional(),
+  fornecedor: nulavel("Fornecedor", LIMITES.nome).optional(),
+  obs: nulavel("Observações", LIMITES.observacao).optional(),
+};
+
+export const produtoCriarSchema = z.object({
+  ...produtoCampos,
+  /** Saldo inicial da prateleira. Vira o primeiro movimento, não um número solto. */
+  quantidade: quantidadeEstoque("Quantidade").optional(),
+});
+
+// `quantidade` não entra aqui de propósito: mexer no saldo é sempre um movimento
+// (lib/estoque), senão o histórico deixaria de explicar o número que está na tela.
+export const produtoAtualizarSchema = z.object({
+  ...produtoCampos,
+  nome: obrigatorio("Nome do produto", LIMITES.nome).optional(),
+  unidade: enumComPadrao("Unidade", UNIDADES_PRODUTO, UNIDADE_PADRAO).optional(),
+  ativo: z.boolean().optional(),
+});
+
+/**
+ * Movimento de prateleira feito à mão (a baixa da OS não passa por aqui).
+ *
+ * Em ENTRADA e SAIDA, `quantidade` é o quanto entrou ou saiu. Em AJUSTE é o saldo
+ * contado — o número que a pessoa viu na prateleira —, e o sistema calcula a
+ * diferença. É a forma que não exige conta de cabeça de quem está inventariando.
+ */
+export const movimentoEstoqueSchema = z
+  .object({
+    tipo: enumDe("Tipo do movimento", TIPOS_MOVIMENTO),
+    quantidade: quantidadeEstoque("Quantidade"),
+    /** Só na entrada: o que a peça custou nesta compra. Atualiza o custo do produto. */
+    custoUnit: dinheiroNulavel("Custo unitário").optional(),
+    motivo: nulavel("Motivo", LIMITES.descricao).optional(),
+  })
+  .refine((m) => m.tipo === "AJUSTE" || m.quantidade > 0, {
+    message: "Quantidade deve ser maior que zero",
+    path: ["quantidade"],
+  });
 
 // ── Mecânico ────────────────────────────────────────────────────────────────
 

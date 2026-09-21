@@ -4,6 +4,7 @@ import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { orcamentoCriarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
+import { produtosDosItens, vinculoDoItem } from "@/lib/estoque";
 
 export async function GET(request: Request) {
   const guarda = await guardaApi();
@@ -79,6 +80,13 @@ export async function POST(request: Request) {
       .reduce((sum, i) => sum + valorDoItem(i), 0);
     const total = totalPecas + totalMO;
 
+    // O orçamento guarda de onde a peça veio, mas **não** dá baixa: proposta não tira
+    // nada da prateleira. O vínculo existe para a conversão em OS herdá-lo — e é lá
+    // que a peça sai. Como a gravação é a mesma do item da OS, o custo da peça de
+    // estoque também é o do produto quando quem lança não pode digitá-lo.
+    const produtos = await produtosDosItens(itens);
+    const vinculoDe = (item: { produtoId?: string | null }) => vinculoDoItem(item, produtos);
+
     const orcamento = await prisma.$transaction(async (tx) => {
       const seq = await tx.sequencia.upsert({
         where: { id: "orcamento" },
@@ -103,17 +111,24 @@ export async function POST(request: Request) {
           totalMO,
           total,
           itens: {
-            create: itens.map((item) => ({
-              tipo: item.tipo,
-              descricao: item.descricao,
-              quantidade: item.quantidade,
-              valorUnit: item.valorUnit,
-              valorTotal: valorDoItem(item),
-              // Orçamento novo: todo item é novo, então não há custo no banco a
-              // preservar — o do operador simplesmente não entra.
-              custoUnit: podeDefinirCusto ? item.custoUnit ?? null : null,
-              fornecedor: item.fornecedor ?? null,
-            })),
+            create: itens.map((item) => {
+              const produtoId = vinculoDe(item);
+              return {
+                produtoId,
+                tipo: item.tipo,
+                descricao: item.descricao,
+                quantidade: item.quantidade,
+                valorUnit: item.valorUnit,
+                valorTotal: valorDoItem(item),
+                // Orçamento novo: todo item é novo, então não há custo no banco a
+                // preservar — o do operador simplesmente não entra, a menos que a peça
+                // tenha vindo do estoque e o custo dela seja conhecido.
+                custoUnit:
+                  (podeDefinirCusto ? item.custoUnit ?? null : null) ??
+                  (produtoId ? produtos.get(produtoId)!.custoUnit : null),
+                fornecedor: item.fornecedor ?? null,
+              };
+            }),
           },
         },
         include: { cliente: true, veiculo: true, itens: true },

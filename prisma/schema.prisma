@@ -99,6 +99,7 @@ model OrdemServico {
   pagamentos  PagamentoOS[]
   orcamento   Orcamento?
   fotos       FotoOS[]
+  movimentos  MovimentoEstoque[]
 
   @@index([status])
   @@index([pago])
@@ -171,9 +172,14 @@ model Orcamento {
 }
 
 // tipo: PECA | MAO_DE_OBRA | SERVICO
+//
+// `produtoId` diz que a peça saiu da prateleira (ver model Produto). O orçamento
+// **não** dá baixa: ele é uma proposta, e o que sai do estoque é o que a OS
+// consome. O vínculo existe aqui para ser copiado na conversão em OS.
 model ItemOrcamento {
   id          String   @id @default(cuid())
   orcamentoId String
+  produtoId   String?
   tipo        String   @default("PECA")
   descricao   String
   quantidade  Float    @default(1)
@@ -184,12 +190,21 @@ model ItemOrcamento {
   createdAt   DateTime @default(now())
 
   orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  @@index([produtoId])
 }
 
 // tipo: PECA | MAO_DE_OBRA | SERVICO
+//
+// `produtoId` é o vínculo com o estoque: é ele que faz a peça baixar da prateleira
+// ao ser gravada na OS. Descrição, preço e custo continuam sendo cópias, não
+// ponteiros — reajustar a tabela do estoque não pode reescrever o que um cliente
+// já pagou mês passado.
 model ItemOrdem {
   id         String   @id @default(cuid())
   ordemId    String
+  produtoId  String?
   tipo       String   @default("PECA")
   descricao  String
   quantidade Float    @default(1)
@@ -199,7 +214,79 @@ model ItemOrdem {
   fornecedor String?
   createdAt  DateTime @default(now())
 
-  ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+  ordem   OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+  produto Produto?     @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  @@index([produtoId])
+}
+
+// ─── Estoque ─────────────────────────────────────────────────────────────────
+//
+// O produto é o que está na prateleira: custo, preço de venda e quantidade. Ele
+// não substitui o item da OS — a OS continua guardando a própria linha, com o
+// preço praticado naquele dia (ver ItemOrdem).
+//
+// `custoUnit` se chama assim de propósito, e não `custo`: é o mesmo nome que o
+// item da OS usa, então `semFinanceiro()` (lib/permissoes) já o apaga para quem
+// não pode ver dinheiro, sem precisar de uma segunda lista de campos.
+model Produto {
+  id            String   @id @default(cuid())
+  nome          String
+  /// Código do fabricante/fornecedor. Entra na busca junto com o nome.
+  codigo        String?  @unique
+  /// Nome, código e fornecedor em minúsculo e sem acento. É o campo que a busca
+  /// compara, e existe porque o `ILIKE` do Postgres não ignora acento: sem ele,
+  /// digitar "agua" na OS não acharia "Água desmineralizada". Mantido pela
+  /// aplicação (`textoDeBusca`, lib/estoque) a cada gravação.
+  busca         String   @default("")
+  unidade       String   @default("UN")
+  custoUnit     Float    @default(0)
+  valorVenda    Float    @default(0)
+  quantidade    Float    @default(0)
+  /// Abaixo disto a tela avisa que é hora de repor. Zero desliga o aviso.
+  estoqueMinimo Float    @default(0)
+  fornecedor    String?
+  obs           String?
+  /// Desativado some da busca da OS, mas o histórico que o usa continua legível.
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  itensOrdem     ItemOrdem[]
+  itensOrcamento ItemOrcamento[]
+  movimentos     MovimentoEstoque[]
+
+  @@index([ativo, nome])
+}
+
+// tipo: ENTRADA | SAIDA | AJUSTE
+//
+// Livro-caixa do estoque. Existe porque "tenho 3" sem o "por quê" é um número que
+// ninguém consegue conferir: aqui ficam a compra, a baixa de cada OS e o acerto de
+// prateleira, cada um com o saldo que deixou.
+//
+// `quantidade` é a variação com sinal (+ entra, − sai), então a soma dos
+// movimentos de um produto é o saldo dele. `ordemNumero` é cópia congelada: a OS
+// pode ser excluída depois, e o rastro precisa continuar legível — mesma ideia do
+// `usuarioNome` de RegistroExclusao.
+model MovimentoEstoque {
+  id          String   @id @default(cuid())
+  produtoId   String
+  tipo        String
+  quantidade  Float
+  saldoDepois Float
+  custoUnit   Float?
+  motivo      String?
+  ordemId     String?
+  ordemNumero Int?
+  usuarioNome String?
+  createdAt   DateTime @default(now())
+
+  produto Produto       @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  ordem   OrdemServico? @relation(fields: [ordemId], references: [id], onDelete: SetNull)
+
+  @@index([produtoId, createdAt])
+  @@index([ordemId])
 }
 
 // formaPagamento: DINHEIRO | PIX | CARTAO_CREDITO | CARTAO_DEBITO | TRANSFERENCIA

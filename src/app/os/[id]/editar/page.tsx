@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import OSForm, { type OSFormInitial } from "@/components/OSForm";
+import { OS_CONCLUIDA } from "@/lib/constants";
 import { Esqueleto } from "@/components/ui/Dados";
 
 export default function EditarOSPage() {
@@ -16,6 +17,20 @@ export default function EditarOSPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((os: any) => {
+        // Nome e saldo das peças de estoque que a OS já usa — é o que o formulário
+        // precisa para desenhar o selo do vínculo sem uma segunda consulta.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const produtos = (os.itens ?? []).reduce((acc: any, i: any) => {
+          if (i.produto) {
+            acc[i.produto.id] = {
+              nome: i.produto.nome,
+              unidade: i.produto.unidade,
+              quantidade: i.produto.quantidade,
+            };
+          }
+          return acc;
+        }, {});
+
         setInitial({
           clienteId: os.clienteId ?? os.cliente?.id ?? "",
           veiculoId: os.veiculoId ?? os.veiculo?.id ?? "",
@@ -29,12 +44,15 @@ export default function EditarOSPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           itens: (os.itens ?? []).map((i: any) => ({
             id: i.id,
+            produtoId: i.produtoId ?? undefined,
             tipo: i.tipo,
             descricao: i.descricao,
             quantidade: String(i.quantidade),
             valorUnit: String(i.valorUnit),
             custoUnit: i.custoUnit != null ? String(i.custoUnit) : "",
           })),
+          produtos,
+          seguraEstoque: OS_CONCLUIDA.includes(os.status),
         });
       })
       .catch(() => setErro(true))
