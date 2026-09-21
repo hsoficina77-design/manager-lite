@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
 import { HEADER_ROTA, ehRotaPublica, exigeDono, exigeFinanceiro, exigeExclusao } from "@/lib/permissoes";
+import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
+
+/** POST de foto: `/api/os/<id>/fotos` e `/api/orcamentos/<id>/fotos`. */
+const ROTA_DE_UPLOAD = /^\/api\/(os|orcamentos)\/[^/]+\/fotos$/;
 
 /**
  * Porta de entrada do app: **nada** passa sem sessão válida.
@@ -16,13 +20,28 @@ import { HEADER_ROTA, ehRotaPublica, exigeDono, exigeFinanceiro, exigeExclusao }
  * as permissões de financeiro/exclusão, todos dentro do cookie assinado. A confirmação
  * de que a sessão continua existindo e de que o usuário segue ativo é feita no
  * servidor, em `auth.ts`.
+ *
+ * É também onde mora o freio de requisições (`lib/limite-requisicoes.ts`). Ele vem
+ * antes de tudo de propósito: barrar aqui custa uma consulta a um `Map` e não encosta
+ * no banco, no Storage nem no scrypt.
  */
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (ehRotaPublica(pathname)) return NextResponse.next();
+  // Tráfego interno do Next (HMR em desenvolvimento, chunks) não entra na conta: é
+  // pedido pelo próprio app e em volume que não representa abuso.
+  if (pathname.startsWith("/_next/")) return NextResponse.next();
 
   const ehApi = pathname.startsWith("/api/");
+
+  // Teto por IP, valendo inclusive para as rotas públicas — é justamente o login que
+  // interessa proteger. Vem antes de ler o cookie porque não depende dele.
+  const ip = ipDaRequisicao(request);
+  const esperaIp = consumir(`ip:${ip}`, REGRAS.porIp);
+  if (esperaIp > 0) return respostaDeLimite(esperaIp, { json: ehApi });
+
+  if (ehRotaPublica(pathname)) return NextResponse.next();
+
   const sessao = await lerToken(request.cookies.get(COOKIE_SESSAO)?.value);
 
   if (!sessao) {
@@ -36,6 +55,24 @@ export default async function proxy(request: NextRequest) {
     // Cookie inválido ou vencido não serve para mais nada — sai do navegador.
     resposta.cookies.delete(COOKIE_SESSAO);
     return resposta;
+  }
+
+  // Teto por sessão. Existe além do teto por IP porque a oficina inteira sai pelo mesmo
+  // Wi-Fi: assim um cookie roubado — ou uma tela em laço — é contido sem derrubar os
+  // colegas junto.
+  const esperaSessao = consumir(`sessao:${sessao.sessaoId}`, REGRAS.porSessao);
+  if (esperaSessao > 0) return respostaDeLimite(esperaSessao, { json: ehApi });
+
+  // Foto é o pedido mais caro do sistema: até 10MB de corpo, que o servidor guarda
+  // inteiro na memória, mais um arquivo no Storage do Supabase (que é cobrado e tem
+  // teto). Barrar aqui evita até o corpo ser lido.
+  if (request.method === "POST" && ROTA_DE_UPLOAD.test(pathname)) {
+    const esperaUpload = consumir(`upload:${sessao.sessaoId}`, REGRAS.upload);
+    if (esperaUpload > 0) {
+      return respostaDeLimite(esperaUpload, {
+        mensagem: "Muitas fotos enviadas em sequência. Espere alguns minutos e continue.",
+      });
+    }
   }
 
   const ehDono = sessao.papel === "ADMIN";

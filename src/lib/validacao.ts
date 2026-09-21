@@ -20,6 +20,15 @@ import { janelaMes } from "@/lib/periodo";
  */
 export const CORPO_MAX_BYTES = 256 * 1024;
 
+/**
+ * Teto do corpo nas rotas públicas de autenticação (login e primeiro acesso).
+ *
+ * Bem menor que o dos demais: ali só trafegam nome, e-mail e senha, e são as únicas
+ * rotas que aceitam corpo **sem** exigir sessão — quem quisesse ocupar a memória do
+ * servidor começaria por elas.
+ */
+export const CORPO_CREDENCIAL_MAX_BYTES = 4 * 1024;
+
 /** Tamanhos máximos por natureza de campo — um lugar só para não divergirem. */
 export const LIMITES = {
   nome: 120,
@@ -135,6 +144,27 @@ export async function lerJson<S extends ZodTypeAny>(
     throw new ErroDeEntrada(400, primeiraMensagem(resultado.error));
   }
   return resultado.data;
+}
+
+/**
+ * Corpo JSON com teto de tamanho, mas sem schema.
+ *
+ * Existe para as rotas de autenticação, que conferem os campos na mão para poder
+ * responder sempre a mesma coisa a e-mail inexistente e a senha errada — um schema
+ * diria, pela mensagem, qual dos dois falhou. O teto de bytes, esse, elas precisam
+ * tanto quanto as outras: `request.json()` puro lê o corpo inteiro na memória antes
+ * de qualquer checagem.
+ */
+export async function lerJsonCru(
+  request: Request,
+  maxBytes = CORPO_CREDENCIAL_MAX_BYTES
+): Promise<unknown> {
+  const texto = await lerCorpoLimitado(request, maxBytes);
+  try {
+    return JSON.parse(texto);
+  } catch {
+    throw new ErroDeEntrada(400, "Corpo da requisição inválido");
+  }
 }
 
 /**

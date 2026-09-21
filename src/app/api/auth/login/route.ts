@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { conferirSenha, hashSenha } from "@/lib/senha";
 import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
 import { chaveDaRequisicao, esperaRestante, limparFalhas, registrarFalha } from "@/lib/tentativas";
+import { REGRAS, consumir, esquecer, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
+import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
 // Uma mensagem só para e-mail inexistente e para senha errada: dizer "este e-mail não
 // existe" entregaria de graça quais contas existem na oficina.
@@ -21,7 +23,25 @@ function hashFalso(): Promise<string> {
 
 export async function POST(request: Request) {
   try {
-    const { email, senha } = await request.json();
+    // Antes de qualquer coisa — antes de ler o corpo, de ir ao banco e, principalmente,
+    // antes do scrypt. Conta toda tentativa, certa ou errada: o freio por e-mail (mais
+    // abaixo) não pega quem varia o e-mail a cada requisição, e cada uma dessas custa
+    // ~100ms de CPU e 16MB de RAM. Sem este teto, umas dezenas por segundo derrubam o
+    // container sem precisar acertar senha nenhuma.
+    const ip = ipDaRequisicao(request);
+    const chaveIp = `login:${ip}`;
+    const esperaIp = consumir(chaveIp, REGRAS.loginPorIp);
+    if (esperaIp > 0) {
+      return respostaDeLimite(esperaIp, {
+        mensagem: "Muitas tentativas de entrada deste aparelho. Espere alguns minutos.",
+      });
+    }
+
+    // `?.` porque um corpo `null` ou `"texto"` é JSON válido: desestruturar direto
+    // viraria TypeError e 500 onde o certo é 400.
+    const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
+    const email = corpo?.email;
+    const senha = corpo?.senha;
 
     if (typeof email !== "string" || typeof senha !== "string" || !email.trim() || !senha) {
       return NextResponse.json({ error: "Informe e-mail e senha" }, { status: 400 });
@@ -57,6 +77,10 @@ export async function POST(request: Request) {
     }
 
     limparFalhas(chave);
+    // Entrou: o IP não carrega mais o histórico. Sem isto, uma oficina com vários
+    // funcionários no mesmo Wi-Fi poderia se trancar sozinha num dia de troca de
+    // aparelho — e quem acerta a senha não é o caso que este teto persegue.
+    esquecer(chaveIp);
 
     const sessaoId = novoIdDeSessao();
     const expiraEm = new Date(Date.now() + DURACAO_MS);
@@ -96,6 +120,10 @@ export async function POST(request: Request) {
       papel: usuario.papel,
     });
   } catch (err) {
+    // Corpo grande demais ou JSON quebrado é erro de quem chamou, não do servidor.
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
+
     console.error(err);
     // Sem AUTH_SECRET ninguém entra — e a causa precisa aparecer, senão vira
     // "login não funciona" sem pista nenhuma.

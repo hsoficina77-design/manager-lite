@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { hashSenha, validarSenha } from "@/lib/senha";
 import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
+import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
+import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
 /**
  * Trava opcional do primeiro acesso.
@@ -20,7 +22,12 @@ function tokenExigido(): string | null {
 }
 
 /** Estado da instalação — a tela usa para saber se deve pedir o código. */
-export async function GET() {
+export async function GET(request: Request) {
+  // Rota pública que consulta o banco: sem freio, é um `count()` de graça para quem
+  // quiser martelar.
+  const espera = consumir(`setup-get:${ipDaRequisicao(request)}`, REGRAS.primeiroAcessoLeitura);
+  if (espera > 0) return respostaDeLimite(espera);
+
   try {
     return NextResponse.json({
       disponivel: (await prisma.usuario.count()) === 0,
@@ -39,8 +46,16 @@ export async function GET() {
  * sistema já em uso e sair como dono.
  */
 export async function POST(request: Request) {
+  // Antes do corpo e do banco. Esta rota abre uma transação `Serializable` a cada
+  // chamada — a mais cara do sistema para o Postgres — e responde 409 depois de o dono
+  // existir; sem teto, o trabalho acontece mesmo assim. É também por aqui que alguém
+  // tentaria adivinhar o `SETUP_TOKEN`.
+  const espera = consumir(`setup:${ipDaRequisicao(request)}`, REGRAS.primeiroAcesso);
+  if (espera > 0) return respostaDeLimite(espera);
+
   try {
-    const { nome, email, senha, token: codigo } = await request.json();
+    const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
+    const { nome, email, senha, token: codigo } = corpo ?? {};
 
     const esperado = tokenExigido();
     if (esperado && codigo !== esperado) {
@@ -104,6 +119,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ id: usuario.id, nome: usuario.nome, papel: usuario.papel }, { status: 201 });
   } catch (err) {
+    // Corpo grande demais ou JSON quebrado é erro de quem chamou, não do servidor.
+    const invalido = respostaDeValidacao(err);
+    if (invalido) return invalido;
+
     console.error(err);
     if (err instanceof Error && err.message.includes("AUTH_SECRET")) {
       return NextResponse.json({ error: err.message }, { status: 500 });

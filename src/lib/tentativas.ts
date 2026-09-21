@@ -5,7 +5,13 @@
 // contagem, e vários containers contariam separado — se um dia escalar horizontal,
 // isto precisa virar tabela ou Redis.
 //
+// Este arquivo cuida só do e-mail: "senha errada demais para *esta* conta". O freio por
+// IP — o que impede alguém de varrer e-mails e queimar CPU no scrypt — está em
+// `lib/limite-requisicoes.ts` e é conferido antes deste.
+//
 // Server-side apenas.
+
+import { ipDaRequisicao } from "@/lib/limite-requisicoes";
 
 const JANELA_MS = 15 * 60 * 1000;
 const LIMITE = 8;
@@ -58,9 +64,5 @@ export function limparFalhas(chave: string) {
 
 /** Identifica quem está tentando, mesmo atrás do proxy do Railway. */
 export function chaveDaRequisicao(request: Request, email: string): string {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "desconhecido";
-  return `${ip}|${email.toLowerCase()}`;
+  return `${ipDaRequisicao(request)}|${email.toLowerCase()}`;
 }
