@@ -12,6 +12,7 @@ import { EsqueletoLista, FaixaMetricas, Metrica, Vazio } from "@/components/ui/D
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Alerta, Mais } from "@/components/ui/Icones";
 import BaixarComprovante from "@/components/BaixarComprovante";
+import type { ComprovanteItem } from "@/components/ComprovantePagamentoPdfDocument";
 
 type Faixa = "0-15" | "16-30" | "31-60" | "60+";
 
@@ -33,7 +34,7 @@ const FAIXA_NIVEL: Record<Faixa, 1 | 2 | 3 | 4> = {
 const FAIXAS: Faixa[] = ["0-15", "16-30", "31-60", "60+"];
 
 type OSPendente = {
-  id: string; numero: number; status: string; total: number; valorPago: number; abertura: string;
+  id: string; numero: number; status: string; desconto: number; total: number; valorPago: number; abertura: string;
   veiculo: { marca: string; modelo: string; placa: string | null };
   pagamentos: Pagamento[];
 };
@@ -61,7 +62,17 @@ type Pagamento = {
   id: string | number; valor: number; formaPagamento: string; obs: string | null; data: string;
 };
 type ModalPgto = { type: "os" | "divida"; id: string | number; saldo: number } | null;
-type HistoricoModal = { type: "os" | "divida"; id: string | number; pagamentos: Pagamento[] } | null;
+/**
+ * Cada linha carrega o próprio alvo porque o histórico do cliente junta
+ * pagamentos de OS e de dívidas diferentes — o estorno precisa saber de qual
+ * deles o valor está voltando.
+ */
+type HistoricoLinha = Pagamento & {
+  type: "os" | "divida";
+  alvoId: string | number;
+  origem: string;
+};
+type HistoricoModal = { descricao?: string; linhas: HistoricoLinha[]; mostrarOrigem: boolean } | null;
 type Ordenacao = "saldo" | "dias";
 
 const RESUMO_VAZIO: Resumo = {
@@ -69,11 +80,26 @@ const RESUMO_VAZIO: Resumo = {
   porFaixa: { "0-15": { clientes: 0, valor: 0 }, "16-30": { clientes: 0, valor: 0 }, "31-60": { clientes: 0, valor: 0 }, "60+": { clientes: 0, valor: 0 } },
 };
 
-function csvEscape(v: string) {
-  if (v.includes(";") || v.includes('"') || v.includes("\n")) {
-    return `"${v.replace(/"/g, '""')}"`;
-  }
-  return v;
+/** Tudo o que o cliente deve, na ordem em que aparece na tela, para o comprovante geral. */
+function itensDoCliente(c: ClienteDevedor): ComprovanteItem[] {
+  return [
+    ...c.ordens.map((os) => ({
+      numero: os.numero,
+      veiculo: os.veiculo,
+      desconto: os.desconto,
+      total: os.total,
+      valorPago: os.valorPago,
+      pago: false,
+      pagamentos: os.pagamentos,
+    })),
+    ...c.dividasAvulsas.map((div) => ({
+      descricao: div.descricao,
+      total: div.valor,
+      valorPago: div.valorPago,
+      pago: false,
+      pagamentos: div.pagamentos,
+    })),
+  ];
 }
 
 export default function ContasReceberPage() {
@@ -190,7 +216,7 @@ export default function ContasReceberPage() {
     load();
   }
 
-  async function openHistorico(type: "os" | "divida", id: string | number) {
+  async function openHistorico(type: "os" | "divida", id: string | number, origem: string) {
     const url = type === "os" ? `/api/os/${id}` : `/api/dividas/${id}/pagamentos`;
     const res = await fetch(url);
     if (!res.ok) {
@@ -198,23 +224,49 @@ export default function ContasReceberPage() {
       return;
     }
     const data = await res.json();
-    setHistoricoModal({ type, id, pagamentos: type === "os" ? data.pagamentos : data });
+    const pagamentos: Pagamento[] = type === "os" ? data.pagamentos : data;
+    setHistoricoModal({
+      descricao: origem,
+      linhas: pagamentos.map((p) => ({ ...p, type, alvoId: id, origem })),
+      mostrarOrigem: false,
+    });
+  }
+
+  /**
+   * Histórico do cliente inteiro: todas as OS e dívidas em aberto numa lista só,
+   * em ordem de data. Sai dos dados já carregados na lista — são os mesmos que a
+   * API acabou de entregar, e abrir um pedido por débito só atrasaria o modal.
+   */
+  function openHistoricoCliente(c: ClienteDevedor) {
+    const linhas: HistoricoLinha[] = [
+      ...c.ordens.flatMap((os) =>
+        os.pagamentos.map((p) => ({ ...p, type: "os" as const, alvoId: os.id, origem: `OS #${os.numero}` }))
+      ),
+      ...c.dividasAvulsas.flatMap((div) =>
+        div.pagamentos.map((p) => ({ ...p, type: "divida" as const, alvoId: div.id, origem: div.descricao }))
+      ),
+    ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+    setHistoricoModal({
+      descricao: `${c.nome} · todas as OS e dívidas em aberto`,
+      linhas,
+      mostrarOrigem: true,
+    });
   }
 
   // Estorna um pagamento do histórico — o valor volta para o saldo em aberto.
-  async function estornarPagamento(p: Pagamento) {
+  async function estornarPagamento(p: HistoricoLinha) {
     if (!historicoModal) return;
     const ok = await confirmar({
       titulo: "Estornar este pagamento?",
-      texto: `Os ${formatCurrency(p.valor)} voltam para o saldo em aberto deste cliente.`,
+      texto: `Os ${formatCurrency(p.valor)} de ${p.origem} voltam para o saldo em aberto deste cliente.`,
       acao: "Estornar",
       perigo: true,
     });
     if (!ok) return;
-    const { type, id } = historicoModal;
     setEstornandoId(p.id);
     try {
-      const base = type === "os" ? `/api/os/${id}` : `/api/dividas/${id}`;
+      const base = p.type === "os" ? `/api/os/${p.alvoId}` : `/api/dividas/${p.alvoId}`;
       const res = await fetch(`${base}/pagamentos/${p.id}`, { method: "DELETE" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -223,7 +275,9 @@ export default function ContasReceberPage() {
       }
       setHistoricoModal({
         ...historicoModal,
-        pagamentos: historicoModal.pagamentos.filter((x) => x.id !== p.id),
+        // Id de pagamento de OS é texto e o de dívida é número: só o par com o
+        // alvo identifica a linha sem risco de derrubar a errada.
+        linhas: historicoModal.linhas.filter((x) => !(x.id === p.id && x.alvoId === p.alvoId)),
       });
       avisar("Pagamento estornado.");
       load();
@@ -266,35 +320,11 @@ export default function ContasReceberPage() {
       .catch(() => avisar("Não foi possível copiar o telefone.", "erro"));
   }
 
-  function exportarCSV() {
-    const header = ["Cliente", "Telefone", "Total em aberto", "Dias em aberto", "Faixa", "OS pendentes", "Dívidas avulsas"];
-    const linhas = filtered.map((c) => [
-      c.nome,
-      c.telefone ?? "",
-      c.totalSaldo.toFixed(2).replace(".", ","),
-      String(c.diasEmAberto),
-      c.faixa,
-      String(c.ordens.length),
-      String(c.dividasAvulsas.length),
-    ]);
-    const csv = [header, ...linhas].map((linha) => linha.map(csvEscape).join(";")).join("\r\n");
-    const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `inadimplencia-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div className="space-y-4 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-tinta sm:text-2xl">Contas a receber</h1>
         <div className="flex gap-2">
-          <Botao variante="secundario" onClick={exportarCSV} disabled={filtered.length === 0}>
-            Exportar CSV
-          </Botao>
           <Botao onClick={() => setNovaDividaModal(true)}>
             <Mais tamanho={16} /> Dívida avulsa
           </Botao>
@@ -388,6 +418,9 @@ export default function ContasReceberPage() {
               .map((v) => `${v.marca} ${v.modelo}${v.placa ? ` · ${v.placa}` : ""}`)
               .join(" · ");
             const extrasVeiculos = c.veiculos.length > 2 ? ` +${c.veiculos.length - 2}` : "";
+            // Com um débito só, os botões da linha já fazem o mesmo — repetir no
+            // cabeçalho seria só ruído.
+            const varios = c.ordens.length + c.dividasAvulsas.length > 1;
 
             return (
               <div key={c.id} className="overflow-hidden rounded-xl border border-linha bg-superficie">
@@ -447,11 +480,30 @@ export default function ContasReceberPage() {
                     </div>
                   </div>
 
-                  <div className="text-left sm:text-right">
-                    <p className="text-xs text-tinta-3">Total em aberto</p>
-                    <p className="font-bold tabular-nums text-perigo">
-                      {formatCurrency(c.totalSaldo)}
-                    </p>
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <div className="text-left sm:text-right">
+                      <p className="text-xs text-tinta-3">Total em aberto</p>
+                      <p className="font-bold tabular-nums text-perigo">
+                        {formatCurrency(c.totalSaldo)}
+                      </p>
+                    </div>
+                    {varios && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Botao
+                          variante="fantasma"
+                          tamanho="denso"
+                          onClick={() => openHistoricoCliente(c)}
+                          title="Pagamentos de todas as OS e dívidas em aberto deste cliente"
+                        >
+                          Histórico geral
+                        </Botao>
+                        <BaixarComprovante
+                          dados={{ cliente: { nome: c.nome }, itens: itensDoCliente(c) }}
+                          rotulo="Comprovante geral"
+                          titulo="Uma imagem só com todas as OS e dívidas em aberto deste cliente"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -493,19 +545,24 @@ export default function ContasReceberPage() {
                             <Botao
                               variante="fantasma"
                               tamanho="denso"
-                              onClick={() => openHistorico("os", os.id)}
+                              onClick={() => openHistorico("os", os.id, `OS #${os.numero}`)}
                             >
                               Histórico
                             </Botao>
                             <BaixarComprovante
-                              os={{
-                                numero: os.numero,
+                              dados={{
                                 cliente: { nome: c.nome },
-                                veiculo: os.veiculo,
-                                total: os.total,
-                                valorPago: os.valorPago,
-                                pago: false,
-                                pagamentos: os.pagamentos,
+                                itens: [
+                                  {
+                                    numero: os.numero,
+                                    veiculo: os.veiculo,
+                                    desconto: os.desconto,
+                                    total: os.total,
+                                    valorPago: os.valorPago,
+                                    pago: false,
+                                    pagamentos: os.pagamentos,
+                                  },
+                                ],
                               }}
                             />
                             <Botao
@@ -548,18 +605,22 @@ export default function ContasReceberPage() {
                             <Botao
                               variante="fantasma"
                               tamanho="denso"
-                              onClick={() => openHistorico("divida", div.id)}
+                              onClick={() => openHistorico("divida", div.id, div.descricao)}
                             >
                               Histórico
                             </Botao>
                             <BaixarComprovante
-                              os={{
-                                descricao: div.descricao,
+                              dados={{
                                 cliente: { nome: c.nome },
-                                total: div.valor,
-                                valorPago: div.valorPago,
-                                pago: false,
-                                pagamentos: div.pagamentos,
+                                itens: [
+                                  {
+                                    descricao: div.descricao,
+                                    total: div.valor,
+                                    valorPago: div.valorPago,
+                                    pago: false,
+                                    pagamentos: div.pagamentos,
+                                  },
+                                ],
                               }}
                             />
                             <Botao
@@ -655,6 +716,7 @@ export default function ContasReceberPage() {
       {historicoModal && (
         <Modal
           titulo="Histórico de pagamentos"
+          descricao={historicoModal.descricao}
           onFechar={() => setHistoricoModal(null)}
           rodape={
             <Botao variante="secundario" className="w-full" onClick={() => setHistoricoModal(null)}>
@@ -662,13 +724,13 @@ export default function ContasReceberPage() {
             </Botao>
           }
         >
-          {historicoModal.pagamentos.length === 0 ? (
+          {historicoModal.linhas.length === 0 ? (
             <p className="text-sm text-tinta-3">Nenhum pagamento registrado.</p>
           ) : (
             <div className="space-y-2">
-              {historicoModal.pagamentos.map((p) => (
+              {historicoModal.linhas.map((p) => (
                 <div
-                  key={p.id}
+                  key={`${p.alvoId}-${p.id}`}
                   className="flex items-center justify-between gap-2 border-b border-linha pb-2 text-sm last:border-0"
                 >
                   <div className="min-w-0">
@@ -679,6 +741,9 @@ export default function ContasReceberPage() {
                     {p.obs && <span className="ml-1 text-tinta-3">· {p.obs}</span>}
                     <span className="block text-xs tabular-nums text-tinta-3">
                       {formatDatetime(p.data)}
+                      {historicoModal.mostrarOrigem && (
+                        <span className="text-tinta-2"> · {p.origem}</span>
+                      )}
                     </span>
                   </div>
                   <Botao

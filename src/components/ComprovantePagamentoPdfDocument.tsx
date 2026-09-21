@@ -6,18 +6,32 @@ type Pagamento = {
   id: string | number; valor: number; formaPagamento: string; data: string; obs: string | null;
 };
 /**
+ * Um débito do cliente: uma OS ou uma dívida avulsa.
+ *
  * Uma OS tem `numero` e `veiculo`; uma dívida avulsa não tem nenhum dos dois — usa
  * `descricao` no lugar. Nunca os dois ao mesmo tempo.
  */
-export type ComprovanteOS = {
+export type ComprovanteItem = {
   numero?: number;
   descricao?: string;
-  cliente: { nome: string };
   veiculo?: { marca: string; modelo: string; placa: string | null };
+  /** Desconto já abatido de `total`. Dívida avulsa não tem desconto. */
+  desconto?: number;
   total: number;
   valorPago: number;
   pago: boolean;
   pagamentos: Pagamento[];
+};
+
+/**
+ * Um comprovante por cliente, não por OS: com um débito só ele sai como o recibo
+ * de sempre; com vários, ganha a lista de débitos e o histórico marcado com a
+ * origem de cada pagamento — é assim que o cliente com duas OS em aberto recebe
+ * uma conta só, em vez de duas imagens para juntar de cabeça.
+ */
+export type ComprovanteDados = {
+  cliente: { nome: string };
+  itens: ComprovanteItem[];
 };
 
 function brl(v: number) {
@@ -27,6 +41,15 @@ function dataHora(d: string | Date) {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(d));
+}
+
+export function identificacaoDoItem(item: ComprovanteItem) {
+  return item.numero != null ? `OS Nº ${item.numero}` : (item.descricao ?? "Dívida avulsa");
+}
+function veiculoDoItem(item: ComprovanteItem) {
+  if (!item.veiculo) return "";
+  const nome = [item.veiculo.marca, item.veiculo.modelo].filter(Boolean).join(" ");
+  return item.veiculo.placa ? `${nome} · ${item.veiculo.placa}` : nome;
 }
 
 const C = {
@@ -52,6 +75,18 @@ const s = StyleSheet.create({
   title: { fontSize: 13, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 3 },
   subtitle: { fontSize: 9, color: C.sub, marginBottom: 16, lineHeight: 1.4 },
 
+  secTitle: { fontSize: 7.5, color: C.mute, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
+
+  debitos: { marginBottom: 16 },
+  debRow: {
+    flexDirection: "row", justifyContent: "space-between", gap: 10,
+    paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.soft,
+  },
+  debInfo: { flex: 1 },
+  debLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.ink },
+  debSub: { fontSize: 7.5, color: C.mute, marginTop: 1.5 },
+  debSaldo: { fontSize: 9.5, fontFamily: "Helvetica-Bold" },
+
   grid: {
     flexDirection: "row", borderWidth: 1, borderColor: C.line, borderRadius: 10,
     marginBottom: 16,
@@ -61,6 +96,14 @@ const s = StyleSheet.create({
   gridLabel: { fontSize: 7.5, color: C.mute, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
   gridValue: { fontSize: 12, fontFamily: "Helvetica-Bold", color: C.ink },
 
+  desconto: {
+    borderWidth: 1, borderColor: C.line, borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 12, marginBottom: 10,
+  },
+  descontoRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 1.5 },
+  descontoLabel: { fontSize: 8.5, color: C.sub },
+  descontoValor: { fontSize: 8.5, color: C.sub },
+
   quitado: {
     flexDirection: "row", alignItems: "center", marginBottom: 16,
     borderWidth: 1, borderColor: C.green, borderRadius: 8, backgroundColor: "#f0fdf4",
@@ -68,7 +111,6 @@ const s = StyleSheet.create({
   },
   quitadoTexto: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.green },
 
-  histTitle: { fontSize: 7.5, color: C.mute, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
   histRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.soft },
   histLinha1: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" },
   histValor: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: C.ink },
@@ -81,24 +123,45 @@ const s = StyleSheet.create({
 });
 
 export function ComprovantePagamentoPdfDocument({
-  os,
+  dados,
   logoSrc,
   geradoEm,
   config = CONFIG_PADRAO,
 }: {
-  os: ComprovanteOS;
+  dados: ComprovanteDados;
   logoSrc?: string;
   /** Fixado no momento em que o download começa, para bater com o nome do arquivo. */
   geradoEm: Date;
   config?: Configuracao;
 }) {
-  const saldo = Math.max(0, os.total - os.valorPago);
+  const { cliente, itens } = dados;
+  const varios = itens.length > 1;
+
+  const total = itens.reduce((acc, i) => acc + i.total, 0);
+  const valorPago = itens.reduce((acc, i) => acc + i.valorPago, 0);
+  const saldo = Math.max(0, total - valorPago);
+  // `total` já vem líquido; o bruto só existe aqui, para o cliente enxergar o abatimento.
+  const desconto = itens.reduce((acc, i) => acc + (i.desconto ?? 0), 0);
+  const quitado = itens.length > 0 && itens.every((i) => i.pago);
+
   const marca = config.corPrimaria;
-  const veiculo = os.veiculo ? [os.veiculo.marca, os.veiculo.modelo].filter(Boolean).join(" ") : "";
-  const identificacao = os.numero != null ? `OS Nº ${os.numero}` : (os.descricao ?? "Dívida avulsa");
+  const unico = varios ? null : itens[0];
+  const veiculoUnico = unico ? veiculoDoItem(unico) : "";
+
+  // Um histórico só, em ordem de data, com a origem de cada pagamento à mão —
+  // sem ela, dois débitos viram uma lista de valores soltos.
+  const historico = itens
+    .flatMap((item, idx) =>
+      item.pagamentos.map((p) => ({ ...p, chave: `${idx}-${p.id}`, origem: identificacaoDoItem(item) }))
+    )
+    .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+  const tituloDoc = unico
+    ? `Comprovante - ${identificacaoDoItem(unico)} - ${cliente.nome}`
+    : `Comprovante - ${cliente.nome}`;
 
   return (
-    <Document title={`Comprovante - ${identificacao} - ${os.cliente.nome}`} author={config.nome}>
+    <Document title={tituloDoc} author={config.nome}>
       <Page size={{ width: LARGURA_PAGINA }} style={s.page}>
         <View style={s.header}>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
@@ -112,20 +175,67 @@ export function ComprovantePagamentoPdfDocument({
         <View style={[s.rule, { backgroundColor: marca }]} />
 
         <Text style={s.title}>Comprovante de Pagamento</Text>
-        <Text style={s.subtitle}>
-          {identificacao} · {os.cliente.nome}
-          {veiculo ? `\n${veiculo}${os.veiculo?.placa ? ` · ${os.veiculo.placa}` : ""}` : ""}
-        </Text>
+        {unico ? (
+          <Text style={s.subtitle}>
+            {identificacaoDoItem(unico)} · {cliente.nome}
+            {veiculoUnico ? `\n${veiculoUnico}` : ""}
+          </Text>
+        ) : (
+          <Text style={s.subtitle}>
+            {cliente.nome}
+            {`\n${itens.length} débitos em aberto`}
+          </Text>
+        )}
+
+        {varios ? (
+          <View style={s.debitos}>
+            <Text style={s.secTitle}>Débitos</Text>
+            {itens.map((item, idx) => {
+              const saldoItem = Math.max(0, item.total - item.valorPago);
+              const veiculo = veiculoDoItem(item);
+              return (
+                <View key={idx} style={s.debRow}>
+                  <View style={s.debInfo}>
+                    <Text style={s.debLabel}>{identificacaoDoItem(item)}</Text>
+                    <Text style={s.debSub}>
+                      {veiculo ? `${veiculo} · ` : ""}
+                      Total {brl(item.total)}
+                      {item.valorPago > 0 ? ` · Pago ${brl(item.valorPago)}` : ""}
+                    </Text>
+                  </View>
+                  <Text style={[s.debSaldo, { color: saldoItem > 0 ? C.red : C.green }]}>
+                    {brl(saldoItem)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {desconto > 0 ? (
+          <View style={s.desconto}>
+            <View style={s.descontoRow}>
+              <Text style={s.descontoLabel}>Valor sem desconto</Text>
+              <Text style={s.descontoValor}>{brl(total + desconto)}</Text>
+            </View>
+            <View style={s.descontoRow}>
+              <Text style={[s.descontoLabel, { color: C.green }]}>
+                {varios ? "Descontos aplicados" : "Desconto aplicado"}
+              </Text>
+              <Text style={[s.descontoValor, { color: C.green }]}>- {brl(desconto)}</Text>
+            </View>
+          </View>
+        ) : null}
 
         <View style={s.grid}>
           <View style={s.gridCol}>
             <Text style={s.gridLabel}>Total</Text>
-            <Text style={s.gridValue}>{brl(os.total)}</Text>
+            <Text style={s.gridValue}>{brl(total)}</Text>
           </View>
           <View style={s.gridDivider} />
           <View style={s.gridCol}>
             <Text style={s.gridLabel}>Pago</Text>
-            <Text style={[s.gridValue, { color: C.green }]}>{brl(os.valorPago)}</Text>
+            <Text style={[s.gridValue, { color: C.green }]}>{brl(valorPago)}</Text>
           </View>
           <View style={s.gridDivider} />
           <View style={s.gridCol}>
@@ -134,23 +244,26 @@ export function ComprovantePagamentoPdfDocument({
           </View>
         </View>
 
-        {os.pago ? (
+        {quitado ? (
           <View style={s.quitado}>
             <Text style={s.quitadoTexto}>Pagamento quitado</Text>
           </View>
         ) : null}
 
-        {os.pagamentos.length > 0 ? (
+        {historico.length > 0 ? (
           <View>
-            <Text style={s.histTitle}>Histórico</Text>
-            {os.pagamentos.map((p) => (
-              <View key={p.id} style={s.histRow}>
+            <Text style={s.secTitle}>Histórico</Text>
+            {historico.map((p) => (
+              <View key={p.chave} style={s.histRow}>
                 <View style={s.histLinha1}>
                   <Text style={s.histValor}>{brl(p.valor)}</Text>
                   <Text style={s.histForma}>{labelFormaPagamento(p.formaPagamento)}</Text>
                   {p.obs ? <Text style={s.histForma}>· {p.obs}</Text> : null}
                 </View>
-                <Text style={s.histData}>{dataHora(p.data)}</Text>
+                <Text style={s.histData}>
+                  {dataHora(p.data)}
+                  {varios ? ` · ${p.origem}` : ""}
+                </Text>
               </View>
             ))}
           </View>

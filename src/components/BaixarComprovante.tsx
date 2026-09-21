@@ -8,7 +8,7 @@ import { toDataUrl } from "@/lib/foto-pdf";
 import { PRAZO, comPrazo } from "@/lib/tempo-limite";
 import { cn } from "@/lib/utils";
 import { Botao } from "@/components/ui/Botao";
-import { ComprovantePagamentoPdfDocument, type ComprovanteOS } from "./ComprovantePagamentoPdfDocument";
+import { ComprovantePagamentoPdfDocument, type ComprovanteDados } from "./ComprovantePagamentoPdfDocument";
 
 /**
  * Botão que gera direto uma imagem do histórico de pagamento — a mesma coisa
@@ -17,7 +17,15 @@ import { ComprovantePagamentoPdfDocument, type ComprovanteOS } from "./Comprovan
  * Sai só em PNG, sem a escolha de formato do BaixarDocumento: aqui a imagem é
  * o próprio produto, não um documento que também poderia virar PDF.
  */
-export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
+export default function BaixarComprovante({
+  dados,
+  rotulo = "Baixar comprovante",
+  titulo = "Baixar uma imagem com o histórico de pagamento",
+}: {
+  dados: ComprovanteDados;
+  rotulo?: string;
+  titulo?: string;
+}) {
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -32,7 +40,7 @@ export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
 
       const pdfBlob = await comPrazo(
         pdf(
-          <ComprovantePagamentoPdfDocument os={os} logoSrc={logo} config={config} geradoEm={new Date()} />
+          <ComprovantePagamentoPdfDocument dados={dados} logoSrc={logo} config={config} geradoEm={new Date()} />
         ).toBlob(),
         PRAZO.pdf,
         "Montar o comprovante"
@@ -46,7 +54,7 @@ export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
       const url = URL.createObjectURL(png);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${nomeArquivo(os)}.png`;
+      a.download = `${nomeArquivo(dados)}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -57,7 +65,7 @@ export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
     } finally {
       setGerando(false);
     }
-  }, [os]);
+  }, [dados]);
 
   return (
     <div className="relative">
@@ -67,11 +75,11 @@ export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
         tamanho="denso"
         onClick={baixar}
         disabled={gerando}
-        title={erro ? `Não foi possível gerar o comprovante: ${erro}` : "Baixar uma imagem com o histórico de pagamento"}
+        title={erro ? `Não foi possível gerar o comprovante: ${erro}` : titulo}
         className={cn(erro && "border-perigo-linha text-perigo hover:bg-perigo-fraco")}
       >
         <IconeDownload className="h-3.5 w-3.5 shrink-0" />
-        {gerando ? "Gerando..." : erro ? "Tentar de novo" : "Baixar comprovante"}
+        {gerando ? "Gerando..." : erro ? "Tentar de novo" : rotulo}
       </Botao>
 
       {erro && (
@@ -83,10 +91,16 @@ export default function BaixarComprovante({ os }: { os: ComprovanteOS }) {
   );
 }
 
-/** Ex.: "Comprovante - OS 123 - João Silva" ou "Comprovante - Dívida - João Silva" */
-function nomeArquivo(os: ComprovanteOS) {
-  const identificacao = os.numero != null ? `OS ${os.numero}` : "Dívida";
-  return [`Comprovante - ${identificacao}`, limparNome(os.cliente.nome)].filter(Boolean).join(" - ");
+/**
+ * Ex.: "Comprovante - OS 123 - João Silva" com um débito só; com vários, o nome
+ * cai para "Comprovante - João Silva" — enfileirar as OS no nome do arquivo não
+ * caberia na tela do celular de quem recebe.
+ */
+function nomeArquivo({ cliente, itens }: ComprovanteDados) {
+  const nome = limparNome(cliente.nome);
+  if (itens.length !== 1) return ["Comprovante", nome].filter(Boolean).join(" - ");
+  const identificacao = itens[0].numero != null ? `OS ${itens[0].numero}` : "Dívida";
+  return [`Comprovante - ${identificacao}`, nome].filter(Boolean).join(" - ");
 }
 
 function IconeDownload({ className }: { className?: string }) {

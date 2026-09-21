@@ -26,7 +26,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
 import { valorReserva, type Configuracao } from "@/lib/configuracao";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
-import { Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
+import { Caixa, Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
 
 const BaixarOS = dynamic(() => import("@/components/BaixarOS"), {
   ssr: false,
@@ -49,6 +49,8 @@ const BaixarComprovante = dynamic(() => import("@/components/BaixarComprovante")
 type Item = {
   id: string; tipo: string; descricao: string; quantidade: number;
   valorUnit: number; valorTotal: number; custoUnit: number | null;
+  /** Peça que saiu (ou vai sair, na entrega) da prateleira. */
+  produtoId: string | null;
 };
 type Pagamento = {
   id: string; valor: number; formaPagamento: string; data: string; obs: string | null;
@@ -203,12 +205,22 @@ export default function OSDetailPage() {
       });
       // Sem esta checagem a tela recarregava com o status antigo e nenhuma
       // explicação — o usuário concluía que tinha salvado.
+      const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
         avisar(d.error || "Não foi possível alterar o status.", "erro");
         return;
       }
-      avisar(`Status alterado para ${labelStatus(status)}.`);
+      // A entrega é o momento em que a peça sai da prateleira, e o cancelamento é o
+      // que a devolve. O saldo não pode mudar sem ninguém dizer nada.
+      const baixados = d.estoque?.baixados ?? 0;
+      const devolvidos = d.estoque?.devolvidos ?? 0;
+      const doEstoque =
+        baixados > 0
+          ? ` ${baixados} ${baixados === 1 ? "peça baixada" : "peças baixadas"} do estoque.`
+          : devolvidos > 0
+            ? ` ${devolvidos} ${devolvidos === 1 ? "peça devolvida" : "peças devolvidas"} ao estoque.`
+            : "";
+      avisar(`Status alterado para ${labelStatus(status)}.${doEstoque}`);
       await load();
     } catch {
       avisar("Sem conexão. O status não foi alterado.", "erro");
@@ -260,6 +272,7 @@ export default function OSDetailPage() {
           return;
         }
       }
+      let baixados = 0;
       if (entrega) {
         const res = await fetch(`/api/os/${id}`, {
           method: "PUT",
@@ -268,16 +281,23 @@ export default function OSDetailPage() {
             semPagamento ? { status: "ENTREGUE" } : { status: "ENTREGUE", formaPagamento: pgtoForm.formaPagamento },
           ),
         });
+        const d = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
           avisar(d.error || "O pagamento entrou, mas a OS não foi marcada como entregue.", "erro");
           await load();
           return;
         }
+        // Entregar é o que tira a peça da prateleira — o aviso fecha esse laço.
+        baixados = d.estoque?.baixados ?? 0;
       }
       const restante = semPagamento ? saldoAtual : Math.max(0, saldoAtual - valor);
       setPayModal(null);
-      if (!semPagamento) avisar(`Recebimento de ${formatCurrency(valor)} registrado.`);
+      const doEstoque =
+        baixados > 0
+          ? ` ${baixados} ${baixados === 1 ? "peça baixada" : "peças baixadas"} do estoque.`
+          : "";
+      if (!semPagamento) avisar(`Recebimento de ${formatCurrency(valor)} registrado.${doEstoque}`);
+      else if (doEstoque) avisar(`OS entregue.${doEstoque}`);
       await load();
       if (entrega && restante > 0) setDevedor({ saldo: restante });
     } catch {
@@ -598,7 +618,21 @@ export default function OSDetailPage() {
                     {os.itens.map((item) => (
                       <tr key={item.id}>
                         <td className="py-1.5 text-xs text-tinta-3">{TIPO_LABEL[item.tipo] ?? item.tipo}</td>
-                        <td className="py-1.5 pr-2">{item.descricao}</td>
+                        <td className="py-1.5 pr-2">
+                          <span className="flex items-center gap-1.5">
+                            {/* Peça do estoque: já baixada se a OS foi entregue, a
+                                baixar quando for. Some na impressão — é informação
+                                interna, não do cliente. */}
+                            {item.produtoId && (
+                              <Caixa
+                                tamanho={13}
+                                className="no-print shrink-0 text-tinta-3"
+                                aria-label="Peça do estoque"
+                              />
+                            )}
+                            <span className="min-w-0">{item.descricao}</span>
+                          </span>
+                        </td>
                         <td className="py-1.5 text-right text-tinta-2">{item.quantidade}</td>
                         <td className="py-1.5 text-right text-tinta-2">{formatCurrency(item.valorUnit)}</td>
                         <td className="py-1.5 text-right font-medium">{formatCurrency(item.valorTotal)}</td>
@@ -793,14 +827,19 @@ export default function OSDetailPage() {
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-tinta-3">Histórico</p>
                 <BaixarComprovante
-                  os={{
-                    numero: os.numero,
+                  dados={{
                     cliente: { nome: os.cliente.nome },
-                    veiculo: { marca: os.veiculo.marca, modelo: os.veiculo.modelo, placa: os.veiculo.placa },
-                    total: os.total,
-                    valorPago: os.valorPago,
-                    pago: os.pago,
-                    pagamentos: os.pagamentos,
+                    itens: [
+                      {
+                        numero: os.numero,
+                        veiculo: { marca: os.veiculo.marca, modelo: os.veiculo.modelo, placa: os.veiculo.placa },
+                        desconto: os.desconto,
+                        total: os.total,
+                        valorPago: os.valorPago,
+                        pago: os.pago,
+                        pagamentos: os.pagamentos,
+                      },
+                    ],
                   }}
                 />
               </div>

@@ -16,7 +16,7 @@ export async function GET() {
     prisma.ordemServico.findMany({
       where: { pago: false, status: "ENTREGUE" },
       select: {
-        id: true, numero: true, status: true, total: true, valorPago: true, abertura: true,
+        id: true, numero: true, status: true, desconto: true, total: true, valorPago: true, abertura: true,
         veiculo: { select: { marca: true, modelo: true, placa: true } },
         cliente: { select: { id: true, nome: true, apelido: true, telefone: true } },
         // Para o botão "Baixar comprovante" direto na lista, sem precisar abrir a OS.
@@ -43,7 +43,7 @@ export async function GET() {
 
   type Veiculo = { marca: string; modelo: string; placa: string | null };
   type Pagamento = { id: string | number; valor: number; formaPagamento: string; data: Date; obs: string | null };
-  type OSPendente = { id: string; numero: number; status: string; total: number; valorPago: number; abertura: Date; veiculo: Veiculo; pagamentos: Pagamento[] };
+  type OSPendente = { id: string; numero: number; status: string; desconto: number; total: number; valorPago: number; abertura: Date; veiculo: Veiculo; pagamentos: Pagamento[] };
   type DividaAvulsa = { id: number; descricao: string; valor: number; valorPago: number; createdAt: Date; pagamentos: Pagamento[] };
   type ClienteDevedor = {
     // Cliente cadastrado: o próprio id. Devedor avulso (sem cadastro): uma chave
