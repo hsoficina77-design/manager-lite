@@ -16,6 +16,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizarBusca } from "@/lib/utils";
 
 /** Cliente do Prisma dentro de uma transação — escrever no estoque exige uma. */
 type Tx = Prisma.TransactionClient;
@@ -153,15 +154,6 @@ export function vinculoDoItem(
 }
 
 // ─── Busca ───────────────────────────────────────────────────────────────────
-
-/** Minúsculo e sem acento: é assim que "agua" acha "Água". */
-export function normalizarBusca(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-}
 
 /**
  * O texto que o campo `Produto.busca` guarda.

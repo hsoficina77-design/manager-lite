@@ -4,7 +4,8 @@ import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { produtoCriarSchema } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
-import { normalizarBusca, textoDeBusca } from "@/lib/estoque";
+import { textoDeBusca } from "@/lib/estoque";
+import { normalizarBusca } from "@/lib/utils";
 
 /**
  * Lista e busca do estoque.

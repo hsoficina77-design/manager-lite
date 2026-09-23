@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, normalizarBusca } from "@/lib/utils";
 import { formatQuantidade } from "@/lib/constants";
 import { BASE_CAMPO } from "@/components/ui/Campos";
 import { Caixa, Fechar } from "@/components/ui/Icones";
@@ -78,6 +78,72 @@ export function VinculoEstoque({
   );
 }
 
+// ─── Memória da busca ────────────────────────────────────────────────────────
+//
+// Existe porque digitar é lento. Mesmo com a pausa abaixo, escrever "reservatório ford"
+// num celular — onde cada letra demora mais que a pausa — manda quase uma requisição
+// por letra, e cada uma custa uma varredura inteira da tabela de produtos no banco (o
+// `contains` da rota vira `LIKE '%x%'`, que índice comum nenhum resolve). Apagar uma
+// letra para corrigir refazia a consulta idêntica.
+//
+// Mora no módulo, e não no componente: há um campo destes por linha de item, e o que a
+// segunda linha procura a primeira muitas vezes já procurou.
+//
+// A validade curta é o preço de não mentir: dá para cadastrar a peça na aba do estoque
+// e voltar para cá sem recarregar a página.
+
+/** Quanto tempo uma resposta guardada continua valendo. */
+const VALIDADE_MS = 60_000;
+
+/** Teto de termos guardados. Passou disso, esquece tudo — é memória de conveniência. */
+const MAX_LEMBRADOS = 200;
+
+/** Pausa antes de ir ao servidor. Digitação de celular passa dos 250ms por letra. */
+const PAUSA_MS = 400;
+
+/** Abaixo disto não vale a viagem: a resposta seria quase o catálogo inteiro. */
+const MIN_LETRAS = 3;
+
+type Lembrado = { lista: ProdutoBuscado[]; em: number };
+
+const lembrados = new Map<string, Lembrado>();
+
+function vigente(l: Lembrado, agora: number): boolean {
+  return agora - l.em <= VALIDADE_MS;
+}
+
+function lembrar(chave: string, lista: ProdutoBuscado[]) {
+  if (lembrados.size >= MAX_LEMBRADOS) lembrados.clear();
+  lembrados.set(chave, { lista, em: Date.now() });
+}
+
+/**
+ * O que já se sabe sobre este termo sem perguntar ao servidor, ou `undefined`.
+ *
+ * Dois casos. O óbvio: perguntou-se exatamente isto há pouco. E o que economiza de
+ * verdade: **um trecho** deste termo já voltou vazio. Como a busca é por trecho, nada
+ * que contenha "reserv" pode aparecer se "reserv" não apareceu — então, a partir da
+ * primeira resposta vazia, todas as letras seguintes de "reservatório ford" têm
+ * resposta conhecida. É exatamente onde mais se digita: peça que não está cadastrada.
+ *
+ * Só o vazio se propaga assim. Uma resposta com resultados não diz nada sobre o termo
+ * maior, e o corte de 8 itens da rota tornaria qualquer palpite errado.
+ */
+function jaSabido(chave: string): ProdutoBuscado[] | undefined {
+  const agora = Date.now();
+
+  const exato = lembrados.get(chave);
+  if (exato) {
+    if (vigente(exato, agora)) return exato.lista;
+    lembrados.delete(chave);
+  }
+
+  for (const [anterior, l] of lembrados) {
+    if (l.lista.length === 0 && vigente(l, agora) && chave.includes(anterior)) return l.lista;
+  }
+  return undefined;
+}
+
 /**
  * Campo de descrição da peça que também procura no estoque.
  *
@@ -90,6 +156,10 @@ export function VinculoEstoque({
  * A busca acontece no servidor, com pausa: a lista de peças só cresce, e baixá-la
  * inteira a cada abertura de OS é o que deixou a lista de OS lenta antes de ser
  * paginada. Sem acento e sem caixa, para "agua" achar "Água desmineralizada".
+ *
+ * Só vai ao servidor o que ainda não se sabe (ver acima), e a busca que a letra
+ * seguinte já tornou obsoleta é abortada — sem isso o servidor terminava de servir
+ * respostas que ninguém ia ler.
  */
 export default function ProdutoBusca({
   valor,
@@ -117,31 +187,54 @@ export default function ProdutoBusca({
   const wrapRef = useRef<HTMLDivElement>(null);
   const listaId = useId();
 
-  // Busca com pausa. O termo curto demais não vai ao servidor: com uma letra a
-  // resposta seria o catálogo inteiro, e ninguém escolhe peça vendo duas letras.
+  // Busca com pausa, e só do que ainda não se sabe. O termo curto demais não vai ao
+  // servidor: a resposta seria quase o catálogo, e ninguém escolhe peça assim.
   useEffect(() => {
     const termo = valor.trim();
-    if (!aberto || termo.length < 2) {
+    if (!aberto || termo.length < MIN_LETRAS) {
       setResultados([]);
       setTermoBuscado("");
+      setBuscando(false);
       return;
     }
+
+    const chave = normalizarBusca(termo);
+
+    // Resposta que já se tem aparece no mesmo quadro: sem rede, sem pausa e sem o
+    // "Procurando no estoque..." piscando por nada.
+    const sabido = jaSabido(chave);
+    if (sabido) {
+      setResultados(sabido);
+      setTermoBuscado(termo);
+      setDestaque(-1);
+      setBuscando(false);
+      return;
+    }
+
+    // `cancelado` e `abortar` respondem por coisas diferentes: o abort corta o trabalho
+    // do lado do servidor, e a flag impede que uma resposta chegada um instante antes
+    // do abort pise no resultado da busca seguinte.
     let cancelado = false;
+    const controle = new AbortController();
     setBuscando(true);
     const t = setTimeout(() => {
-      fetch(`/api/produtos?ativo=true&limite=8&q=${encodeURIComponent(termo)}`)
+      fetch(`/api/produtos?ativo=true&limite=8&q=${encodeURIComponent(termo)}`, {
+        signal: controle.signal,
+      })
         .then((r) => (r.ok ? r.json() : []))
         .then((lista: ProdutoBuscado[]) => {
           if (cancelado) return;
+          lembrar(chave, lista);
           setResultados(lista);
           setTermoBuscado(termo);
           setDestaque(-1);
         })
         .catch(() => !cancelado && setResultados([]))
         .finally(() => !cancelado && setBuscando(false));
-    }, 250);
+    }, PAUSA_MS);
     return () => {
       cancelado = true;
+      controle.abort();
       clearTimeout(t);
     };
   }, [valor, aberto]);
@@ -191,7 +284,7 @@ export default function ProdutoBusca({
     }
   }
 
-  const mostrarLista = aberto && valor.trim().length >= 2;
+  const mostrarLista = aberto && valor.trim().length >= MIN_LETRAS;
   const semResultado =
     mostrarLista && !buscando && resultados.length === 0 && termoBuscado === valor.trim();
 

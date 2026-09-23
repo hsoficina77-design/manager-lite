@@ -257,6 +257,11 @@ model Produto {
   movimentos     MovimentoEstoque[]
 
   @@index([ativo, nome])
+  /// Índice da busca por trecho do campo de peça da OS. Precisa ser GIN com trigramas
+  /// porque o filtro é `contains`, que vira `LIKE '%x%'`: um btree comum só serve para
+  /// o que começa com o termo, então o índice acima não ajuda e o banco varre a tabela
+  /// inteira a cada letra digitada. Depende da extensão pg_trgm (criada na migração).
+  @@index([busca(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 // tipo: ENTRADA | SAIDA | AJUSTE

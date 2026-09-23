@@ -64,6 +64,22 @@ export function paraNumero(texto: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Minúsculo e sem acento: é assim que "agua" acha "Água".
+ *
+ * Mora aqui, e não em `lib/estoque`, porque os dois lados precisam dela e `lib/estoque`
+ * importa o Prisma: o campo de peça (que roda no navegador) usa esta mesma função para
+ * saber se já perguntou algo equivalente antes de ir ao servidor, e a chave só serve se
+ * for a mesma que o servidor usa para comparar.
+ */
+export function normalizarBusca(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 /** `true` quando o campo tem conteúdo que não seja espaço. */
 export function temValor(texto: string | null | undefined): boolean {
   return !!texto && texto.trim() !== "";
