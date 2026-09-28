@@ -41,6 +41,8 @@ export const LIMITES = {
   cidade: 100,
   estado: 2,
   descricao: 500,
+  /** Descrição do serviço da OS e do orçamento: cabe um roteiro de vários passos. */
+  descricaoServico: 2000,
   observacao: 2000,
   /** Recado da oficina no rodapé do PDF: alguns parágrafos, não um contrato. */
   documento: 2000,

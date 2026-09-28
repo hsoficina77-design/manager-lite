@@ -142,7 +142,7 @@ export const clienteAtualizarSchema = z.object(clienteCampos);
 // ── Ordem de serviço ────────────────────────────────────────────────────────
 
 const osCampos = {
-  descricao: obrigatorio("Descrição", LIMITES.descricao),
+  descricao: obrigatorio("Descrição", LIMITES.descricaoServico),
   defeitoRelatado: nulavel("Defeito relatado", LIMITES.observacao).optional(),
   kmEntrada: inteiroNulavel("KM de entrada", 0, LIMITES.km).optional(),
   obs: nulavel("Observações", LIMITES.observacao).optional(),
@@ -162,7 +162,7 @@ export const osAtualizarSchema = z.object({
   ...osCampos,
   // Na edição todo campo é opcional: a tela da OS manda só o que mudou, e o
   // ausente precisa continuar significando "não mexe".
-  descricao: obrigatorio("Descrição", LIMITES.descricao).optional(),
+  descricao: obrigatorio("Descrição", LIMITES.descricaoServico).optional(),
   clienteId: id("Cliente").optional(),
   veiculoId: id("Veículo").optional(),
   status: enumDe("Status", STATUS_OS).optional(),
@@ -198,7 +198,7 @@ const orcamentoCampos = {
   clienteNome: nulavel("Nome do cliente", LIMITES.nome).optional(),
   clienteTelefone: nulavel("Telefone", LIMITES.telefone).optional(),
   veiculoDesc: nulavel("Veículo", LIMITES.descricao).optional(),
-  descricao: nulavel("Descrição", LIMITES.descricao).optional(),
+  descricao: nulavel("Descrição", LIMITES.descricaoServico).optional(),
   validade: dataNulavel("Validade").optional(),
   obs: nulavel("Observações", LIMITES.observacao).optional(),
 };
