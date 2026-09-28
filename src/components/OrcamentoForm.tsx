@@ -19,6 +19,8 @@ import { CampoDinheiro, CampoQuantidade, Entrada } from "@/components/ui/Campos"
 import { Modal } from "@/components/ui/Modal";
 import { Caixa, Fechar } from "@/components/ui/Icones";
 import { useSaidaSegura } from "@/components/ui/SaidaSegura";
+import { EditorDescricao } from "@/components/EditorDescricao";
+import { DESCRICAO_SERVICO_MAX } from "@/lib/texto-formatado";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 type Veiculo = {
@@ -484,7 +486,7 @@ export default function OrcamentoForm({
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-tinta-2 mb-1">Descrição do serviço</label>
-              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Ex: Revisão geral, troca de óleo e filtros..." className="w-full rounded-lg border border-linha-forte px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
+              <EditorDescricao value={descricao} onChange={setDescricao} maxLength={DESCRICAO_SERVICO_MAX} placeholder="Ex: Revisão geral, troca de óleo e filtros..." />
               <p className="text-xs text-tinta-3 mt-1">Opcional se você já adicionar os itens abaixo.</p>
             </div>
             <div>

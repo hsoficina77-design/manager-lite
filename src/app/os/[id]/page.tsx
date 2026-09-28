@@ -27,6 +27,7 @@ import { Esqueleto, Metrica } from "@/components/ui/Dados";
 import { valorReserva, type Configuracao } from "@/lib/configuracao";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Caixa, Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
+import { TextoFormatado } from "@/components/ui/TextoFormatado";
 
 const BaixarOS = dynamic(() => import("@/components/BaixarOS"), {
   ssr: false,
@@ -596,7 +597,7 @@ export default function OSDetailPage() {
             {/* Descrição do serviço */}
             <div className="mb-6">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-tinta-3">Descrição do serviço</p>
-              <p className="text-sm leading-relaxed text-tinta whitespace-pre-wrap">{os.descricao}</p>
+              <TextoFormatado texto={os.descricao} />
             </div>
 
             {/* Itens e serviços */}

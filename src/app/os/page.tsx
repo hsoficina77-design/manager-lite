@@ -10,6 +10,7 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Entrada, Selecao } from "@/components/ui/Campos";
 import { EsqueletoLista, Vazio } from "@/components/ui/Dados";
 import { Busca, Chevron, Mais } from "@/components/ui/Icones";
+import { resumoDoTexto } from "@/lib/texto-formatado";
 
 const TABS = [
   { label: "Todas", value: "" },
@@ -349,7 +350,7 @@ function OSRow({ os, podeFinanceiro }: { os: OS; podeFinanceiro: boolean }) {
             {os.veiculo.marca} {os.veiculo.modelo}
             {os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""}
             {" · "}
-            {os.descricao}
+            {resumoDoTexto(os.descricao)}
           </p>
         </div>
         <span className={cn("shrink-0 sm:hidden", corStatus(os.status))}>

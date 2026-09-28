@@ -12,6 +12,7 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Esqueleto, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Fechar, Mais, Voltar } from "@/components/ui/Icones";
+import { resumoDoTexto } from "@/lib/texto-formatado";
 import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 
 const ESTADOS_BR = [
@@ -616,7 +617,7 @@ export default function ClienteDetailPage() {
                       OS #{os.numero} · {os.veiculo.marca} {os.veiculo.modelo}
                       {os.veiculo.placa ? ` (${os.veiculo.placa})` : ""}
                     </p>
-                    <p className="text-sm text-tinta-3 truncate">{os.descricao}</p>
+                    <p className="text-sm text-tinta-3 truncate">{resumoDoTexto(os.descricao)}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0 sm:ml-3">
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${corStatus(os.status)}`}>

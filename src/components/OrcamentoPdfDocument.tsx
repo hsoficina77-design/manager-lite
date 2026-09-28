@@ -1,6 +1,7 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { anoVeiculo } from "@/lib/constants";
 import type { FotoPdf } from "@/lib/foto-pdf";
+import { TextoFormatadoPdf } from "@/components/TextoFormatadoPdf";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -215,7 +216,7 @@ export function OrcamentoPdfDocument({
         {orc.descricao ? (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Descrição do Serviço</Text>
-            <Text style={s.desc}>{orc.descricao}</Text>
+            <TextoFormatadoPdf texto={orc.descricao} />
           </View>
         ) : null}
 

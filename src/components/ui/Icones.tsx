@@ -278,3 +278,41 @@ export const Monitor = (p: Props) => (
     <path d="M12 17v4" />
   </Base>
 );
+
+// ── Barra de formatação de texto ───────────────────────────────────────────
+
+export const Negrito = (p: Props) => (
+  <Base {...p}>
+    <path d="M6 12h9a4 4 0 0 1 0 8H6V4h8a4 4 0 0 1 0 8" />
+  </Base>
+);
+
+export const Titulo = (p: Props) => (
+  <Base {...p}>
+    <path d="M6 12h12" />
+    <path d="M6 20V4" />
+    <path d="M18 20V4" />
+  </Base>
+);
+
+export const ListaMarcadores = (p: Props) => (
+  <Base {...p}>
+    <path d="M9 6h11" />
+    <path d="M9 12h11" />
+    <path d="M9 18h11" />
+    <circle cx="4" cy="6" r="1" />
+    <circle cx="4" cy="12" r="1" />
+    <circle cx="4" cy="18" r="1" />
+  </Base>
+);
+
+export const ListaNumerada = (p: Props) => (
+  <Base {...p}>
+    <path d="M10 6h11" />
+    <path d="M10 12h11" />
+    <path d="M10 18h11" />
+    <path d="M4 6h1v4" />
+    <path d="M4 10h2" />
+    <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
+  </Base>
+);

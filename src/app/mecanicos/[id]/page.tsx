@@ -10,6 +10,7 @@ import { CampoDinheiro } from "@/components/ui/Campos";
 import { Esqueleto, FaixaMetricas, Metrica, Vazio } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Voltar } from "@/components/ui/Icones";
+import { resumoDoTexto } from "@/lib/texto-formatado";
 
 type Meta = { id: string; ano: number; mes: number; valorAlvo: number };
 type Mecanico = {
@@ -286,7 +287,7 @@ export default function MecanicoDetailPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-tinta truncate">{os.cliente.nome}</p>
                     <p className="text-sm text-tinta-3 truncate">
-                      {os.veiculo.marca} {os.veiculo.modelo}{os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""} · {os.descricao}
+                      {os.veiculo.marca} {os.veiculo.modelo}{os.veiculo.placa ? ` · ${os.veiculo.placa}` : ""} · {resumoDoTexto(os.descricao)}
                     </p>
                   </div>
                 </div>

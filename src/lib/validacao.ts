@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { z, type ZodError, type ZodTypeAny } from "zod";
 import { janelaMes } from "@/lib/periodo";
+import { DESCRICAO_SERVICO_MAX } from "@/lib/texto-formatado";
 
 /**
  * Teto do corpo JSON. Uma OS cheia (60 itens, observações longas) não passa de
@@ -41,8 +42,8 @@ export const LIMITES = {
   cidade: 100,
   estado: 2,
   descricao: 500,
-  /** Descrição do serviço da OS e do orçamento: cabe um roteiro de vários passos. */
-  descricaoServico: 2000,
+  /** Descrição do serviço da OS e do orçamento: cabe um laudo formatado inteiro. */
+  descricaoServico: DESCRICAO_SERVICO_MAX,
   observacao: 2000,
   /** Recado da oficina no rodapé do PDF: alguns parágrafos, não um contrato. */
   documento: 2000,

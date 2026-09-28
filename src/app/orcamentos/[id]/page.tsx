@@ -14,6 +14,7 @@ import CopiarVeiculo from "@/components/CopiarVeiculo";
 import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 import Fotos, { type Foto } from "@/components/Fotos";
 import { usePodeFinanceiro, usePodeExcluir } from "@/components/UsuarioProvider";
+import { TextoFormatado } from "@/components/ui/TextoFormatado";
 
 const BaixarOrcamento = dynamic(() => import("@/components/BaixarOrcamento"), {
   ssr: false,
@@ -377,7 +378,7 @@ export default function OrcamentoDetailPage() {
             {orc.descricao && (
               <div className="mb-6">
                 <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-tinta-3">Descrição do serviço</p>
-                <p className="text-sm leading-relaxed text-tinta whitespace-pre-wrap">{orc.descricao}</p>
+                <TextoFormatado texto={orc.descricao} />
               </div>
             )}
 

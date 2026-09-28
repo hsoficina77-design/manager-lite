@@ -9,6 +9,7 @@ import { BotaoLink } from "@/components/ui/Botao";
 import { BuscaLive } from "@/components/ui/BuscaLive";
 import { EsqueletoLista, Vazio } from "@/components/ui/Dados";
 import { Mais } from "@/components/ui/Icones";
+import { resumoDoTexto } from "@/lib/texto-formatado";
 
 const TABS = [
   { label: "Todos", value: "" },
@@ -135,7 +136,7 @@ function OrcamentosContent() {
                     )}
                   </div>
                   <p className="text-sm text-tinta-3 truncate">
-                    {[descricaoVeiculo(o), o.descricao].filter(Boolean).join(" · ")}
+                    {[descricaoVeiculo(o), resumoDoTexto(o.descricao)].filter(Boolean).join(" · ")}
                   </p>
                 </div>
                 <span className={cn("shrink-0 sm:hidden", corStatusOrcamento(o.status))}>
