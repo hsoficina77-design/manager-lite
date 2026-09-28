@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, situacaoRecebimento } from "@/lib/utils";
 import { corMargem, corStatus, labelStatus, margemOS, OS_STATUS } from "@/lib/constants";
 import { usePodeFinanceiro } from "@/components/UsuarioProvider";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
@@ -28,7 +28,7 @@ const POR_PAGINA = 40;
 
 type OS = {
   id: string; numero: number; status: string; descricao: string;
-  total: number; pago: boolean; abertura: string; mecanico: string | null;
+  total: number; valorPago: number; pago: boolean; abertura: string; mecanico: string | null;
   lucroReal?: number; // ausente para o operador (ver src/lib/permissoes.ts)
   cliente: { id: string; nome: string; apelido: string | null };
   veiculo: { marca: string; modelo: string; placa: string | null };
@@ -325,6 +325,7 @@ function OSListContent() {
 function OSRow({ os, podeFinanceiro }: { os: OS; podeFinanceiro: boolean }) {
   const margem = margemOS({ ...os, lucroReal: os.lucroReal ?? 0 });
   const mostrarLucro = podeFinanceiro && os.status !== "CANCELADA" && os.total > 0;
+  const recebimento = situacaoRecebimento(os);
   return (
     <Link
       href={`/os/${os.id}`}
@@ -371,9 +372,9 @@ function OSRow({ os, podeFinanceiro }: { os: OS; podeFinanceiro: boolean }) {
         <span className={cn("hidden sm:inline-flex", corStatus(os.status))}>
           {labelStatus(os.status)}
         </span>
-        <div className="w-24 text-right text-xs tabular-nums">
+        <div className="w-28 text-right text-xs tabular-nums">
           <p className="font-semibold text-tinta">{formatCurrency(os.total)}</p>
-          <p className={os.pago ? "text-ok" : "text-perigo"}>{os.pago ? "Pago" : "Pendente"}</p>
+          <p className={recebimento.cor}>{recebimento.texto}</p>
         </div>
         <p className="hidden text-xs tabular-nums text-tinta-3 sm:block">{formatDate(os.abertura)}</p>
       </div>

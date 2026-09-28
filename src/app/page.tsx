@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { exigirUsuario } from "@/lib/auth";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, situacaoRecebimento } from "@/lib/utils";
 import { labelStatus, corStatus, margemOS, corMargem } from "@/lib/constants";
 import {
   janela,
@@ -738,6 +738,7 @@ function ListaOS({
     const lucroTitulo = patio
       ? "Lucro previsto se a OS fechar com os valores atuais"
       : "Lucro real (após custo de peças)";
+    const recebimento = situacaoRecebimento(os);
     return (
       <Link
         key={os.id}
@@ -797,7 +798,7 @@ function ListaOS({
           </span>
           <div className="text-right text-xs tabular-nums">
             <p className="font-semibold text-tinta">{formatCurrency(os.total)}</p>
-            {!os.pago && <p className="text-perigo">Pendente</p>}
+            {!os.pago && <p className={recebimento.cor}>{recebimento.texto}</p>}
           </div>
         </div>
       </Link>

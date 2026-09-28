@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, situacaoRecebimento } from "@/lib/utils";
 import { labelStatus, corStatus, ORIGENS, anoVeiculo } from "@/lib/constants";
 import CopiarVeiculo from "@/components/CopiarVeiculo";
 import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDe, type VeiculoForm } from "@/components/VeiculoCampos";
@@ -27,7 +27,7 @@ type Veiculo = {
 };
 type OS = {
   id: string; numero: number; status: string; descricao: string; total: number;
-  pago: boolean; abertura: string;
+  valorPago: number; pago: boolean; abertura: string;
   veiculo: { marca: string; modelo: string; placa: string | null };
 };
 type ClienteStats = {
@@ -607,27 +607,30 @@ export default function ClienteDetailPage() {
           />
         ) : (
           <div className="overflow-hidden rounded-xl border border-linha bg-superficie divide-y divide-linha">
-            {cliente.ordens.map((os) => (
-              <Link key={os.id} href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-superficie-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="font-medium text-tinta truncate">
-                    OS #{os.numero} · {os.veiculo.marca} {os.veiculo.modelo}
-                    {os.veiculo.placa ? ` (${os.veiculo.placa})` : ""}
-                  </p>
-                  <p className="text-sm text-tinta-3 truncate">{os.descricao}</p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 sm:ml-3">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${corStatus(os.status)}`}>
-                    {labelStatus(os.status)}
-                  </span>
-                  <div className="text-right text-xs">
-                    <p className="font-medium text-tinta">{formatCurrency(os.total)}</p>
-                    <p className={os.pago ? "text-ok" : "text-perigo"}>{os.pago ? "Pago" : "Pendente"}</p>
+            {cliente.ordens.map((os) => {
+              const recebimento = situacaoRecebimento(os);
+              return (
+                <Link key={os.id} href={`/os/${os.id}`} className="flex flex-col gap-2 px-4 py-3 hover:bg-superficie-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium text-tinta truncate">
+                      OS #{os.numero} · {os.veiculo.marca} {os.veiculo.modelo}
+                      {os.veiculo.placa ? ` (${os.veiculo.placa})` : ""}
+                    </p>
+                    <p className="text-sm text-tinta-3 truncate">{os.descricao}</p>
                   </div>
-                  <p className="text-xs text-tinta-3 hidden sm:block">{formatDate(os.abertura)}</p>
-                </div>
-              </Link>
-            ))}
+                  <div className="flex items-center gap-3 shrink-0 sm:ml-3">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${corStatus(os.status)}`}>
+                      {labelStatus(os.status)}
+                    </span>
+                    <div className="text-right text-xs">
+                      <p className="font-medium text-tinta">{formatCurrency(os.total)}</p>
+                      <p className={recebimento.cor}>{recebimento.texto}</p>
+                    </div>
+                    <p className="text-xs text-tinta-3 hidden sm:block">{formatDate(os.abertura)}</p>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

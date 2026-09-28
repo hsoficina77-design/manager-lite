@@ -13,6 +13,29 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/**
+ * Como a linha de lista fala do recebimento da OS.
+ *
+ * Antes era só "Pago" ou "Pendente" embaixo do total, e "Pendente" ao lado de
+ * R$ 2.900,00 dava a entender que o cliente devia os 2.900 — mesmo quando ele já
+ * tinha deixado 1.900. O que está em aberto é o saldo, então é ele que aparece.
+ * Sem nenhum pagamento o rótulo continua sendo "Pendente": repetir o total logo
+ * abaixo dele não diria nada de novo.
+ */
+export function situacaoRecebimento(os: {
+  total: number;
+  valorPago?: number | null;
+  pago: boolean;
+}): { texto: string; cor: string } {
+  if (os.pago) return { texto: "Pago", cor: "text-ok" };
+  const recebido = os.valorPago ?? 0;
+  const saldo = Math.max(0, os.total - recebido);
+  return {
+    texto: recebido > 0 ? `Falta ${formatCurrency(saldo)}` : "Pendente",
+    cor: "text-perigo",
+  };
+}
+
 /** Valor sem o "R$" — para dentro de campos, onde o prefixo já está desenhado. */
 export function formatarValorBR(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
