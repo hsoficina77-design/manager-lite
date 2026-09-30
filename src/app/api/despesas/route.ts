@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaCriarSchema } from "@/lib/schemas";
 import { INCLUDE_CATEGORIA, mesDeGastos } from "@/lib/despesas";
@@ -12,17 +12,22 @@ import { competenciaDe } from "@/lib/periodo";
  * leitura pode escrever. É o que substitui o job de fundo que este app não tem.
  */
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
   const { searchParams } = new URL(request.url);
-  const { janela, lancamentos } = await mesDeGastos(searchParams.get("mes") ?? undefined);
+  const { janela, lancamentos } = await mesDeGastos(guarda.db, searchParams.get("mes") ?? undefined);
   return NextResponse.json({ mes: janela.label, lancamentos });
 }
 
 /** Gasto avulso — o que não tem regra: uma peça de fornecedor, um conserto do portão. */
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   try {
     const dados = await lerJson(request, despesaCriarSchema);
 
-    const despesa = await prisma.despesa.create({
+    const despesa = await db.despesa.create({
       data: {
         categoriaId: dados.categoriaId,
         descricao: dados.descricao,

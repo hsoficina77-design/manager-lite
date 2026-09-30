@@ -1,15 +1,13 @@
 // Configurações da oficina: formato, padrões e os derivados que tela e PDF usam.
 //
-// A tabela guarda uma linha só, de id fixo. Quem consome nunca precisa saber disso
-// nem tratar "ainda não configurado" — os padrões daqui preenchem o que faltar.
+// A tabela guarda uma linha por oficina (a chave é o `oficinaId`). Quem consome nunca
+// precisa tratar "ainda não configurado" — os padrões daqui preenchem o que faltar.
 //
 // Este arquivo é puro de propósito (sem Prisma): o cabeçalho dos documentos e os
 // botões de PDF são componentes de cliente e importam os mesmos derivados. A leitura
 // no banco fica em `configuracao-db.ts`.
 
 import { COR_MENU_PADRAO, COR_PRIMARIA_PADRAO } from "@/lib/tema";
-
-export const CONFIG_ID = "default";
 
 export type Configuracao = {
   nome: string;

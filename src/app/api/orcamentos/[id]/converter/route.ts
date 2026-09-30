@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { guardaApi } from "@/lib/auth";
 
 // Converte um orçamento em Ordem de Serviço.
@@ -13,10 +12,11 @@ export async function POST(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db, transacao, oficinaId } = guarda;
 
   const { id } = await params;
   try {
-    const orcamento = await prisma.orcamento.findUnique({
+    const orcamento = await db.orcamento.findUnique({
       where: { id },
       include: { itens: true },
     });
@@ -59,9 +59,9 @@ export async function POST(
     const lucroReal = total - custoTotalPecas;
     const margemPecas = totalPecas > 0 ? ((totalPecas - custoTotalPecas) / totalPecas) * 100 : 0;
 
-    const os = await prisma.$transaction(async (tx) => {
+    const os = await transacao(async (tx) => {
       const seq = await tx.sequencia.upsert({
-        where: { id: "os" },
+        where: { oficinaId_id: { oficinaId, id: "os" } },
         update: { ultimo: { increment: 1 } },
         create: { id: "os", ultimo: 1 },
       });

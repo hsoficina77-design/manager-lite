@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import type { Db } from "@/lib/db-oficina";
 import { encerrarSessoesDoUsuario, guardaApi } from "@/lib/auth";
 import { hashSenha, validarSenha } from "@/lib/senha";
 import { ehPapelValido } from "@/lib/permissoes";
@@ -10,10 +10,10 @@ const CAMPOS = {
   ultimoAcesso: true, createdAt: true,
 } as const;
 
-/** Sobraria algum dono ativo depois desta mudança? */
-async function restaDono(idAlterado: string, continuaDonoAtivo: boolean): Promise<boolean> {
+/** Sobraria algum dono ativo nesta oficina depois desta mudança? */
+async function restaDono(db: Db, idAlterado: string, continuaDonoAtivo: boolean): Promise<boolean> {
   if (continuaDonoAtivo) return true;
-  const outros = await prisma.usuario.count({
+  const outros = await db.usuario.count({
     where: { papel: "ADMIN", ativo: true, id: { not: idAlterado } },
   });
   return outros > 0;
@@ -24,9 +24,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (guarda.resposta) return guarda.resposta;
 
   const { id } = await params;
+  const { db } = guarda;
 
   try {
-    const alvo = await prisma.usuario.findUnique({ where: { id } });
+    // Acesso de outra oficina não é encontrado — o `db` só enxerga a do dono.
+    const alvo = await db.usuario.findUnique({ where: { id } });
     if (!alvo) return NextResponse.json({ error: "Acesso não encontrado" }, { status: 404 });
 
     const body = await request.json();
@@ -103,7 +105,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // trancado por fora.
     const papelFinal = (dados.papel as string) ?? alvo.papel;
     const ativoFinal = (dados.ativo as boolean) ?? alvo.ativo;
-    if (!(await restaDono(id, papelFinal === "ADMIN" && ativoFinal))) {
+    if (!(await restaDono(db, id, papelFinal === "ADMIN" && ativoFinal))) {
       return NextResponse.json(
         { error: "É preciso manter pelo menos um dono ativo" },
         { status: 400 }
@@ -111,10 +113,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     if (Object.keys(dados).length === 0) {
-      return NextResponse.json(await prisma.usuario.findUnique({ where: { id }, select: CAMPOS }));
+      return NextResponse.json(await db.usuario.findUnique({ where: { id }, select: CAMPOS }));
     }
 
-    const usuario = await prisma.usuario.update({ where: { id }, data: dados, select: CAMPOS });
+    const usuario = await db.usuario.update({ where: { id }, data: dados, select: CAMPOS });
 
     // Derruba as outras sessões, mas poupa a atual: quem acabou de trocar a própria
     // senha não deveria ser expulso da tela em que está.
@@ -125,7 +127,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json(usuario);
   } catch (err) {
     if (err instanceof Error && err.message.includes("Unique constraint")) {
-      return NextResponse.json({ error: "Já existe um acesso com este e-mail" }, { status: 409 });
+      return NextResponse.json({ error: "Este e-mail já é usado por outro acesso no sistema" }, { status: 409 });
     }
     console.error(err);
     return NextResponse.json({ error: "Erro ao salvar o acesso" }, { status: 500 });
@@ -142,11 +144,13 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Você não pode excluir o próprio acesso" }, { status: 400 });
   }
 
+  const { db } = guarda;
+
   try {
-    const alvo = await prisma.usuario.findUnique({ where: { id } });
+    const alvo = await db.usuario.findUnique({ where: { id } });
     if (!alvo) return NextResponse.json({ error: "Acesso não encontrado" }, { status: 404 });
 
-    if (!(await restaDono(id, false))) {
+    if (!(await restaDono(db, id, false))) {
       return NextResponse.json(
         { error: "É preciso manter pelo menos um dono ativo" },
         { status: 400 }
@@ -154,7 +158,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
 
     // As sessões vão junto pela FK (onDelete: Cascade).
-    await prisma.usuario.delete({ where: { id } });
+    await db.usuario.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error(err);

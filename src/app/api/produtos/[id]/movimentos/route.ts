@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { movimentoEstoqueSchema } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -8,9 +7,13 @@ import { semFinanceiro } from "@/lib/permissoes";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
-  const movimentos = await prisma.movimentoEstoque.findMany({
+  const produto = await db.produto.findUnique({ where: { id }, select: { id: true } });
+  if (!produto) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
+
+  const movimentos = await db.movimentoEstoque.findMany({
     where: { produtoId: id },
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -28,12 +31,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { transacao } = guarda;
 
   const { id } = await params;
   try {
     const { tipo, quantidade, custoUnit, motivo } = await lerJson(request, movimentoEstoqueSchema);
 
-    const resultado = await prisma.$transaction(async (tx) => {
+    const resultado = await transacao(async (tx) => {
       const produto = await tx.produto.findUnique({
         where: { id },
         select: { quantidade: true, custoUnit: true },

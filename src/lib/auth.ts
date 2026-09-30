@@ -4,11 +4,14 @@
 // confirma o que o cookie não pode provar sozinho: a sessão ainda existe no banco,
 // o usuário continua ativo e o papel é o de agora — não o de quando ele entrou.
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
 import { ehPapelValido, type Papel } from "@/lib/permissoes";
+import { bancoDaOficina, type BancoDaOficina } from "@/lib/db-oficina";
+import { sistemaVazio } from "@/lib/sistema";
 
 export type UsuarioSessao = {
   id: string;
@@ -21,6 +24,10 @@ export type UsuarioSessao = {
   podeExcluir: boolean;
   /** Sessão desta requisição — permite poupá-la ao derrubar as demais. */
   sessaoId: string;
+  /** Oficina da pessoa. Vem do banco, nunca do cookie nem da requisição. */
+  oficinaId: string;
+  /** Dono da plataforma: gera convites. Não abre dados de outras oficinas. */
+  administraPlataforma: boolean;
 };
 
 /**
@@ -28,8 +35,13 @@ export type UsuarioSessao = {
  *
  * Sessão vencida ou de usuário desativado é apagada na hora — assim desligar um acesso
  * tem efeito no próximo carregamento de página, sem esperar o cookie expirar.
+ *
+ * `cache` junta as chamadas da mesma renderização (layout, metadados e página pedem o
+ * usuário cada um) numa consulta só ao banco.
  */
-export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
+export const getUsuarioAtual = cache(lerUsuarioDaSessao);
+
+async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
   const token = (await cookies()).get(COOKIE_SESSAO)?.value;
   const lido = await lerToken(token);
   if (!lido) return null;
@@ -48,12 +60,22 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
             podeFinanceiro: true,
             podeExcluir: true,
             ativo: true,
+            oficinaId: true,
+            administraPlataforma: true,
+            oficina: { select: { ativa: true } },
           },
         },
       },
     });
 
-    if (!sessao || sessao.expiraEm <= new Date() || !sessao.usuario.ativo) {
+    // Oficina suspensa pelo dono da plataforma derruba todo mundo dela, do mesmo jeito
+    // que um acesso desativado.
+    if (
+      !sessao ||
+      sessao.expiraEm <= new Date() ||
+      !sessao.usuario.ativo ||
+      !sessao.usuario.oficina.ativa
+    ) {
       if (sessao) await encerrarSessao(lido.sessaoId);
       return null;
     }
@@ -69,6 +91,8 @@ export async function getUsuarioAtual(): Promise<UsuarioSessao | null> {
       podeFinanceiro: ehDono || usuario.podeFinanceiro,
       podeExcluir: ehDono || usuario.podeExcluir,
       sessaoId: lido.sessaoId,
+      oficinaId: usuario.oficinaId,
+      administraPlataforma: usuario.administraPlataforma,
     };
   } catch (err) {
     console.error("Falha ao ler a sessão:", err);
@@ -104,7 +128,7 @@ export async function encerrarSessoesDoUsuario(usuarioId: string, exceto?: strin
 /** Ainda não existe ninguém cadastrado — o app deve abrir a tela de primeiro acesso. */
 export async function precisaPrimeiroAcesso(): Promise<boolean> {
   try {
-    return (await prisma.usuario.count()) === 0;
+    return await sistemaVazio();
   } catch (err) {
     // Banco fora do ar não pode virar "instale de novo": no erro, assume que já existe
     // dono cadastrado, e a tela de login mostra a falha.
@@ -129,19 +153,32 @@ export async function exigirDono(): Promise<UsuarioSessao> {
   return usuario;
 }
 
+/** Página que lê dados: usuário logado + o banco da oficina dele. */
+export async function exigirOficina(
+  destino?: string
+): Promise<BancoDaOficina & { usuario: UsuarioSessao }> {
+  const usuario = await exigirUsuario(destino);
+  return { usuario, ...bancoDaOficina(usuario.oficinaId) };
+}
+
 // ─── Rotas de API ─────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
 
 /**
- * Guarda para rotas de API. Devolve `{ usuario }` ou `{ resposta }` já pronta.
+ * Guarda para rotas de API. Devolve `{ usuario, db, transacao }` — o banco já preso à
+ * oficina de quem está logado — ou `{ resposta }` já pronta.
  *
  *   const guarda = await guardaApi({ dono: true });
  *   if (guarda.resposta) return guarda.resposta;
+ *   const { db } = guarda;
  */
 export async function guardaApi(
-  opcoes: { dono?: boolean; financeiro?: boolean; exclusao?: boolean } = {}
-): Promise<{ usuario: UsuarioSessao; resposta?: never } | { usuario?: never; resposta: NextResponse }> {
+  opcoes: { dono?: boolean; financeiro?: boolean; exclusao?: boolean; plataforma?: boolean } = {}
+): Promise<
+  | (BancoDaOficina & { usuario: UsuarioSessao; resposta?: never })
+  | { usuario?: never; db?: never; transacao?: never; resposta: NextResponse }
+> {
   const usuario = await getUsuarioAtual();
   if (!usuario) {
     return { resposta: NextResponse.json({ error: "Não autenticado" }, { status: 401 }) };
@@ -155,5 +192,9 @@ export async function guardaApi(
   if (opcoes.exclusao && !usuario.podeExcluir) {
     return { resposta: NextResponse.json({ error: "Sem permissão para excluir" }, { status: 403 }) };
   }
-  return { usuario };
+  if (opcoes.plataforma && !usuario.administraPlataforma) {
+    return { resposta: NextResponse.json({ error: "Acesso restrito à plataforma" }, { status: 403 }) };
+  }
+  // O banco entregue à rota já vem preso à oficina da sessão — é a trava 1.
+  return { usuario, ...bancoDaOficina(usuario.oficinaId) };
 }

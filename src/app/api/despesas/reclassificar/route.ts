@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaReclassificarSchema } from "@/lib/schemas";
 
@@ -17,10 +17,13 @@ import { despesaReclassificarSchema } from "@/lib/schemas";
  * regra para que a escolha seja consciente.
  */
 export async function PUT(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   try {
     const { ids, categoriaId } = await lerJson(request, despesaReclassificarSchema);
 
-    const categoria = await prisma.categoriaDespesa.findUnique({
+    const categoria = await db.categoriaDespesa.findUnique({
       where: { id: categoriaId },
       select: { id: true },
     });
@@ -28,7 +31,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Categoria não encontrada" }, { status: 404 });
     }
 
-    const { count } = await prisma.despesa.updateMany({
+    const { count } = await db.despesa.updateMany({
       where: { id: { in: ids } },
       data: { categoriaId },
     });

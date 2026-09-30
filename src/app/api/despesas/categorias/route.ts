@@ -1,26 +1,32 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { categoriaDespesaSchema } from "@/lib/schemas";
 
 export async function GET() {
-  const categorias = await prisma.categoriaDespesa.findMany({
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+  const categorias = await db.categoriaDespesa.findMany({
     orderBy: [{ ordem: "asc" }, { nome: "asc" }],
   });
   return NextResponse.json(categorias);
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   try {
     const { nome, cor, ordem, ativa } = await lerJson(request, categoriaDespesaSchema);
 
     // Categoria nova entra no fim da lista sem o dono precisar pensar em ordem.
-    const ultima = await prisma.categoriaDespesa.findFirst({
+    const ultima = await db.categoriaDespesa.findFirst({
       orderBy: { ordem: "desc" },
       select: { ordem: true },
     });
 
-    const categoria = await prisma.categoriaDespesa.create({
+    const categoria = await db.categoriaDespesa.create({
       data: {
         nome,
         cor: cor ?? "#71717a",

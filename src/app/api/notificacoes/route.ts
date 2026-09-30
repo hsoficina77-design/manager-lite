@@ -7,10 +7,11 @@ import { contarNaoLidas, listarNotificacoes } from "@/lib/notificacoes";
 export async function GET() {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const [notificacoes, naoLidas] = await Promise.all([
-    listarNotificacoes(guarda.usuario.papel),
-    contarNaoLidas(guarda.usuario.papel),
+    listarNotificacoes(db, guarda.usuario.papel),
+    contarNaoLidas(db, guarda.usuario.papel),
   ]);
   return NextResponse.json({ notificacoes, naoLidas });
 }

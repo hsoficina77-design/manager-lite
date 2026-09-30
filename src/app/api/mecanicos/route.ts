@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { mecanicoCriarSchema } from "@/lib/schemas";
 
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { searchParams } = new URL(request.url);
   const apenasAtivos = searchParams.get("ativo") === "true";
 
-  const mecanicos = await prisma.mecanico.findMany({
+  const mecanicos = await db.mecanico.findMany({
     where: apenasAtivos ? { ativo: true } : undefined,
     orderBy: { nome: "asc" },
     include: { _count: { select: { ordens: true } } },
@@ -17,10 +20,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   try {
     const { nome, telefone, especialidade } = await lerJson(request, mecanicoCriarSchema);
 
-    const mecanico = await prisma.mecanico.create({
+    const mecanico = await db.mecanico.create({
       data: {
         nome,
         telefone: telefone ?? null,

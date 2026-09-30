@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { uploadFoto } from "@/lib/supabase-storage";
 import { comUrlAssinada } from "@/lib/fotos";
 import { FOTO_LEGENDA_MAX, FOTO_TIPO_PADRAO, FOTO_TIPO_VALUES } from "@/lib/constants";
@@ -12,9 +12,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, oficinaId } = guarda;
+
   const { id } = await params;
   try {
-    const os = await prisma.ordemServico.findUnique({ where: { id }, select: { id: true } });
+    const os = await db.ordemServico.findUnique({ where: { id }, select: { id: true } });
     if (!os) {
       return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
     }
@@ -45,12 +49,14 @@ export async function POST(
       return NextResponse.json({ error: "Momento da foto inválido" }, { status: 400 });
     }
 
-    const { path, url } = await uploadFoto(id, bytes, tipoArquivo);
+    // A pasta começa pela oficina: o bucket é um só para todas, e é o prefixo que
+    // separa os arquivos de cada uma.
+    const { path, url } = await uploadFoto(oficinaId, id, bytes, tipoArquivo);
 
-    const foto = await prisma.fotoOS.create({
+    const foto = await db.fotoOS.create({
       data: { ordemId: id, path, url, legenda, tipo, tamanhoBytes: bytes.byteLength },
     });
-    await avisarSeArmazenamentoCheio();
+    await avisarSeArmazenamentoCheio(db);
 
     const [comAssinatura] = await comUrlAssinada([foto]);
     return NextResponse.json(comAssinatura, { status: 201 });

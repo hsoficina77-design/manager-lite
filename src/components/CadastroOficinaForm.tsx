@@ -7,11 +7,30 @@ import { SENHA_MIN } from "@/lib/senha-regras";
 const inputCls =
   "w-full rounded-lg border border-linha-forte px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
-export default function PrimeiroAcessoForm() {
+/**
+ * Cadastro de uma oficina e do dono dela. Serve às duas portas de entrada:
+ *
+ *   - instalação (`/primeiro-acesso`): sistema vazio, cria a primeira oficina;
+ *   - convite (`/convite/<token>`): o link que o dono da plataforma mandou.
+ */
+export default function CadastroOficinaForm({
+  convite,
+}: {
+  /** Sem convite, é a instalação. */
+  convite?: { token: string; nomeOficina: string | null };
+}) {
   const router = useRouter();
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", confirmacao: "", token: "" });
+  const [form, setForm] = useState({
+    nomeOficina: convite?.nomeOficina ?? "",
+    nome: "",
+    email: "",
+    senha: "",
+    confirmacao: "",
+    token: "",
+  });
   // Instalação protegida por código (SETUP_TOKEN no servidor) pede mais um campo.
   const [exigeToken, setExigeToken] = useState(false);
+  const endpoint = convite ? `/api/convite/${encodeURIComponent(convite.token)}` : "/api/auth/primeiro-acesso";
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -20,11 +39,12 @@ export default function PrimeiroAcessoForm() {
     setForm((f) => ({ ...f, [campo]: valor }));
 
   useEffect(() => {
+    if (convite) return;
     fetch("/api/auth/primeiro-acesso")
       .then((r) => r.json())
       .then((d) => setExigeToken(Boolean(d.exigeToken)))
       .catch(() => {});
-  }, []);
+  }, [convite]);
 
   const senhaCurta = form.senha.length > 0 && form.senha.length < SENHA_MIN;
   const naoConfere = form.confirmacao.length > 0 && form.senha !== form.confirmacao;
@@ -38,10 +58,11 @@ export default function PrimeiroAcessoForm() {
     }
     setSalvando(true);
     try {
-      const res = await fetch("/api/auth/primeiro-acesso", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          nomeOficina: form.nomeOficina,
           nome: form.nome,
           email: form.email,
           senha: form.senha,
@@ -89,13 +110,28 @@ export default function PrimeiroAcessoForm() {
       )}
 
       <div>
+        <label htmlFor="nomeOficina" className="mb-1 block text-sm font-medium text-tinta-2">
+          Nome da oficina
+        </label>
+        <input
+          id="nomeOficina"
+          required
+          autoFocus
+          maxLength={120}
+          value={form.nomeOficina}
+          onChange={(e) => setCampo("nomeOficina", e.target.value)}
+          className={inputCls}
+        />
+        <p className="mt-1 text-xs text-tinta-3">Sai no menu e nos documentos. Dá para mudar depois.</p>
+      </div>
+
+      <div>
         <label htmlFor="nome" className="mb-1 block text-sm font-medium text-tinta-2">
           Seu nome
         </label>
         <input
           id="nome"
           required
-          autoFocus
           value={form.nome}
           onChange={(e) => setCampo("nome", e.target.value)}
           className={inputCls}
@@ -168,7 +204,7 @@ export default function PrimeiroAcessoForm() {
         disabled={salvando || senhaCurta || naoConfere}
         className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50"
       >
-        {salvando ? "Criando..." : "Criar acesso e entrar"}
+        {salvando ? "Criando..." : "Criar oficina e entrar"}
       </button>
     </form>
   );

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 
 // Fechamento de caixa: soma os recebimentos (OS + dívidas avulsas) de um dia,
 // agrupados por forma de pagamento. ?data=YYYY-MM-DD — default: hoje.
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { searchParams } = new URL(request.url);
   const dataParam = searchParams.get("data");
   const dia = dataParam ? new Date(`${dataParam}T00:00:00`) : new Date();
@@ -12,12 +15,12 @@ export async function GET(request: Request) {
   fim.setDate(fim.getDate() + 1);
 
   const [pagamentosOS, pagamentosDivida] = await Promise.all([
-    prisma.pagamentoOS.findMany({
+    db.pagamentoOS.findMany({
       where: { data: { gte: inicio, lt: fim } },
       include: { ordem: { select: { numero: true, cliente: { select: { nome: true } } } } },
       orderBy: { data: "desc" },
     }),
-    prisma.pagamentoDivida.findMany({
+    db.pagamentoDivida.findMany({
       where: { data: { gte: inicio, lt: fim } },
       include: { divida: { select: { descricao: true, devedorNome: true, cliente: { select: { nome: true } } } } },
       orderBy: { data: "desc" },

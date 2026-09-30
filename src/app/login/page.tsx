@@ -16,7 +16,7 @@ export default async function LoginPage({
   if (await getUsuarioAtual()) redirect("/");
 
   const { next } = await searchParams;
-  const config = await getConfiguracao();
+  const config = await getConfiguracao(null);
 
   // Só caminho interno: um `next` apontando para fora viraria redirecionamento aberto,
   // que é como se monta phishing com o domínio da oficina.

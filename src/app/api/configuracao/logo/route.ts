@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { deleteFotos, uploadLogo } from "@/lib/supabase-storage";
 import { getConfiguracao } from "@/lib/configuracao-db";
-import { CONFIG_ID } from "@/lib/configuracao";
 import { FORMATOS_ACEITOS, tipoRealDaImagem } from "@/lib/imagem-upload";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — logo é arte pequena, não foto de serviço
@@ -13,6 +12,10 @@ async function descartarAnterior(logoPath: string | null | undefined) {
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi({ dono: true });
+  if (guarda.resposta) return guarda.resposta;
+  const { db, oficinaId } = guarda;
+
   try {
     const form = await request.formData();
     const file = form.get("file");
@@ -33,22 +36,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const anterior = await prisma.configuracao.findUnique({
-      where: { id: CONFIG_ID },
+    const anterior = await db.configuracao.findUnique({
+      where: { oficinaId },
       select: { logoPath: true },
     });
 
-    const { path, url } = await uploadLogo(bytes, tipo);
+    const { path, url } = await uploadLogo(oficinaId, bytes, tipo);
 
-    await prisma.configuracao.upsert({
-      where: { id: CONFIG_ID },
+    await db.configuracao.upsert({
+      where: { oficinaId },
       update: { logoUrl: url, logoPath: path },
-      create: { id: CONFIG_ID, logoUrl: url, logoPath: path },
+      create: { logoUrl: url, logoPath: path },
     });
 
     await descartarAnterior(anterior?.logoPath);
 
-    return NextResponse.json(await getConfiguracao());
+    return NextResponse.json(await getConfiguracao(guarda));
   } catch (err) {
     console.error(err);
     const msg =
@@ -60,21 +63,25 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
+  const guarda = await guardaApi({ dono: true });
+  if (guarda.resposta) return guarda.resposta;
+  const { db, oficinaId } = guarda;
+
   try {
-    const anterior = await prisma.configuracao.findUnique({
-      where: { id: CONFIG_ID },
+    const anterior = await db.configuracao.findUnique({
+      where: { oficinaId },
       select: { logoPath: true },
     });
 
-    await prisma.configuracao.upsert({
-      where: { id: CONFIG_ID },
+    await db.configuracao.upsert({
+      where: { oficinaId },
       update: { logoUrl: null, logoPath: null },
-      create: { id: CONFIG_ID },
+      create: {},
     });
 
     await descartarAnterior(anterior?.logoPath);
 
-    return NextResponse.json(await getConfiguracao());
+    return NextResponse.json(await getConfiguracao(guarda));
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Erro ao remover a logo" }, { status: 500 });

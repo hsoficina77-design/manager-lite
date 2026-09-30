@@ -6,8 +6,8 @@ import { UsuarioProvider } from "@/components/UsuarioProvider";
 import { AvisosProvider } from "@/components/ui/Avisos";
 import { SaidaSeguraProvider } from "@/components/ui/SaidaSegura";
 import { SCRIPT_TEMA } from "@/components/ui/Tema";
-import { prisma } from "@/lib/prisma";
 import { getUsuarioAtual } from "@/lib/auth";
+import { bancoDaOficina, type Db } from "@/lib/db-oficina";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
 import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
@@ -23,10 +23,15 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+/** Configuração da oficina de quem está logado; o padrão para quem não está. */
+async function configuracaoDaSessao(usuario: Awaited<ReturnType<typeof getUsuarioAtual>>) {
+  return getConfiguracao(usuario ? bancoDaOficina(usuario.oficinaId) : null);
+}
+
 // Título, descrição e ícone saem do painel de configurações — a aba do navegador
 // mostra o nome da oficina, não o de quem escreveu o sistema.
 export async function generateMetadata(): Promise<Metadata> {
-  const config = await getConfiguracao();
+  const config = await configuracaoDaSessao(await getUsuarioAtual());
   return {
     title: config.nome,
     description: "Gestão simples para oficinas mecânicas.",
@@ -43,11 +48,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [config, usuario, cabecalhos] = await Promise.all([
-    getConfiguracao(),
-    getUsuarioAtual(),
-    headers(),
-  ]);
+  const [usuario, cabecalhos] = await Promise.all([getUsuarioAtual(), headers()]);
+  // Marca e cores são da oficina de quem entrou. Sem ninguém logado (login, convite),
+  // vale o tema padrão — a tela de entrada é da plataforma, não de uma oficina.
+  const config = await configuracaoDaSessao(usuario);
 
   // Cookie válido mas sem usuário significa sessão que deixou de existir — acesso
   // desativado ou derrubado pelo dono. O proxy não tem como saber disso (não alcança
@@ -57,8 +61,8 @@ export default async function RootLayout({
     redirect(`/login?next=${encodeURIComponent(rota)}`);
   }
 
-  // As telas de login e de primeiro acesso caem aqui sem usuário — e não devem ganhar
-  // menu lateral nem contagem de pendências. O tema, sim: a marca já aparece no login.
+  // As telas de login, convite e primeiro acesso caem aqui sem usuário — e não devem
+  // ganhar menu lateral nem contagem de pendências.
   const conteudo = usuario ? (
     <AppComMenu usuario={usuario} config={config}>
       {children}
@@ -90,6 +94,7 @@ export default async function RootLayout({
                   papel: usuario.papel,
                   podeFinanceiro: usuario.podeFinanceiro,
                   podeExcluir: usuario.podeExcluir,
+                  administraPlataforma: usuario.administraPlataforma,
                 }
               : null
           }
@@ -114,7 +119,9 @@ async function AppComMenu({
   children: React.ReactNode;
 }) {
   // Contas a receber é tela de financeiro; sem esse acesso o contador nem é consultado.
-  const pendingCount = usuario.podeFinanceiro ? await contarPendencias() : 0;
+  const pendingCount = usuario.podeFinanceiro
+    ? await contarPendencias(bancoDaOficina(usuario.oficinaId).db)
+    : 0;
 
   // Quem rola agora é o documento, não um `main` de altura travada.
   //
@@ -140,11 +147,10 @@ async function AppComMenu({
   );
 }
 
-async function contarPendencias(): Promise<number> {
+async function contarPendencias(db: Db): Promise<number> {
   const [osPendentes, dividasPendentes] = await Promise.all([
-    prisma.ordemServico.count({ where: { pago: false, status: "ENTREGUE" } }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).dividaAvulsa.count({ where: { pago: false } }) as Promise<number>,
+    db.ordemServico.count({ where: { pago: false, status: "ENTREGUE" } }),
+    db.dividaAvulsa.count({ where: { pago: false } }),
   ]);
   return osPendentes + dividasPendentes;
 }

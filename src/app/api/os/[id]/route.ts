@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { deleteFotos } from "@/lib/supabase-storage";
 import { comUrlAssinada } from "@/lib/fotos";
 import { OS_CONCLUIDA, consomeEstoque } from "@/lib/constants";
@@ -18,10 +17,11 @@ export async function GET(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
 
-  const os = await prisma.ordemServico.findUnique({
+  const os = await db.ordemServico.findUnique({
     where: { id },
     include: {
       cliente: true,
@@ -56,6 +56,7 @@ export async function PUT(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
 
   const { id } = await params;
   try {
@@ -77,7 +78,7 @@ export async function PUT(
       itens,
     } = await lerJson(request, osAtualizarSchema);
 
-    const current = await prisma.ordemServico.findUnique({
+    const current = await db.ordemServico.findUnique({
       where: { id },
       select: { numero: true, totalPecas: true, totalMO: true, desconto: true, custoTotalPecas: true, valorPago: true, status: true },
     });
@@ -89,7 +90,7 @@ export async function PUT(
     // Peças da prateleira citadas na lista nova. `vinculos` é posicional, como
     // `custos`: id de produto que não existe mais chega como null e o item fica sem
     // vínculo, em vez de derrubar a gravação inteira com erro de chave estrangeira.
-    const produtos = itens ? await produtosDosItens(itens) : new Map();
+    const produtos = itens ? await produtosDosItens(db, itens) : new Map();
     const vinculos = itens ? itens.map((i) => vinculoDoItem(i, produtos)) : [];
 
     // Quando os itens são enviados (edição completa), recalcula os totais a partir deles.
@@ -99,7 +100,7 @@ export async function PUT(
 
     // Custo dos itens: do payload quando é o dono, do banco quando é o operador —
     // que não recebe custo na leitura e, sem isto, zeraria o lucro ao salvar.
-    const custos = itens ? await custosParaSalvar(itens, guarda.usuario.podeFinanceiro, { os: id }) : [];
+    const custos = itens ? await custosParaSalvar(db, itens, guarda.usuario.podeFinanceiro, { os: id }) : [];
 
     if (itens) {
       totalPecas = itens.filter((i) => i.tipo === "PECA").reduce((s, i) => s + valorDoItem(i), 0);
@@ -144,7 +145,7 @@ export async function PUT(
     if (mecanicoId !== undefined) {
       data.mecanicoId = mecanicoId;
       const mec = mecanicoId
-        ? await prisma.mecanico.findUnique({ where: { id: mecanicoId }, select: { nome: true } })
+        ? await db.mecanico.findUnique({ where: { id: mecanicoId }, select: { nome: true } })
         : null;
       data.mecanico = mec?.nome ?? null;
     }
@@ -174,7 +175,7 @@ export async function PUT(
     // Uma transação só, e não apenas quando a lista de itens vem junto: cancelar a OS
     // devolve as peças para a prateleira, e a devolução não pode acontecer separada da
     // mudança de status.
-    await prisma.$transaction(async (tx) => {
+    await transacao(async (tx) => {
       if (itens !== undefined || status !== undefined) {
         // Item que já existe é atualizado no lugar, e não recriado: trocar o id a cada
         // gravação quebraria a recuperação de custo do operador — ver lib/itens.
@@ -221,7 +222,7 @@ export async function PUT(
       await tx.ordemServico.update({ where: { id }, data });
     });
 
-    const os = await prisma.ordemServico.findUnique({ where: { id } });
+    const os = await db.ordemServico.findUnique({ where: { id } });
     return NextResponse.json({
       ...semFinanceiro(os, guarda.usuario.podeFinanceiro),
       estoque,
@@ -240,10 +241,11 @@ export async function DELETE(
 ) {
   const guarda = await guardaApi({ exclusao: true });
   if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
 
   const { id } = await params;
   try {
-    const os = await prisma.ordemServico.findUnique({
+    const os = await db.ordemServico.findUnique({
       where: { id },
       select: {
         numero: true,
@@ -256,7 +258,7 @@ export async function DELETE(
       return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
     }
 
-    const fotos = await prisma.fotoOS.findMany({
+    const fotos = await db.fotoOS.findMany({
       where: { ordemId: id },
       select: { id: true, path: true, orcamentoId: true },
     });
@@ -265,13 +267,13 @@ export async function DELETE(
     // apagaria a imagem de um documento que continua existindo.
     const doOrcamento = fotos.filter((f) => f.orcamentoId);
     if (doOrcamento.length > 0) {
-      await prisma.fotoOS.updateMany({
+      await db.fotoOS.updateMany({
         where: { id: { in: doOrcamento.map((f) => f.id) } },
         data: { ordemId: null },
       });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await transacao(async (tx) => {
       // A OS some, mas a peça que ela segurava não evaporou: volta para a prateleira
       // antes da exclusão. O movimento fica sem `ordemId` de propósito — a OS não vai
       // mais existir —, e `ordemNumero` é o que mantém o rastro legível.
@@ -289,6 +291,7 @@ export async function DELETE(
 
     await deleteFotos(fotos.filter((f) => !f.orcamentoId).map((f) => f.path));
     await registrarExclusao(
+      db,
       "OS",
       `OS #${os.numero} — ${os.cliente.nome}`,
       guarda.usuario

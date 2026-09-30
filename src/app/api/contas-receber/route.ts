@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 
 export type Faixa = "0-15" | "16-30" | "31-60" | "60+";
 
@@ -12,8 +12,11 @@ function calcFaixa(dias: number): Faixa {
 
 // Agrega devedores (OS pendentes + dívidas avulsas) por cliente, com aging de inadimplência.
 export async function GET() {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const [ordens, dividas] = await Promise.all([
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: { pago: false, status: "ENTREGUE" },
       select: {
         id: true, numero: true, status: true, desconto: true, total: true, valorPago: true, abertura: true,
@@ -27,7 +30,7 @@ export async function GET() {
       },
       orderBy: { abertura: "asc" },
     }),
-    prisma.dividaAvulsa.findMany({
+    db.dividaAvulsa.findMany({
       where: { pago: false },
       select: {
         id: true, descricao: true, valor: true, valorPago: true, createdAt: true, devedorNome: true,

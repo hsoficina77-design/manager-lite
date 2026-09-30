@@ -138,23 +138,29 @@ export async function uploadArquivo(
   return { path, url: publicUrl(path) };
 }
 
-/** Foto da OS — cada OS tem sua pasta. */
-export function uploadFoto(osId: string, bytes: ArrayBuffer, contentType: TipoImagem) {
-  return uploadArquivo(`os/${osId}`, bytes, contentType);
+// Todo arquivo mora na pasta da oficina (`<oficinaId>/...`). O caminho nunca vem da
+// requisição: é montado aqui com a oficina da sessão, e para ler ou excluir usa-se só o
+// `path` gravado numa linha que o `db` da oficina devolveu. Os arquivos anteriores à
+// separação continuam em `os/`, `orcamentos/` e `marca/` — são todos da oficina nº 1.
+
+/** Foto da OS — cada OS tem sua pasta, dentro da pasta da oficina. */
+export function uploadFoto(oficinaId: string, osId: string, bytes: ArrayBuffer, contentType: TipoImagem) {
+  return uploadArquivo(`${oficinaId}/os/${osId}`, bytes, contentType);
 }
 
 /** Foto do orçamento — pasta própria, porque a foto existe antes de haver OS. */
 export function uploadFotoOrcamento(
+  oficinaId: string,
   orcamentoId: string,
   bytes: ArrayBuffer,
   contentType: TipoImagem
 ) {
-  return uploadArquivo(`orcamentos/${orcamentoId}`, bytes, contentType);
+  return uploadArquivo(`${oficinaId}/orcamentos/${orcamentoId}`, bytes, contentType);
 }
 
 /** Logo da oficina (painel de configurações). */
-export function uploadLogo(bytes: ArrayBuffer, contentType: TipoImagem) {
-  return uploadArquivo("marca", bytes, contentType);
+export function uploadLogo(oficinaId: string, bytes: ArrayBuffer, contentType: TipoImagem) {
+  return uploadArquivo(`${oficinaId}/marca`, bytes, contentType);
 }
 
 /** Exclui arquivos do bucket (best-effort — não lança em caso de falha). */

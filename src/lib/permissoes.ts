@@ -35,6 +35,9 @@ export const ROTAS_DE_DONO = [
   "/api/produtividade",
   "/api/usuarios",
   "/api/exclusoes",
+  // Plataforma exige, além de dono, `administraPlataforma` — que só o banco sabe, então
+  // essa segunda checagem fica na rota (guardaApi) e na página.
+  "/api/plataforma",
 ];
 
 // Dinheiro: caixa, despesas, contas a receber. Todo dono já enxerga; um operador só
@@ -88,8 +91,10 @@ export function exigeExclusao(pathname: string, metodo: string): boolean {
 export const ROTAS_PUBLICAS = [
   "/login",
   "/primeiro-acesso",
+  "/convite",
   "/api/auth/login",
   "/api/auth/primeiro-acesso",
+  "/api/convite",
 ];
 
 /** Cabeçalho com a rota atual, escrito pelo proxy e lido pelo layout raiz. */

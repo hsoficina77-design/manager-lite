@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { deleteFotos } from "@/lib/supabase-storage";
 import { comUrlAssinada } from "@/lib/fotos";
 import { FOTO_LEGENDA_MAX, FOTO_TIPO_VALUES } from "@/lib/constants";
@@ -10,10 +10,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; fotoId: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+
   const { id, fotoId } = await params;
   try {
     const body = await lerJson(request, fotoAtualizarSchema);
-    const foto = await prisma.fotoOS.findUnique({ where: { id: fotoId } });
+    const foto = await db.fotoOS.findUnique({ where: { id: fotoId } });
     if (!foto || foto.orcamentoId !== id) {
       return NextResponse.json({ error: "Foto não encontrada" }, { status: 404 });
     }
@@ -37,7 +41,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Nada para atualizar" }, { status: 400 });
     }
 
-    const atualizada = await prisma.fotoOS.update({ where: { id: fotoId }, data });
+    const atualizada = await db.fotoOS.update({ where: { id: fotoId }, data });
     const [comAssinatura] = await comUrlAssinada([atualizada]);
     return NextResponse.json(comAssinatura);
   } catch (err) {
@@ -52,19 +56,23 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; fotoId: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+
   const { id, fotoId } = await params;
   try {
-    const foto = await prisma.fotoOS.findUnique({ where: { id: fotoId } });
+    const foto = await db.fotoOS.findUnique({ where: { id: fotoId } });
     if (!foto || foto.orcamentoId !== id) {
       return NextResponse.json({ error: "Foto não encontrada" }, { status: 404 });
     }
     // Foto que já foi para a OS não some do serviço por uma exclusão no orçamento:
     // ali ela só se desliga do orçamento, e o arquivo continua no bucket.
     if (foto.ordemId) {
-      await prisma.fotoOS.update({ where: { id: fotoId }, data: { orcamentoId: null } });
+      await db.fotoOS.update({ where: { id: fotoId }, data: { orcamentoId: null } });
       return NextResponse.json({ ok: true });
     }
-    await prisma.fotoOS.delete({ where: { id: fotoId } });
+    await db.fotoOS.delete({ where: { id: fotoId } });
     await deleteFotos([foto.path]);
     return NextResponse.json({ ok: true });
   } catch (err) {

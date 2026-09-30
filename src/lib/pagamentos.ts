@@ -1,11 +1,11 @@
-import type { Prisma } from "@prisma/client";
+import type { Db } from "@/lib/db-oficina";
 
 /**
  * Recalcula valorPago/pago da OS a partir dos pagamentos que sobraram.
  * Usado no estorno — a soma dos PagamentoOS é a fonte da verdade.
  */
 export async function recalcularPagamento(
-  tx: Prisma.TransactionClient,
+  tx: Db,
   ordemId: string
 ) {
   const os = await tx.ordemServico.findUnique({
@@ -37,7 +37,7 @@ export async function recalcularPagamento(
 
 /** Mesma lógica de estorno, para dívidas avulsas. */
 export async function recalcularPagamentoDivida(
-  tx: Prisma.TransactionClient,
+  tx: Db,
   dividaId: number
 ) {
   const divida = await tx.dividaAvulsa.findUnique({

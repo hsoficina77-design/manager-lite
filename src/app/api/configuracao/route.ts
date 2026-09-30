@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { getConfiguracao } from "@/lib/configuracao-db";
-import { CAMPOS_TEXTO, CONFIG_ID } from "@/lib/configuracao";
+import { CAMPOS_TEXTO } from "@/lib/configuracao";
 import { COR_MENU_PADRAO, COR_PRIMARIA_PADRAO } from "@/lib/tema";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { configuracaoSchema } from "@/lib/schemas";
 
 export async function GET() {
-  return NextResponse.json(await getConfiguracao());
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  return NextResponse.json(await getConfiguracao(guarda));
 }
 
 export async function PUT(request: Request) {
+  const guarda = await guardaApi({ dono: true });
+  if (guarda.resposta) return guarda.resposta;
+
   try {
     const body = await lerJson(request, configuracaoSchema);
 
@@ -26,15 +31,15 @@ export async function PUT(request: Request) {
       reservaLucroPercentual: body.reservaLucroPercentual,
     };
 
-    // Upsert: a linha é criada pela migração, mas um banco restaurado de backup
+    // Upsert: a linha nasce junto com a oficina, mas um banco restaurado de backup
     // antigo pode não tê-la — nesse caso a primeira gravação já a cria.
-    await prisma.configuracao.upsert({
-      where: { id: CONFIG_ID },
+    await guarda.db.configuracao.upsert({
+      where: { oficinaId: guarda.oficinaId },
       update: dados,
-      create: { id: CONFIG_ID, ...dados },
+      create: dados,
     });
 
-    return NextResponse.json(await getConfiguracao());
+    return NextResponse.json(await getConfiguracao(guarda));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

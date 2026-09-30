@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { recalcularPagamento } from "@/lib/pagamentos";
 
 // Estorna um pagamento específico da OS.
@@ -7,10 +7,14 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; pagamentoId: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
+
   const { id: ordemId, pagamentoId } = await params;
 
   try {
-    const pagamento = await prisma.pagamentoOS.findUnique({
+    const pagamento = await db.pagamentoOS.findUnique({
       where: { id: pagamentoId },
       select: { id: true, ordemId: true },
     });
@@ -22,7 +26,7 @@ export async function DELETE(
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await transacao(async (tx) => {
       await tx.pagamentoOS.delete({ where: { id: pagamentoId } });
       return recalcularPagamento(tx, ordemId);
     });

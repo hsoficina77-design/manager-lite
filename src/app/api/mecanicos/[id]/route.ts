@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
+import { registroNaoEncontrado } from "@/lib/db-oficina";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { mecanicoAtualizarSchema } from "@/lib/schemas";
 
@@ -7,9 +8,12 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
 
-  const mecanico = await prisma.mecanico.findUnique({
+  const mecanico = await db.mecanico.findUnique({
     where: { id },
     include: {
       metas: { orderBy: [{ ano: "desc" }, { mes: "desc" }] },
@@ -28,6 +32,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
     const { nome, telefone, especialidade, ativo } = await lerJson(
@@ -41,11 +48,11 @@ export async function PUT(
     if (especialidade !== undefined) data.especialidade = especialidade;
     if (ativo !== undefined) data.ativo = ativo;
 
-    const mecanico = await prisma.mecanico.update({ where: { id }, data });
+    const mecanico = await db.mecanico.update({ where: { id }, data });
 
     // Mantém o nome denormalizado nas OS sincronizado quando o nome muda.
     if (data.nome) {
-      await prisma.ordemServico.updateMany({
+      await db.ordemServico.updateMany({
         where: { mecanicoId: id },
         data: { mecanico: data.nome as string },
       });
@@ -55,6 +62,9 @@ export async function PUT(
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;
+    if (registroNaoEncontrado(err)) {
+      return NextResponse.json({ error: "Mecânico não encontrado" }, { status: 404 });
+    }
     console.error(err);
     return NextResponse.json({ error: "Erro ao atualizar mecânico" }, { status: 500 });
   }
@@ -64,18 +74,24 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
-    const ordens = await prisma.ordemServico.count({ where: { mecanicoId: id } });
+    const ordens = await db.ordemServico.count({ where: { mecanicoId: id } });
     if (ordens > 0) {
       return NextResponse.json(
         { error: "Mecânico possui OS vinculadas. Desative-o em vez de excluir." },
         { status: 409 }
       );
     }
-    await prisma.mecanico.delete({ where: { id } });
+    await db.mecanico.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (registroNaoEncontrado(err)) {
+      return NextResponse.json({ error: "Mecânico não encontrado" }, { status: 404 });
+    }
     console.error(err);
     return NextResponse.json({ error: "Erro ao excluir mecânico" }, { status: 500 });
   }

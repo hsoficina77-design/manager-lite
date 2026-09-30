@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { categoriaDespesaAtualizarSchema } from "@/lib/schemas";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
     const dados = await lerJson(request, categoriaDespesaAtualizarSchema);
@@ -14,7 +17,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (dados.ordem !== undefined) data.ordem = dados.ordem;
     if (dados.ativa !== undefined) data.ativa = dados.ativa;
 
-    const categoria = await prisma.categoriaDespesa.update({ where: { id }, data });
+    const categoria = await db.categoriaDespesa.update({ where: { id }, data });
     return NextResponse.json(categoria);
   } catch (err) {
     const invalido = respostaDeValidacao(err);
@@ -38,11 +41,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
  * histórico continua legível.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
     const [gastos, regras] = await Promise.all([
-      prisma.despesa.count({ where: { categoriaId: id } }),
-      prisma.despesaRecorrente.count({ where: { categoriaId: id } }),
+      db.despesa.count({ where: { categoriaId: id } }),
+      db.despesaRecorrente.count({ where: { categoriaId: id } }),
     ]);
 
     if (gastos > 0 || regras > 0) {
@@ -56,7 +62,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       );
     }
 
-    await prisma.categoriaDespesa.delete({ where: { id } });
+    await db.categoriaDespesa.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (temCodigo(err, "P2025")) {

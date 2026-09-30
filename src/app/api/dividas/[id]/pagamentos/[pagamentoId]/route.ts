@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { recalcularPagamentoDivida } from "@/lib/pagamentos";
 
 // Estorna um pagamento específico da dívida avulsa.
@@ -7,11 +7,14 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; pagamentoId: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
   const { id, pagamentoId } = await params;
   const dividaId = Number(id);
 
   try {
-    const pagamento = await prisma.pagamentoDivida.findUnique({
+    const pagamento = await db.pagamentoDivida.findUnique({
       where: { id: Number(pagamentoId) },
       select: { id: true, dividaId: true },
     });
@@ -23,7 +26,7 @@ export async function DELETE(
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await transacao(async (tx) => {
       await tx.pagamentoDivida.delete({ where: { id: Number(pagamentoId) } });
       return recalcularPagamentoDivida(tx, dividaId);
     });

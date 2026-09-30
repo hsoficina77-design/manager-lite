@@ -8,11 +8,86 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Cliente {
+// ─── Oficinas ────────────────────────────────────────────────────────────────
+//
+// Cada oficina é um mundo à parte: toda tabela de dados carrega `oficinaId`, e nada
+// que pertence a uma aparece para outra. São três travas independentes, de propósito:
+//
+//   1. Código  — as rotas só recebem um acesso ao banco já filtrado pela oficina de
+//                quem está logado (`lib/db-oficina.ts`). O cliente Prisma cru fica
+//                restrito a login, cadastro e plataforma.
+//   2. Vínculo — gatilhos no banco recusam ligar registros de oficinas diferentes
+//                (uma OS da oficina A apontando para um cliente da B).
+//   3. Linha   — RLS do Postgres: a conexão da oficina só enxerga as linhas dela,
+//                mesmo que o código esqueça um filtro.
+//
+// O `@default(dbgenerated(...))` de cada `oficinaId` lê a oficina da transação
+// (`app.oficina_id`, definida pela trava 1). É o que marca até as gravações aninhadas
+// — os itens criados junto com a OS — sem o código precisar lembrar.
+model Oficina {
   id        String   @id @default(cuid())
   nome      String
+  /// Suspensa pelo dono da plataforma: ninguém dela consegue entrar.
+  ativa     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  configuracao       Configuracao?
+  usuarios           Usuario[]
+  clientes           Cliente[]
+  veiculos           Veiculo[]
+  ordens             OrdemServico[]
+  mecanicos          Mecanico[]
+  metas              Meta[]
+  orcamentos         Orcamento[]
+  itensOrcamento     ItemOrcamento[]
+  itensOrdem         ItemOrdem[]
+  produtos           Produto[]
+  movimentosEstoque  MovimentoEstoque[]
+  pagamentosOS       PagamentoOS[]
+  dividasAvulsas     DividaAvulsa[]
+  pagamentosDivida   PagamentoDivida[]
+  fotos              FotoOS[]
+  sequencias         Sequencia[]
+  exclusoes          RegistroExclusao[]
+  notificacoes       Notificacao[]
+  categoriasDespesa  CategoriaDespesa[]
+  despesasRecorrente DespesaRecorrente[]
+  despesas           Despesa[]
+  convites           Convite[]
+}
+
+// Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
+// o hash dele, então quem lê o banco não consegue montar um link válido.
+//
+// Uso único: ao virar oficina, `usadoEm` e `oficinaId` são carimbados na mesma
+// transação que cria a oficina e o dono dela.
+model Convite {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  /// Sugestão para o formulário — quem recebe pode corrigir.
+  nomeOficina String?
+  /// Para quem foi mandado. Só referência; o cadastro não exige o mesmo e-mail.
+  email       String?
+  expiraEm    DateTime
+  usadoEm     DateTime?
+  /// Oficina criada com este convite.
+  oficinaId   String?
+  criadoPor   String
+  createdAt   DateTime  @default(now())
+
+  oficina Oficina? @relation(fields: [oficinaId], references: [id])
+
+  @@index([createdAt])
+}
+
+model Cliente {
+  id        String   @id @default(cuid())
+  oficinaId String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina   Oficina  @relation(fields: [oficinaId], references: [id])
+  nome      String
   telefone  String?
-  cpfCnpj   String?  @unique
+  cpfCnpj   String?
   email     String?
   obs       String?
   apelido   String?
@@ -30,15 +105,21 @@ model Cliente {
   ordens         OrdemServico[]
   orcamentos     Orcamento[]
   dividasAvulsas DividaAvulsa[]
+
+  // CPF/CNPJ não se repete dentro da oficina — duas oficinas podem atender o mesmo cliente.
+  @@unique([oficinaId, cpfCnpj])
+  @@index([oficinaId])
 }
 
 model Veiculo {
   id               String   @id @default(cuid())
+  oficinaId        String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina          Oficina  @relation(fields: [oficinaId], references: [id])
   clienteId        String
   marca            String
   modelo           String
   ano              Int?
-  placa            String?  @unique
+  placa            String?
   cor              String?
   km               Int?
   motorizacao      String?
@@ -53,6 +134,10 @@ model Veiculo {
   cliente    Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordens     OrdemServico[]
   orcamentos Orcamento[]
+
+  @@unique([oficinaId, placa])
+  @@index([oficinaId])
+  @@index([clienteId])
 }
 
 // status: ABERTA | EM_ANDAMENTO | AGUARDANDO_PECA | ENTREGUE | CANCELADA
@@ -63,7 +148,9 @@ model Veiculo {
 // carro aberto há 30 dias e entregue hoje contaria no mês errado.
 model OrdemServico {
   id               String    @id @default(cuid())
-  numero           Int       @unique
+  oficinaId        String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina          Oficina   @relation(fields: [oficinaId], references: [id])
+  numero           Int
   clienteId        String
   veiculoId        String
   status           String    @default("ABERTA")
@@ -92,23 +179,27 @@ model OrdemServico {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  cliente     Cliente       @relation(fields: [clienteId], references: [id])
-  veiculo     Veiculo       @relation(fields: [veiculoId], references: [id])
-  mecanicoRef Mecanico?     @relation(fields: [mecanicoId], references: [id])
+  cliente     Cliente            @relation(fields: [clienteId], references: [id])
+  veiculo     Veiculo            @relation(fields: [veiculoId], references: [id])
+  mecanicoRef Mecanico?          @relation(fields: [mecanicoId], references: [id])
   itens       ItemOrdem[]
   pagamentos  PagamentoOS[]
   orcamento   Orcamento?
   fotos       FotoOS[]
   movimentos  MovimentoEstoque[]
 
-  @@index([status])
-  @@index([pago])
+  // A numeração é por oficina: cada uma começa na OS nº 1.
+  @@unique([oficinaId, numero])
+  @@index([oficinaId, status])
+  @@index([oficinaId, pago])
   @@index([clienteId])
   @@index([mecanicoId])
 }
 
 model Mecanico {
   id            String   @id @default(cuid())
+  oficinaId     String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina       Oficina  @relation(fields: [oficinaId], references: [id])
   nome          String
   telefone      String?
   especialidade String?
@@ -118,11 +209,15 @@ model Mecanico {
 
   ordens OrdemServico[]
   metas  Meta[]
+
+  @@index([oficinaId])
 }
 
 // Meta de lucro real por mecânico, por mês.
 model Meta {
   id         String   @id @default(cuid())
+  oficinaId  String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina    Oficina  @relation(fields: [oficinaId], references: [id])
   mecanicoId String
   ano        Int
   mes        Int // 1-12
@@ -133,6 +228,7 @@ model Meta {
   mecanico Mecanico @relation(fields: [mecanicoId], references: [id], onDelete: Cascade)
 
   @@unique([mecanicoId, ano, mes])
+  @@index([oficinaId])
 }
 
 // status: PENDENTE | APROVADO | RECUSADO | CONVERTIDO
@@ -142,7 +238,9 @@ model Meta {
 // de verdade só é exigido na conversão em OS.
 model Orcamento {
   id              String    @id @default(cuid())
-  numero          Int       @unique
+  oficinaId       String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina         Oficina   @relation(fields: [oficinaId], references: [id])
+  numero          Int
   clienteId       String?
   veiculoId       String?
   // Dados soltos do rascunho — usados só enquanto não há cliente/veículo cadastrado.
@@ -167,7 +265,8 @@ model Orcamento {
   itens   ItemOrcamento[]
   fotos   FotoOS[]
 
-  @@index([status])
+  @@unique([oficinaId, numero])
+  @@index([oficinaId, status])
   @@index([clienteId])
 }
 
@@ -178,6 +277,8 @@ model Orcamento {
 // consome. O vínculo existe aqui para ser copiado na conversão em OS.
 model ItemOrcamento {
   id          String   @id @default(cuid())
+  oficinaId   String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina     Oficina  @relation(fields: [oficinaId], references: [id])
   orcamentoId String
   produtoId   String?
   tipo        String   @default("PECA")
@@ -192,6 +293,8 @@ model ItemOrcamento {
   orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)
 
+  @@index([oficinaId])
+  @@index([orcamentoId])
   @@index([produtoId])
 }
 
@@ -203,6 +306,8 @@ model ItemOrcamento {
 // já pagou mês passado.
 model ItemOrdem {
   id         String   @id @default(cuid())
+  oficinaId  String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina    Oficina  @relation(fields: [oficinaId], references: [id])
   ordemId    String
   produtoId  String?
   tipo       String   @default("PECA")
@@ -217,6 +322,8 @@ model ItemOrdem {
   ordem   OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
   produto Produto?     @relation(fields: [produtoId], references: [id], onDelete: SetNull)
 
+  @@index([oficinaId])
+  @@index([ordemId])
   @@index([produtoId])
 }
 
@@ -231,9 +338,11 @@ model ItemOrdem {
 // não pode ver dinheiro, sem precisar de uma segunda lista de campos.
 model Produto {
   id            String   @id @default(cuid())
+  oficinaId     String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina       Oficina  @relation(fields: [oficinaId], references: [id])
   nome          String
   /// Código do fabricante/fornecedor. Entra na busca junto com o nome.
-  codigo        String?  @unique
+  codigo        String?
   /// Nome, código e fornecedor em minúsculo e sem acento. É o campo que a busca
   /// compara, e existe porque o `ILIKE` do Postgres não ignora acento: sem ele,
   /// digitar "agua" na OS não acharia "Água desmineralizada". Mantido pela
@@ -256,7 +365,8 @@ model Produto {
   itensOrcamento ItemOrcamento[]
   movimentos     MovimentoEstoque[]
 
-  @@index([ativo, nome])
+  @@unique([oficinaId, codigo])
+  @@index([oficinaId, ativo, nome])
   /// Índice da busca por trecho do campo de peça da OS. Precisa ser GIN com trigramas
   /// porque o filtro é `contains`, que vira `LIKE '%x%'`: um btree comum só serve para
   /// o que começa com o termo, então o índice acima não ajuda e o banco varre a tabela
@@ -276,6 +386,8 @@ model Produto {
 // `usuarioNome` de RegistroExclusao.
 model MovimentoEstoque {
   id          String   @id @default(cuid())
+  oficinaId   String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina     Oficina  @relation(fields: [oficinaId], references: [id])
   produtoId   String
   tipo        String
   quantidade  Float
@@ -290,6 +402,7 @@ model MovimentoEstoque {
   produto Produto       @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   ordem   OrdemServico? @relation(fields: [ordemId], references: [id], onDelete: SetNull)
 
+  @@index([oficinaId])
   @@index([produtoId, createdAt])
   @@index([ordemId])
 }
@@ -297,6 +410,8 @@ model MovimentoEstoque {
 // formaPagamento: DINHEIRO | PIX | CARTAO_CREDITO | CARTAO_DEBITO | TRANSFERENCIA
 model PagamentoOS {
   id             String   @id @default(cuid())
+  oficinaId      String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina        Oficina  @relation(fields: [oficinaId], references: [id])
   ordemId        String
   valor          Float
   formaPagamento String   @default("DINHEIRO")
@@ -306,6 +421,7 @@ model PagamentoOS {
 
   ordem OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
 
+  @@index([oficinaId])
   @@index([ordemId])
 }
 
@@ -315,6 +431,8 @@ model PagamentoOS {
 // precisa cadastrar o cliente; aqui só se registra a dívida em si.
 model DividaAvulsa {
   id          Int      @id @default(autoincrement())
+  oficinaId   String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina     Oficina  @relation(fields: [oficinaId], references: [id])
   clienteId   String?
   devedorNome String?
   descricao   String
@@ -327,11 +445,14 @@ model DividaAvulsa {
   cliente    Cliente?          @relation(fields: [clienteId], references: [id])
   pagamentos PagamentoDivida[]
 
+  @@index([oficinaId])
   @@index([clienteId])
 }
 
 model PagamentoDivida {
   id             Int      @id @default(autoincrement())
+  oficinaId      String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina        Oficina  @relation(fields: [oficinaId], references: [id])
   dividaId       Int
   valor          Float
   formaPagamento String
@@ -339,6 +460,9 @@ model PagamentoDivida {
   data           DateTime @default(now())
 
   divida DividaAvulsa @relation(fields: [dividaId], references: [id])
+
+  @@index([oficinaId])
+  @@index([dividaId])
 }
 
 // Foto anexada a um documento — o arquivo fica no Supabase Storage, aqui só a referência.
@@ -349,6 +473,8 @@ model PagamentoDivida {
 // impresso continua igual ao que o cliente aprovou.
 model FotoOS {
   id           String   @id @default(cuid())
+  oficinaId    String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina      Oficina  @relation(fields: [oficinaId], references: [id])
   ordemId      String?
   orcamentoId  String?
   path         String // caminho do arquivo no bucket (usado para excluir)
@@ -361,13 +487,20 @@ model FotoOS {
   ordem     OrdemServico? @relation(fields: [ordemId], references: [id], onDelete: Cascade)
   orcamento Orcamento?    @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 
+  @@index([oficinaId])
   @@index([ordemId, tipo])
   @@index([orcamentoId])
 }
 
+// Contador da numeração (OS, orçamento) — uma linha por oficina e por documento.
 model Sequencia {
-  id     String @id
-  ultimo Int    @default(0)
+  oficinaId String @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  id        String
+  ultimo    Int    @default(0)
+
+  oficina Oficina @relation(fields: [oficinaId], references: [id])
+
+  @@id([oficinaId, id])
 }
 
 // papel: ADMIN | OPERADOR
@@ -380,20 +513,29 @@ model Sequencia {
 // tela: as rotas de API filtram os campos financeiros antes de responder, senão
 // bastaria abrir o DevTools.
 model Usuario {
-  id             String    @id @default(cuid())
-  nome           String
-  email          String    @unique
-  senhaHash      String
-  papel          String    @default("OPERADOR")
-  podeFinanceiro Boolean   @default(false)
-  podeExcluir    Boolean   @default(false)
-  ativo          Boolean   @default(true)
-  ultimoAcesso   DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  oficinaId            String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina              Oficina   @relation(fields: [oficinaId], references: [id])
+  nome                 String
+  /// Único no sistema inteiro, e não por oficina: é o e-mail que diz, no login, de
+  /// qual oficina a pessoa é.
+  email                String    @unique
+  senhaHash            String
+  papel                String    @default("OPERADOR")
+  podeFinanceiro       Boolean   @default(false)
+  podeExcluir          Boolean   @default(false)
+  ativo                Boolean   @default(true)
+  ultimoAcesso         DateTime?
+  /// Dono da plataforma: gera convites e vê a lista de oficinas. Não abre os dados de
+  /// outras oficinas — isso não existe para ninguém.
+  administraPlataforma Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   sessoes   Sessao[]
   exclusoes RegistroExclusao[]
+
+  @@index([oficinaId])
 }
 
 // Backlog de exclusões — rastro de quem apagou o quê, já que a exclusão em si some com
@@ -401,6 +543,8 @@ model Usuario {
 // removida depois, o rastro continua legível (`usuarioId` fica nulo, mas o nome fica).
 model RegistroExclusao {
   id          String   @id @default(cuid())
+  oficinaId   String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina     Oficina  @relation(fields: [oficinaId], references: [id])
   tipo        String
   descricao   String
   usuarioId   String?
@@ -409,7 +553,7 @@ model RegistroExclusao {
 
   usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
-  @@index([createdAt])
+  @@index([oficinaId, createdAt])
 }
 
 // Sessão de login. Guardar no banco (em vez de só assinar um token) é o que permite
@@ -440,7 +584,8 @@ model Sessao {
 // tabela é a semente do registro de tenant — basta trocar o id fixo pela chave da
 // oficina e passar a filtrar as demais tabelas por ela.
 model Configuracao {
-  id String @id @default("default")
+  oficinaId String  @id @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina   Oficina @relation(fields: [oficinaId], references: [id])
 
   // Identidade — sai no topo dos documentos e no menu
   nome      String  @default("Minha Oficina")
@@ -487,6 +632,8 @@ model Configuracao {
 // acesso. `publico` decide quem vê — dado financeiro sempre fica em "ADMIN".
 model Notificacao {
   id        String    @id @default(cuid())
+  oficinaId String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina   Oficina   @relation(fields: [oficinaId], references: [id])
   tipo      String // "ARMAZENAMENTO" | "SISTEMA" | ...
   titulo    String
   mensagem  String
@@ -496,8 +643,8 @@ model Notificacao {
   publico   String    @default("ADMIN") // "ADMIN" | "TODOS"
   createdAt DateTime  @default(now())
 
-  @@index([lida, createdAt])
-  @@index([publico, lida])
+  @@index([oficinaId, lida, createdAt])
+  @@index([oficinaId, publico, lida])
 }
 
 // ─── Controle de gastos ──────────────────────────────────────────────────────
@@ -517,7 +664,9 @@ model Notificacao {
 
 model CategoriaDespesa {
   id        String   @id @default(cuid())
-  nome      String   @unique
+  oficinaId String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina   Oficina  @relation(fields: [oficinaId], references: [id])
+  nome      String
   /// Cor do chip na tela e da barra no gráfico por categoria.
   cor       String   @default("#71717a")
   ordem     Int      @default(0)
@@ -529,12 +678,15 @@ model CategoriaDespesa {
   despesas    Despesa[]
   recorrentes DespesaRecorrente[]
 
-  @@index([ativa, ordem])
+  @@unique([oficinaId, nome])
+  @@index([oficinaId, ativa, ordem])
 }
 
 // periodicidade: MENSAL | BIMESTRAL | TRIMESTRAL | SEMESTRAL | ANUAL
 model DespesaRecorrente {
   id            String    @id @default(cuid())
+  oficinaId     String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina       Oficina   @relation(fields: [oficinaId], references: [id])
   categoriaId   String
   descricao     String
   /// Valor previsto. O lançamento do mês pode ser pago por outro valor (energia).
@@ -555,12 +707,14 @@ model DespesaRecorrente {
   categoria   CategoriaDespesa @relation(fields: [categoriaId], references: [id])
   lancamentos Despesa[]
 
-  @@index([ativa])
+  @@index([oficinaId, ativa])
   @@index([categoriaId])
 }
 
 model Despesa {
   id             String    @id @default(cuid())
+  oficinaId      String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina        Oficina   @relation(fields: [oficinaId], references: [id])
   categoriaId    String
   /// Regra que gerou o lançamento; null quando é um gasto avulso do mês.
   recorrenteId   String?
@@ -589,8 +743,8 @@ model Despesa {
   /// Uma regra só pode ter um lançamento por mês — é o que torna a geração
   /// sob demanda idempotente sem precisar de trava na aplicação.
   @@unique([recorrenteId, competencia])
-  @@index([competencia])
-  @@index([pago])
-  @@index([vencimento])
+  @@index([oficinaId, competencia])
+  @@index([oficinaId, pago])
+  @@index([oficinaId, vencimento])
   @@index([categoriaId])
 }

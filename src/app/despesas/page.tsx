@@ -1,4 +1,5 @@
 import { exigirDono } from "@/lib/auth";
+import { bancoDaOficina } from "@/lib/db-oficina";
 import { mesDeGastos, pontoDeEquilibrio, resumirMes } from "@/lib/despesas";
 import { chaveMes, ehPeriodoAtual } from "@/lib/periodo";
 import { ControleDeGastos } from "@/components/despesas/ControleDeGastos";
@@ -18,12 +19,13 @@ export default async function DespesasPage({
 }: {
   searchParams: Promise<{ mes?: string }>;
 }) {
-  await exigirDono();
+  const usuario = await exigirDono();
+  const { db } = bancoDaOficina(usuario.oficinaId);
   const { mes } = await searchParams;
 
-  const { janela, lancamentos, cancelados, categorias, regras } = await mesDeGastos(mes);
+  const { janela, lancamentos, cancelados, categorias, regras } = await mesDeGastos(db, mes);
   const resumo = resumirMes(lancamentos);
-  const equilibrio = await pontoDeEquilibrio(janela, resumo.total);
+  const equilibrio = await pontoDeEquilibrio(db, janela, resumo.total);
 
   return (
     <ControleDeGastos

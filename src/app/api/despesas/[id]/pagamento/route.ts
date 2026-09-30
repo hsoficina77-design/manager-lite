@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaPagamentoSchema } from "@/lib/schemas";
 import { INCLUDE_CATEGORIA } from "@/lib/despesas";
@@ -12,6 +12,9 @@ import { INCLUDE_CATEGORIA } from "@/lib/despesas";
  * Sem `valorPago`, pagou o previsto; com ele, é a conta de luz que veio diferente.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
     const { pago, valorPago, pagoEm, formaPagamento } = await lerJson(
@@ -19,12 +22,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       despesaPagamentoSchema
     );
 
-    const atual = await prisma.despesa.findUnique({ where: { id } });
+    const atual = await db.despesa.findUnique({ where: { id } });
     if (!atual) {
       return NextResponse.json({ error: "Gasto não encontrado" }, { status: 404 });
     }
 
-    const despesa = await prisma.despesa.update({
+    const despesa = await db.despesa.update({
       where: { id },
       data: pago
         ? {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaRecorrenteAtualizarSchema } from "@/lib/schemas";
 import { INCLUDE_CATEGORIA, regraValeNoMes } from "@/lib/despesas";
@@ -19,11 +19,14 @@ import { competenciaDe, diaDaCompetencia } from "@/lib/periodo";
  *      pendurado nos meses seguintes.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
   const { id } = await params;
   try {
     const dados = await lerJson(request, despesaRecorrenteAtualizarSchema);
 
-    const atual = await prisma.despesaRecorrente.findUnique({ where: { id } });
+    const atual = await db.despesaRecorrente.findUnique({ where: { id } });
     if (!atual) {
       return NextResponse.json({ error: "Despesa fixa não encontrada" }, { status: 404 });
     }
@@ -54,7 +57,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const desteMes = competenciaDe(new Date());
 
-    const atualizada = await prisma.$transaction(async (tx) => {
+    const atualizada = await transacao(async (tx) => {
       const salva = await tx.despesaRecorrente.update({
         where: { id },
         data,
@@ -111,11 +114,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
  * Para só parar de gerar sem mexer em nada, o caminho é desativar.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { transacao } = guarda;
   const { id } = await params;
   try {
     const desteMes = competenciaDe(new Date());
 
-    await prisma.$transaction(async (tx) => {
+    await transacao(async (tx) => {
       await tx.despesa.deleteMany({
         where: { recorrenteId: id, competencia: { gte: desteMes }, pago: false },
       });

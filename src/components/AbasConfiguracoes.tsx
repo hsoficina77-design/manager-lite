@@ -3,19 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useUsuario } from "@/components/UsuarioProvider";
 
 const ABAS = [
   { href: "/configuracoes", label: "Oficina" },
   { href: "/configuracoes/usuarios", label: "Acessos" },
 ];
 
-/** Navegação entre as duas telas do painel do dono. */
+// Só para o dono da plataforma: convites e a lista de oficinas.
+const ABA_PLATAFORMA = { href: "/configuracoes/plataforma", label: "Plataforma" };
+
+/** Navegação entre as telas do painel do dono. */
 export default function AbasConfiguracoes() {
   const pathname = usePathname();
+  const usuario = useUsuario();
+  const abas = usuario?.administraPlataforma ? [...ABAS, ABA_PLATAFORMA] : ABAS;
 
   return (
     <div className="mb-6 flex gap-1 border-b border-linha">
-      {ABAS.map((aba) => {
+      {abas.map((aba) => {
         const ativa = pathname === aba.href;
         return (
           <Link

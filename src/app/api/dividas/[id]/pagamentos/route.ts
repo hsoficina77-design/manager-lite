@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { pagamentoSchema } from "@/lib/schemas";
 
@@ -7,8 +7,14 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
-  const pagamentos = await prisma.pagamentoDivida.findMany({
+  const divida = await db.dividaAvulsa.findUnique({ where: { id: Number(id) }, select: { id: true } });
+  if (!divida) return NextResponse.json({ error: "Dívida não encontrada" }, { status: 404 });
+
+  const pagamentos = await db.pagamentoDivida.findMany({
     where: { dividaId: Number(id) },
     orderBy: { data: "desc" },
   });
@@ -19,11 +25,17 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
   const { id } = await params;
   try {
     const { valor, formaPagamento, obs } = await lerJson(request, pagamentoSchema);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const existe = await db.dividaAvulsa.findUnique({ where: { id: Number(id) }, select: { id: true } });
+    if (!existe) return NextResponse.json({ error: "Dívida não encontrada" }, { status: 404 });
+
+    const result = await transacao(async (tx) => {
       const pagamento = await tx.pagamentoDivida.create({
         data: {
           dividaId: Number(id),

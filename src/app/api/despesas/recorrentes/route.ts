@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaRecorrenteCriarSchema } from "@/lib/schemas";
 import { INCLUDE_CATEGORIA } from "@/lib/despesas";
 
 export async function GET() {
-  const regras = await prisma.despesaRecorrente.findMany({
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+  const regras = await db.despesaRecorrente.findMany({
     include: INCLUDE_CATEGORIA,
     orderBy: [{ ativa: "desc" }, { diaVencimento: "asc" }],
   });
@@ -18,6 +21,9 @@ export async function GET() {
  * como fonte única e evita gerar anos de linhas que ninguém pediu.
  */
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   try {
     const dados = await lerJson(request, despesaRecorrenteCriarSchema);
 
@@ -28,7 +34,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const regra = await prisma.despesaRecorrente.create({
+    const regra = await db.despesaRecorrente.create({
       data: {
         categoriaId: dados.categoriaId,
         descricao: dados.descricao,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { prisma } from "@/lib/prisma";
+import { exigirOficina } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
 import { BotaoLink } from "@/components/ui/Botao";
 import { BuscaLive } from "@/components/ui/BuscaLive";
@@ -12,9 +12,10 @@ export default async function ClientesPage({
 }: {
   searchParams: Promise<{ q?: string; de?: string; ate?: string }>;
 }) {
+  const { db } = await exigirOficina("/clientes");
   const { q, de, ate } = await searchParams;
 
-  const clientes = await prisma.cliente.findMany({
+  const clientes = await db.cliente.findMany({
     where: {
       AND: [
         q

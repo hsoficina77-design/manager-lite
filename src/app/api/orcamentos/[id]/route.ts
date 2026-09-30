@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { comUrlAssinada } from "@/lib/fotos";
 import { deleteFotos } from "@/lib/supabase-storage";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
@@ -17,10 +16,11 @@ export async function GET(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
 
-  const orcamento = await prisma.orcamento.findUnique({
+  const orcamento = await db.orcamento.findUnique({
     where: { id },
     include: {
       cliente: true,
@@ -56,6 +56,7 @@ export async function PUT(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
 
   const { id } = await params;
   try {
@@ -73,7 +74,7 @@ export async function PUT(
       itens,
     } = await lerJson(request, orcamentoAtualizarSchema);
 
-    const current = await prisma.orcamento.findUnique({
+    const current = await db.orcamento.findUnique({
       where: { id },
       select: {
         totalPecas: true, totalMO: true, desconto: true,
@@ -100,12 +101,12 @@ export async function PUT(
 
     // Custo dos itens: do payload quando é o dono, do banco quando é o operador.
     const custos = itens
-      ? await custosParaSalvar(itens, guarda.usuario.podeFinanceiro, { orcamento: id })
+      ? await custosParaSalvar(db, itens, guarda.usuario.podeFinanceiro, { orcamento: id })
       : [];
 
     // De onde veio cada peça. O orçamento não dá baixa — o vínculo existe para a
     // conversão em OS herdá-lo (ver rota converter).
-    const produtos = itens ? await produtosDosItens(itens) : new Map();
+    const produtos = itens ? await produtosDosItens(db, itens) : new Map();
     const vinculos = itens ? itens.map((i) => vinculoDoItem(i, produtos)) : [];
 
     if (itens) {
@@ -145,7 +146,7 @@ export async function PUT(
     if (obs !== undefined) data.obs = obs;
 
     if (itens) {
-      await prisma.$transaction(async (tx) => {
+      await transacao(async (tx) => {
         // Item que já existe é atualizado no lugar, e não recriado — ver lib/itens.
         const noBanco = await tx.itemOrcamento.findMany({
           where: { orcamentoId: id },
@@ -170,10 +171,10 @@ export async function PUT(
         await tx.orcamento.update({ where: { id }, data });
       });
     } else {
-      await prisma.orcamento.update({ where: { id }, data });
+      await db.orcamento.update({ where: { id }, data });
     }
 
-    const orcamento = await prisma.orcamento.findUnique({ where: { id } });
+    const orcamento = await db.orcamento.findUnique({ where: { id } });
     return NextResponse.json(semFinanceiro(orcamento, guarda.usuario.podeFinanceiro));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
@@ -189,10 +190,11 @@ export async function DELETE(
 ) {
   const guarda = await guardaApi({ exclusao: true });
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
   try {
-    const orcamento = await prisma.orcamento.findUnique({
+    const orcamento = await db.orcamento.findUnique({
       where: { id },
       select: { numero: true, clienteNome: true, cliente: { select: { nome: true } } },
     });
@@ -200,7 +202,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Orçamento não encontrado" }, { status: 404 });
     }
 
-    const fotos = await prisma.fotoOS.findMany({
+    const fotos = await db.fotoOS.findMany({
       where: { orcamentoId: id },
       select: { id: true, path: true, ordemId: true },
     });
@@ -209,16 +211,17 @@ export async function DELETE(
     // não levar junto o registro fotográfico do serviço.
     const daOS = fotos.filter((f) => f.ordemId);
     if (daOS.length > 0) {
-      await prisma.fotoOS.updateMany({
+      await db.fotoOS.updateMany({
         where: { id: { in: daOS.map((f) => f.id) } },
         data: { orcamentoId: null },
       });
     }
 
-    await prisma.orcamento.delete({ where: { id } });
+    await db.orcamento.delete({ where: { id } });
     // O cascade apaga as linhas; os arquivos no bucket saem aqui.
     await deleteFotos(fotos.filter((f) => !f.ordemId).map((f) => f.path));
     await registrarExclusao(
+      db,
       "Orçamento",
       `Orçamento #${orcamento.numero} — ${orcamento.cliente?.nome ?? orcamento.clienteNome ?? "sem cliente"}`,
       guarda.usuario

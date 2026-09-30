@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { OS_EM_ABERTO } from "@/lib/constants";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { clienteAtualizarSchema } from "@/lib/schemas";
@@ -13,11 +12,12 @@ export async function GET(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
 
   const [cliente, agg, primeiraOS, ultimaOS, osAbertas] = await Promise.all([
-    prisma.cliente.findUnique({
+    db.cliente.findUnique({
       where: { id },
       include: {
         veiculos: { orderBy: { createdAt: "asc" } },
@@ -28,23 +28,23 @@ export async function GET(
         },
       },
     }),
-    prisma.ordemServico.aggregate({
+    db.ordemServico.aggregate({
       where: { clienteId: id, status: { not: "CANCELADA" } },
       _count: { _all: true },
       _avg: { nps: true },
       _sum: { total: true, totalMO: true, totalPecas: true, lucroReal: true, valorPago: true },
     }),
-    prisma.ordemServico.findFirst({
+    db.ordemServico.findFirst({
       where: { clienteId: id, status: { not: "CANCELADA" } },
       orderBy: { abertura: "asc" },
       select: { abertura: true },
     }),
-    prisma.ordemServico.findFirst({
+    db.ordemServico.findFirst({
       where: { clienteId: id, status: { not: "CANCELADA" } },
       orderBy: { abertura: "desc" },
       select: { abertura: true },
     }),
-    prisma.ordemServico.count({
+    db.ordemServico.count({
       where: { clienteId: id, status: { in: OS_EM_ABERTO } },
     }),
   ]);
@@ -79,12 +79,16 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+
   const { id } = await params;
   try {
     const { nome, telefone, cpfCnpj, email, obs, apelido, origem, profissao, telefones, cep, endereco, cidade, estado } =
       await lerJson(request, clienteAtualizarSchema);
 
-    const cliente = await prisma.cliente.update({
+    const cliente = await db.cliente.update({
       where: { id },
       data: {
         nome,
@@ -123,10 +127,11 @@ export async function DELETE(
 ) {
   const guarda = await guardaApi({ exclusao: true });
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
 
-  const osCount = await prisma.ordemServico.count({ where: { clienteId: id } });
+  const osCount = await db.ordemServico.count({ where: { clienteId: id } });
   if (osCount > 0) {
     return NextResponse.json(
       { error: "Cliente possui ordens de serviço e não pode ser excluído" },
@@ -135,13 +140,13 @@ export async function DELETE(
   }
 
   try {
-    const cliente = await prisma.cliente.findUnique({ where: { id }, select: { nome: true } });
+    const cliente = await db.cliente.findUnique({ where: { id }, select: { nome: true } });
     if (!cliente) {
       return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
     }
 
-    await prisma.cliente.delete({ where: { id } });
-    await registrarExclusao("Cliente", cliente.nome, guarda.usuario);
+    await db.cliente.delete({ where: { id } });
+    await registrarExclusao(db, "Cliente", cliente.nome, guarda.usuario);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao excluir cliente" }, { status: 500 });

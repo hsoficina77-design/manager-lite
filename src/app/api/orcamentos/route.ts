@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { orcamentoCriarSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -9,6 +8,7 @@ import { produtosDosItens, vinculoDoItem } from "@/lib/estoque";
 export async function GET(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     where.clienteId = clienteId;
   }
 
-  const orcamentos = await prisma.orcamento.findMany({
+  const orcamentos = await db.orcamento.findMany({
     where,
     include: {
       cliente: { select: { id: true, nome: true, telefone: true, apelido: true } },
@@ -40,6 +40,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db, transacao, oficinaId } = guarda;
 
   // Quem não vê custo também não o define.
   const podeDefinirCusto = guarda.usuario.podeFinanceiro;
@@ -84,12 +85,12 @@ export async function POST(request: Request) {
     // nada da prateleira. O vínculo existe para a conversão em OS herdá-lo — e é lá
     // que a peça sai. Como a gravação é a mesma do item da OS, o custo da peça de
     // estoque também é o do produto quando quem lança não pode digitá-lo.
-    const produtos = await produtosDosItens(itens);
+    const produtos = await produtosDosItens(db, itens);
     const vinculoDe = (item: { produtoId?: string | null }) => vinculoDoItem(item, produtos);
 
-    const orcamento = await prisma.$transaction(async (tx) => {
+    const orcamento = await transacao(async (tx) => {
       const seq = await tx.sequencia.upsert({
-        where: { id: "orcamento" },
+        where: { oficinaId_id: { oficinaId, id: "orcamento" } },
         update: { ultimo: { increment: 1 } },
         create: { id: "orcamento", ultimo: 1 },
       });

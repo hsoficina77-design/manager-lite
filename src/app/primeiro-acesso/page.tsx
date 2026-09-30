@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { precisaPrimeiroAcesso } from "@/lib/auth";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
-import PrimeiroAcessoForm from "@/components/PrimeiroAcessoForm";
+import CadastroOficinaForm from "@/components/CadastroOficinaForm";
 
 export const dynamic = "force-dynamic";
 
@@ -11,17 +11,17 @@ export default async function PrimeiroAcessoPage() {
   // chegar aqui num sistema em uso e criar um acesso de dono para si.
   if (!(await precisaPrimeiroAcesso())) redirect("/login");
 
-  const config = await getConfiguracao();
+  const config = await getConfiguracao(null);
 
   return (
     <TelaDeEntrada
       nome={config.nome}
       logoUrl={config.logoUrl}
       titulo="Primeiro acesso"
-      descricao="Crie o acesso de dono. Depois você cadastra a equipe por dentro do sistema."
+      descricao="Crie a sua oficina e o acesso de dono. Depois você cadastra a equipe e convida outras oficinas por dentro do sistema."
       rodape="Guarde bem esta senha: sem outro dono cadastrado, não há como redefini-la pela tela."
     >
-      <PrimeiroAcessoForm />
+      <CadastroOficinaForm />
     </TelaDeEntrada>
   );
 }

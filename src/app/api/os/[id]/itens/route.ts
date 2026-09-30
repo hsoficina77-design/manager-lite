@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { itemAvulsoSchema, valorDoItem } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -25,16 +24,22 @@ export async function POST(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
 
   const { id: ordemId } = await params;
 
   try {
     const entrada = await lerJson(request, itemAvulsoSchema);
 
-    const produtos = await produtosDosItens([entrada]);
+    // OS de outra oficina (ou inexistente) não é encontrada pelo `db` — 404 antes de
+    // qualquer gravação.
+    const existe = await db.ordemServico.findUnique({ where: { id: ordemId }, select: { id: true } });
+    if (!existe) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
+
+    const produtos = await produtosDosItens(db, [entrada]);
     const produtoId = vinculoDoItem(entrada, produtos);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await transacao(async (tx) => {
       const item = await tx.itemOrdem.create({
         data: {
           ordemId,
@@ -90,6 +95,7 @@ export async function DELETE(
 ) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { transacao } = guarda;
 
   const { id: ordemId } = await params;
   const { searchParams } = new URL(request.url);
@@ -100,14 +106,17 @@ export async function DELETE(
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      // O item precisa ser lido antes de sumir: é dele que sai a peça a devolver.
+    const removeu = await transacao(async (tx) => {
+      // O item precisa ser lido antes de sumir: é dele que sai a peça a devolver. E
+      // precisa ser desta OS — senão a URL de uma OS apagaria item de outra, e os
+      // totais recalculados abaixo seriam os da OS errada.
       const removido = await tx.itemOrdem.findUnique({
-        where: { id: itemId },
+        where: { id: itemId, ordemId },
         select: { produtoId: true, quantidade: true },
       });
+      if (!removido) return false;
 
-      await tx.itemOrdem.delete({ where: { id: itemId } });
+      await tx.itemOrdem.delete({ where: { id: itemId, ordemId } });
 
       const itens = await tx.itemOrdem.findMany({ where: { ordemId } });
       const os = await tx.ordemServico.findUnique({
@@ -126,8 +135,10 @@ export async function DELETE(
           usuarioNome: guarda.usuario.nome,
         });
       }
+      return true;
     });
 
+    if (!removeu) return NextResponse.json({ error: "Item não encontrado" }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Erro ao remover item" }, { status: 500 });

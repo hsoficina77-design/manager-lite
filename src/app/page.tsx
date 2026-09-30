@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { exigirUsuario } from "@/lib/auth";
+import { exigirOficina } from "@/lib/auth";
+import type { BancoDaOficina, Db } from "@/lib/db-oficina";
 import { formatCurrency, cn, situacaoRecebimento } from "@/lib/utils";
 import { labelStatus, corStatus, margemOS, corMargem } from "@/lib/constants";
 import {
@@ -61,7 +61,8 @@ export default async function Dashboard({
   searchParams: Promise<{ aba?: string; periodo?: string; offset?: string }>;
 }) {
   const sp = await searchParams;
-  const usuario = await exigirUsuario();
+  const banco = await exigirOficina();
+  const { usuario } = banco;
   // Resultado é a aba do dinheiro (DRE, lucro, despesas): só quem tem financeiro. É ela
   // que abre por padrão — é a pergunta que o dono faz primeiro. Operação fica a um
   // clique. Para quem não tem financeiro a aba nem aparece, e tudo cai na Operação.
@@ -89,9 +90,9 @@ export default async function Dashboard({
       </div>
 
       {aba === "operacao" ? (
-        <Operacao podeVerFinanceiro={podeVerFinanceiro} />
+        <Operacao banco={banco} podeVerFinanceiro={podeVerFinanceiro} />
       ) : (
-        <Resultado periodo={periodo} offset={offset} />
+        <Resultado banco={banco} periodo={periodo} offset={offset} />
       )}
     </div>
   );
@@ -103,7 +104,14 @@ export default async function Dashboard({
 // 40 dias continua sendo trabalho a fazer, e o dinheiro dela continua sendo dinheiro a
 // entrar. O que separa o carro ativo do encalhado é o aging na lista, não um recorte
 // que faz ele desaparecer da conta.
-async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
+async function Operacao({
+  banco,
+  podeVerFinanceiro,
+}: {
+  banco: BancoDaOficina;
+  podeVerFinanceiro: boolean;
+}) {
+  const { db } = banco;
   const agora = new Date();
   const hoje = janelaHoje(agora);
 
@@ -117,46 +125,43 @@ async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
     recebidoHojeDivida,
     config,
   ] = await Promise.all([
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osNoPatio,
       include: INCLUDE_LISTA,
       orderBy: { abertura: "asc" }, // mais parada no topo
     }) as unknown as Promise<OSLista[]>,
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo(hoje),
       select: { total: true, lucroReal: true },
     }),
-    prisma.ordemServico.groupBy({
+    db.ordemServico.groupBy({
       by: ["clienteId"],
       where: { pago: false, status: "ENTREGUE" },
       _sum: { total: true, valorPago: true },
     }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).dividaAvulsa.groupBy({
+    db.dividaAvulsa.groupBy({
       by: ["clienteId"],
       where: { pago: false, clienteId: { not: null } },
       _sum: { valor: true, valorPago: true },
     }) as Promise<{ clienteId: string; _sum: { valor: number; valorPago: number } }[]>,
     // Dívida avulsa sem cliente cadastrado: agrupa pelo nome digitado, não dá
     // para juntar por clienteId porque não existe.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).dividaAvulsa.groupBy({
+    db.dividaAvulsa.groupBy({
       by: ["devedorNome"],
       where: { pago: false, clienteId: null },
       _sum: { valor: true, valorPago: true },
     }) as Promise<{ devedorNome: string | null; _sum: { valor: number; valorPago: number } }[]>,
     // "Guardar hoje" é sobre o dinheiro que entrou hoje, não sobre o que foi entregue —
     // um carro entregue ontem e pago hoje conta; um entregue hoje mas ainda não pago, não.
-    prisma.pagamentoOS.aggregate({
+    db.pagamentoOS.aggregate({
       where: { data: { gte: hoje.inicio, lt: hoje.fim } },
       _sum: { valor: true },
     }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).pagamentoDivida.aggregate({
+    db.pagamentoDivida.aggregate({
       where: { data: { gte: hoje.inicio, lt: hoje.fim } },
       _sum: { valor: true },
     }) as Promise<{ _sum: { valor: number | null } }>,
-    getConfiguracao(),
+    getConfiguracao(banco),
   ]);
 
   const emServico = patio.filter((o) => o.status !== "AGUARDANDO_PECA").length;
@@ -180,6 +185,7 @@ async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
   const guardarHoje = valorReserva(config, recebidoHoje);
 
   const { total: totalAReceber, quantidade: devedoresCount, top5 } = await resumoDevedores(
+    db,
     devedoresOS,
     dividasDeCliente,
     dividasAvulsas
@@ -317,7 +323,16 @@ async function Operacao({ podeVerFinanceiro }: { podeVerFinanceiro: boolean }) {
 
 // Só OS entregue, contada na data de entrega. Nenhuma OS em aberto entra aqui — é o que
 // impede um carro aberto no dia 2 e ainda no elevador de aparecer como faturamento do mês.
-async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: number }) {
+async function Resultado({
+  banco,
+  periodo,
+  offset,
+}: {
+  banco: BancoDaOficina;
+  periodo: PeriodoKey;
+  offset: number;
+}) {
+  const { db } = banco;
   const agora = new Date();
   const j = janela(periodo, offset, agora);
   const jAnterior = janelaAnterior(periodo, offset, agora);
@@ -329,28 +344,27 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
   const fimDespesas = j.fim < agora ? j.fim : agora;
 
   const [ordens, ordensAnterior, recebidoOS, recebidoDivida, totalDespesas, config] = await Promise.all([
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo(j),
       include: INCLUDE_LISTA,
     }) as unknown as Promise<OSLista[]>,
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo(jAnterior),
       select: { total: true },
     }),
-    prisma.pagamentoOS.aggregate({
+    db.pagamentoOS.aggregate({
       where: { data: { gte: j.inicio, lt: j.fim } },
       _sum: { valor: true },
     }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma as any).pagamentoDivida.aggregate({
+    db.pagamentoDivida.aggregate({
       where: { data: { gte: j.inicio, lt: j.fim } },
       _sum: { valor: true },
     }) as Promise<{ _sum: { valor: number | null } }>,
     // Passa por `custoDoIntervalo` (e não direto no Prisma) porque é ele que
     // materializa os lançamentos das despesas fixas do período. Sem isso, o mês que
     // ninguém abriu em /despesas entraria no DRE sem o aluguel.
-    custoDoIntervalo(j.inicio, fimDespesas),
-    getConfiguracao(),
+    custoDoIntervalo(db, j.inicio, fimDespesas),
+    getConfiguracao(banco),
   ]);
 
   const receita = ordens.reduce((s, o) => s + o.total, 0);
@@ -548,6 +562,7 @@ async function Resultado({ periodo, offset }: { periodo: PeriodoKey; offset: num
 // Saldo devedor completo (OS entregues não quitadas + dívidas avulsas), sem recorte de
 // período: uma dívida não deixa de existir por ter sido aberta fora do período.
 async function resumoDevedores(
+  db: Db,
   devedoresOS: { clienteId: string; _sum: { total: number | null; valorPago: number | null } }[],
   dividasDeCliente: { clienteId: string; _sum: { valor: number | null; valorPago: number | null } }[],
   dividasAvulsas: { devedorNome: string | null; _sum: { valor: number | null; valorPago: number | null } }[]
@@ -587,7 +602,7 @@ async function resumoDevedores(
   const ids = candidatos.filter((c) => c.clienteId).map((c) => c.clienteId!);
   const clientes =
     ids.length > 0
-      ? await prisma.cliente.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } })
+      ? await db.cliente.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } })
       : [];
   const nomePorId = new Map(clientes.map((c) => [c.id, c.nome]));
 

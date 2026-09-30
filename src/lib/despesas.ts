@@ -14,7 +14,7 @@
 // que os modais da tela importam sem trazer o Prisma junto. Reexportadas aqui para o
 // lado servidor ter um import só.
 
-import { prisma } from "@/lib/prisma";
+import type { Db } from "@/lib/db-oficina";
 import { diaDaCompetencia, janelaDaChave, type Janela } from "@/lib/periodo";
 import { osEntreguesNoPeriodo } from "@/lib/os-periodo";
 import { competenciasDoIntervalo, regraValeNoMes, valorEfetivo } from "@/lib/despesas-comum";
@@ -28,10 +28,10 @@ export * from "@/lib/despesas-comum";
  * ou dois navegadores abrindo junto, não duplica nada. Nunca mexe em lançamento que
  * já existe — o valor que o dono editou ali continua sendo dele.
  */
-export async function garantirLancamentos(competencias: Date[]): Promise<void> {
+export async function garantirLancamentos(db: Db, competencias: Date[]): Promise<void> {
   if (competencias.length === 0) return;
 
-  const regras = await prisma.despesaRecorrente.findMany({ where: { ativa: true } });
+  const regras = await db.despesaRecorrente.findMany({ where: { ativa: true } });
   if (regras.length === 0) return;
 
   const novos = competencias.flatMap((competencia) =>
@@ -49,7 +49,7 @@ export async function garantirLancamentos(competencias: Date[]): Promise<void> {
   );
 
   if (novos.length > 0) {
-    await prisma.despesa.createMany({ data: novos, skipDuplicates: true });
+    await db.despesa.createMany({ data: novos, skipDuplicates: true });
   }
 }
 
@@ -60,23 +60,23 @@ export const INCLUDE_CATEGORIA = {
 /**
  * Tudo o que a tela de um mês precisa, com os lançamentos das regras já materializados.
  */
-export async function mesDeGastos(chave: string | undefined, agora = new Date()) {
+export async function mesDeGastos(db: Db, chave: string | undefined, agora = new Date()) {
   const j = janelaDaChave(chave, agora);
-  await garantirLancamentos([j.inicio]);
+  await garantirLancamentos(db, [j.inicio]);
 
   const [lancamentos, cancelados, categorias, regras] = await Promise.all([
-    prisma.despesa.findMany({
+    db.despesa.findMany({
       where: { competencia: j.inicio, cancelado: false },
       include: INCLUDE_CATEGORIA,
       orderBy: [{ vencimento: "asc" }, { descricao: "asc" }],
     }),
-    prisma.despesa.findMany({
+    db.despesa.findMany({
       where: { competencia: j.inicio, cancelado: true },
       include: INCLUDE_CATEGORIA,
       orderBy: { descricao: "asc" },
     }),
-    prisma.categoriaDespesa.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }] }),
-    prisma.despesaRecorrente.findMany({
+    db.categoriaDespesa.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }] }),
+    db.despesaRecorrente.findMany({
       include: INCLUDE_CATEGORIA,
       orderBy: [{ ativa: "desc" }, { diaVencimento: "asc" }],
     }),
@@ -87,9 +87,9 @@ export async function mesDeGastos(chave: string | undefined, agora = new Date())
 
 /** Soma dos gastos de um intervalo, materializando os meses que ele toca.
  *  É por aqui que o DRE do dashboard passa a enxergar a conta fixa ainda não paga. */
-export async function custoDoIntervalo(inicio: Date, fim: Date): Promise<number> {
-  await garantirLancamentos(competenciasDoIntervalo(inicio, fim));
-  const lancamentos = await prisma.despesa.findMany({
+export async function custoDoIntervalo(db: Db, inicio: Date, fim: Date): Promise<number> {
+  await garantirLancamentos(db, competenciasDoIntervalo(inicio, fim));
+  const lancamentos = await db.despesa.findMany({
     where: { vencimento: { gte: inicio, lte: fim }, cancelado: false },
     select: { valor: true, valorPago: true, pago: true },
   });
@@ -103,16 +103,16 @@ export async function custoDoIntervalo(inicio: Date, fim: Date): Promise<number>
  * o mês tem uma OS só, e dividir o custo por uma margem tirada de uma OS daria um
  * número que muda todo dia e não serve para decidir nada.
  */
-export async function pontoDeEquilibrio(j: Janela, custoDoMes: number) {
+export async function pontoDeEquilibrio(db: Db, j: Janela, custoDoMes: number) {
   const inicioMargem = new Date(j.inicio);
   inicioMargem.setUTCMonth(inicioMargem.getUTCMonth() - 2);
 
   const [doMes, paraMargem] = await Promise.all([
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo(j),
       select: { total: true, lucroReal: true },
     }),
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo({ ...j, inicio: inicioMargem }),
       select: { total: true, lucroReal: true },
     }),

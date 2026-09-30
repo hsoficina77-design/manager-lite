@@ -10,7 +10,7 @@
 //
 // Server-side apenas.
 
-import { prisma } from "@/lib/prisma";
+import type { Db } from "@/lib/db-oficina";
 
 export type ItemEntrada = { id?: unknown; custoUnit?: unknown; produtoId?: string | null };
 
@@ -27,19 +27,21 @@ function numeroOuNulo(valor: unknown): number | null {
  * entra, mesmo que alguém o envie de propósito.
  */
 export async function custosParaSalvar(
+  db: Db,
   itens: ItemEntrada[],
   podeVerFinanceiro: boolean,
   pai: { os: string } | { orcamento: string }
 ): Promise<(number | null)[]> {
   const declarados = podeVerFinanceiro
     ? itens.map((i) => numeroOuNulo(i.custoUnit))
-    : await recuperadosDoBanco(itens, pai);
+    : await recuperadosDoBanco(db, itens, pai);
 
-  return completarComEstoque(itens, declarados);
+  return completarComEstoque(db, itens, declarados);
 }
 
 /** O custo que cada item já tinha gravado, para quem não recebeu custo na leitura. */
 async function recuperadosDoBanco(
+  db: Db,
   itens: ItemEntrada[],
   pai: { os: string } | { orcamento: string }
 ): Promise<(number | null)[]> {
@@ -48,11 +50,11 @@ async function recuperadosDoBanco(
 
   const existentes =
     "os" in pai
-      ? await prisma.itemOrdem.findMany({
+      ? await db.itemOrdem.findMany({
           where: { id: { in: ids }, ordemId: pai.os },
           select: { id: true, custoUnit: true },
         })
-      : await prisma.itemOrcamento.findMany({
+      : await db.itemOrcamento.findMany({
           where: { id: { in: ids }, orcamentoId: pai.orcamento },
           select: { id: true, custoUnit: true },
         });
@@ -70,6 +72,7 @@ async function recuperadosDoBanco(
  * preço inteiro do óleo.
  */
 async function completarComEstoque(
+  db: Db,
   itens: ItemEntrada[],
   custos: (number | null)[]
 ): Promise<(number | null)[]> {
@@ -82,7 +85,7 @@ async function completarComEstoque(
   ];
   if (faltando.length === 0) return custos;
 
-  const produtos = await prisma.produto.findMany({
+  const produtos = await db.produto.findMany({
     where: { id: { in: faltando } },
     select: { id: true, custoUnit: true },
   });

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { guardaApi } from "@/lib/auth";
 import { ehPeriodo, ehPeriodoAtual, janela, type PeriodoKey } from "@/lib/periodo";
 import { osEntreguesNoPeriodo } from "@/lib/os-periodo";
@@ -19,6 +18,7 @@ import { osEntreguesNoPeriodo } from "@/lib/os-periodo";
 export async function GET(request: Request) {
   const guarda = await guardaApi({ financeiro: true });
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { searchParams } = new URL(request.url);
   const periodo: PeriodoKey = ehPeriodo(searchParams.get("periodo") ?? undefined)
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const j = janela(periodo, offset);
 
   const [itens, produtos] = await Promise.all([
-    prisma.itemOrdem.findMany({
+    db.itemOrdem.findMany({
       where: { produtoId: { not: null }, ordem: osEntreguesNoPeriodo(j) },
       select: {
         produtoId: true,
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
         produto: { select: { nome: true, unidade: true } },
       },
     }),
-    prisma.produto.findMany({
+    db.produto.findMany({
       where: { ativo: true },
       select: {
         id: true,

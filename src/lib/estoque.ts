@@ -14,12 +14,11 @@
 //
 // Server-side apenas.
 
-import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { Db } from "@/lib/db-oficina";
 import { normalizarBusca } from "@/lib/utils";
 
-/** Cliente do Prisma dentro de uma transação — escrever no estoque exige uma. */
-type Tx = Prisma.TransactionClient;
+/** Banco da oficina dentro de uma transação — escrever no estoque exige uma. */
+type Tx = Db;
 
 export type ItemComProduto = { produtoId?: string | null; quantidade: number };
 
@@ -133,12 +132,13 @@ export type ProdutoDoItem = {
  * viraria erro de chave estrangeira (500) em vez de item sem vínculo.
  */
 export async function produtosDosItens(
+  db: Db,
   itens: { produtoId?: string | null }[]
 ): Promise<Map<string, ProdutoDoItem>> {
   const ids = [...new Set(itens.map((i) => i.produtoId).filter((id): id is string => !!id))];
   if (ids.length === 0) return new Map();
 
-  const produtos = await prisma.produto.findMany({
+  const produtos = await db.produto.findMany({
     where: { id: { in: ids } },
     select: { id: true, nome: true, custoUnit: true, valorVenda: true, quantidade: true },
   });

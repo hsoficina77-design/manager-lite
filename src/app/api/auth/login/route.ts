@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { abrirSessao, usuarioPorEmail } from "@/lib/sistema";
 import { conferirSenha, hashSenha } from "@/lib/senha";
-import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
 import { chaveDaRequisicao, esperaRestante, limparFalhas, registrarFalha } from "@/lib/tentativas";
 import { REGRAS, consumir, esquecer, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
 // Uma mensagem só para e-mail inexistente e para senha errada: dizer "este e-mail não
-// existe" entregaria de graça quais contas existem na oficina.
+// existe" entregaria de graça quais contas existem no sistema.
 const CREDENCIAL_INVALIDA = "E-mail ou senha incorretos";
 
 // Hash de uma senha aleatória, conferido quando o e-mail não existe. Sem ele, a
@@ -59,7 +57,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const usuario = await prisma.usuario.findUnique({ where: { email: emailLimpo } });
+    // O e-mail é único no sistema inteiro: é ele que diz de qual oficina a pessoa é.
+    const usuario = await usuarioPorEmail(emailLimpo);
 
     const senhaConfere = await conferirSenha(senha, usuario?.senhaHash ?? (await hashFalso()));
 
@@ -76,42 +75,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!usuario.oficina.ativa) {
+      return NextResponse.json(
+        { error: "O acesso desta oficina está suspenso. Fale com o suporte." },
+        { status: 403 }
+      );
+    }
+
     limparFalhas(chave);
     // Entrou: o IP não carrega mais o histórico. Sem isto, uma oficina com vários
     // funcionários no mesmo Wi-Fi poderia se trancar sozinha num dia de troca de
     // aparelho — e quem acerta a senha não é o caso que este teto persegue.
     esquecer(chaveIp);
 
-    const sessaoId = novoIdDeSessao();
-    const expiraEm = new Date(Date.now() + DURACAO_MS);
-
-    await prisma.sessao.create({
-      data: {
-        id: sessaoId,
-        usuarioId: usuario.id,
-        expiraEm,
-        userAgent: request.headers.get("user-agent")?.slice(0, 300) ?? null,
-      },
-    });
-    await prisma.usuario.update({
-      where: { id: usuario.id },
-      data: { ultimoAcesso: new Date() },
-    });
-
-    // Faxina barata das sessões vencidas, aproveitando que já estamos no banco.
-    prisma.sessao
-      .deleteMany({ where: { expiraEm: { lt: new Date() } } })
-      .catch((err: unknown) => console.error("Falha ao limpar sessões vencidas:", err));
-
-    const ehDono = usuario.papel === "ADMIN";
-    const token = await assinarToken(
-      sessaoId,
-      expiraEm,
-      usuario.papel,
-      ehDono || usuario.podeFinanceiro,
-      ehDono || usuario.podeExcluir
-    );
-    (await cookies()).set(COOKIE_SESSAO, token, opcoesDoCookie(expiraEm));
+    await abrirSessao(usuario, request);
 
     return NextResponse.json({
       id: usuario.id,

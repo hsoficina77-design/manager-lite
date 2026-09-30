@@ -11,6 +11,8 @@ export type UsuarioCliente = {
   papel: Papel;
   podeFinanceiro: boolean;
   podeExcluir: boolean;
+  /** Dono da plataforma — só decide se a aba "Plataforma" aparece. */
+  administraPlataforma: boolean;
 };
 
 const Contexto = createContext<UsuarioCliente | null>(null);

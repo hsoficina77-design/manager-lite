@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaFixarSchema } from "@/lib/schemas";
 import { INCLUDE_CATEGORIA, regraValeNoMes } from "@/lib/despesas";
@@ -21,11 +21,14 @@ import { INCLUDE_CATEGORIA, regraValeNoMes } from "@/lib/despesas";
  *     seguintes, que sofreriam exatamente o mesmo problema.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
   const { id } = await params;
   try {
     const dados = await lerJson(request, despesaFixarSchema);
 
-    const gasto = await prisma.despesa.findUnique({ where: { id } });
+    const gasto = await db.despesa.findUnique({ where: { id } });
     if (!gasto) {
       return NextResponse.json({ error: "Gasto não encontrado" }, { status: 404 });
     }
@@ -45,7 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    const resultado = await prisma.$transaction(async (tx) => {
+    const resultado = await transacao(async (tx) => {
       const regra = await tx.despesaRecorrente.create({
         data: {
           categoriaId: gasto.categoriaId,
@@ -124,9 +127,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
  * pessoa ainda está escolhendo, então esse filtro é feito na tela.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
 
-  const gasto = await prisma.despesa.findUnique({
+  const gasto = await db.despesa.findUnique({
     where: { id },
     select: { descricao: true, competencia: true, recorrenteId: true },
   });
@@ -135,7 +141,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
   if (gasto.recorrenteId) return NextResponse.json({ semelhantes: [] });
 
-  const semelhantes = await prisma.despesa.findMany({
+  const semelhantes = await db.despesa.findMany({
     where: {
       id: { not: id },
       recorrenteId: null,

@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { dadosVeiculo, erroVeiculo } from "@/lib/veiculo";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { clienteCriarSchema } from "@/lib/schemas";
+import { guardaApi } from "@/lib/auth";
 
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") || "";
 
-  const clientes = await prisma.cliente.findMany({
+  const clientes = await db.cliente.findMany({
     where: q
       ? {
           OR: [
@@ -29,6 +33,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
+
   try {
     const { nome, telefone, cpfCnpj, email, obs, apelido, origem, profissao, telefones, cep, endereco, cidade, estado, veiculo } =
       await lerJson(request, clienteCriarSchema);
@@ -38,7 +46,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: erroVeiculo(dadosNovoVeiculo) }, { status: 400 });
     }
 
-    const cliente = await prisma.cliente.create({
+    const cliente = await db.cliente.create({
       data: {
         nome,
         telefone: telefone ?? null,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { OS_EM_ABERTO } from "@/lib/constants";
 import { janela, janelaMes, mesesDaJanela, type PeriodoKey } from "@/lib/periodo";
 import { osEntreguesNoPeriodo, osNoPatio, dataProducao } from "@/lib/os-periodo";
@@ -23,6 +23,9 @@ const PERIODOS_VALIDOS: PeriodoKey[] = ["mes", "semestre", "ano"];
 // OS ainda no elevador já entrava como faturamento, e a meta era batida com serviço que
 // não tinha saído. Os cortes são no fuso de Brasília, não no do servidor.
 export async function GET(request: Request) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { searchParams } = new URL(request.url);
   const periodoParam = searchParams.get("periodo");
   const periodo: PeriodoKey = PERIODOS_VALIDOS.includes(periodoParam as PeriodoKey)
@@ -50,25 +53,25 @@ export async function GET(request: Request) {
   };
 
   const [mecanicosAtivos, ordensPeriodo, ordensHistorico, patio, metas] = await Promise.all([
-    prisma.mecanico.findMany({ where: { ativo: true }, orderBy: { nome: "asc" } }),
-    prisma.ordemServico.findMany({
+    db.mecanico.findMany({ where: { ativo: true }, orderBy: { nome: "asc" } }),
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo(j),
       select: {
         mecanicoId: true, status: true, total: true, totalMO: true,
         lucroReal: true, nps: true, abertura: true, fechamento: true,
       },
     }),
-    prisma.ordemServico.findMany({
+    db.ordemServico.findMany({
       where: osEntreguesNoPeriodo(jHistorico),
       select: { abertura: true, fechamento: true, total: true, lucroReal: true },
     }),
-    prisma.ordemServico.groupBy({
+    db.ordemServico.groupBy({
       by: ["status"],
       where: osNoPatio,
       _count: { _all: true },
     }),
     // A meta é mensal; num semestre ou ano ela é a soma das metas dos meses cobertos.
-    prisma.meta.findMany({ where: { OR: mesesDaJanela(j).map(({ ano, mes }) => ({ ano, mes })) } }),
+    db.meta.findMany({ where: { OR: mesesDaJanela(j).map(({ ano, mes }) => ({ ano, mes })) } }),
   ]);
 
   const metaPorMecanico = new Map<string, number>();

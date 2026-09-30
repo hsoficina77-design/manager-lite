@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { guardaApi } from "@/lib/auth";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
 
-  const notificacao = await prisma.notificacao.findUnique({ where: { id } });
+  const notificacao = await db.notificacao.findUnique({ where: { id } });
   if (!notificacao) {
     return NextResponse.json({ error: "Notificação não encontrada" }, { status: 404 });
   }
@@ -16,7 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Sem acesso a esta notificação" }, { status: 403 });
   }
 
-  const atualizada = await prisma.notificacao.update({
+  const atualizada = await db.notificacao.update({
     where: { id },
     data: { lida: true, lidaEm: new Date() },
   });

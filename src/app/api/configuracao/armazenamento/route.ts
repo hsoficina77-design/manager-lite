@@ -8,5 +8,5 @@ export async function GET() {
   const guarda = await guardaApi({ dono: true });
   if (guarda.resposta) return guarda.resposta;
 
-  return NextResponse.json(await statusArmazenamento());
+  return NextResponse.json(await statusArmazenamento(guarda.db));
 }

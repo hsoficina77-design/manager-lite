@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { recalcularPagamento } from "@/lib/pagamentos";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { pagamentoSchema } from "@/lib/schemas";
@@ -8,12 +8,19 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
+
   const { id: ordemId } = await params;
 
   try {
     const { valor, formaPagamento, obs } = await lerJson(request, pagamentoSchema);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const existe = await db.ordemServico.findUnique({ where: { id: ordemId }, select: { id: true } });
+    if (!existe) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
+
+    const result = await transacao(async (tx) => {
       const pagamento = await tx.pagamentoOS.create({
         data: {
           ordemId,
@@ -58,10 +65,14 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db, transacao } = guarda;
+
   const { id: ordemId } = await params;
 
   try {
-    const os = await prisma.ordemServico.findUnique({
+    const os = await db.ordemServico.findUnique({
       where: { id: ordemId },
       select: { id: true },
     });
@@ -69,7 +80,7 @@ export async function DELETE(
       return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await transacao(async (tx) => {
       await tx.pagamentoOS.deleteMany({ where: { ordemId } });
       return recalcularPagamento(tx, ordemId);
     });

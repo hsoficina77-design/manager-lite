@@ -2,9 +2,10 @@
 // diferente do toast de `Avisos.tsx`, que some em segundos.
 //
 // Sem `usuarioId`: a leitura é filtrada por papel (ver `publico`), não por pessoa —
-// mesma filosofia de linha única de `Configuracao` para uma escala de 1-3 acessos.
+// a escala de acessos por oficina é de 1-3 pessoas. Cada oficina tem as suas (o `db`
+// já vem preso a ela).
 
-import { prisma } from "@/lib/prisma";
+import type { Db } from "@/lib/db-oficina";
 import type { Papel } from "@/lib/permissoes";
 
 type Publico = "ADMIN" | "TODOS";
@@ -14,7 +15,7 @@ function filtroVisibilidade(papel: Papel) {
 }
 
 /** Não lança: uma notificação que falha não pode derrubar o fluxo que a disparou. */
-export async function criarNotificacao(dados: {
+export async function criarNotificacao(db: Db, dados: {
   tipo: string;
   titulo: string;
   mensagem: string;
@@ -22,7 +23,7 @@ export async function criarNotificacao(dados: {
   publico?: Publico;
 }) {
   try {
-    await prisma.notificacao.create({
+    await db.notificacao.create({
       data: {
         tipo: dados.tipo,
         titulo: dados.titulo,
@@ -41,7 +42,7 @@ export async function criarNotificacao(dados: {
  * `tipo` criada dentro de `janelaDias`, não cria de novo. É o que impede um aviso de
  * armazenamento de nascer a cada foto enviada enquanto o uso segue acima do limiar.
  */
-export async function criarNotificacaoUnica(dados: {
+export async function criarNotificacaoUnica(db: Db, dados: {
   tipo: string;
   titulo: string;
   mensagem: string;
@@ -51,13 +52,13 @@ export async function criarNotificacaoUnica(dados: {
 }) {
   try {
     const desde = new Date(Date.now() - dados.janelaDias * 24 * 60 * 60 * 1000);
-    const existente = await prisma.notificacao.findFirst({
+    const existente = await db.notificacao.findFirst({
       where: { tipo: dados.tipo, lida: false, createdAt: { gte: desde } },
       select: { id: true },
     });
     if (existente) return;
 
-    await prisma.notificacao.create({
+    await db.notificacao.create({
       data: {
         tipo: dados.tipo,
         titulo: dados.titulo,
@@ -71,12 +72,12 @@ export async function criarNotificacaoUnica(dados: {
   }
 }
 
-export function contarNaoLidas(papel: Papel) {
-  return prisma.notificacao.count({ where: { lida: false, ...filtroVisibilidade(papel) } });
+export function contarNaoLidas(db: Db, papel: Papel) {
+  return db.notificacao.count({ where: { lida: false, ...filtroVisibilidade(papel) } });
 }
 
-export function listarNotificacoes(papel: Papel) {
-  return prisma.notificacao.findMany({
+export function listarNotificacoes(db: Db, papel: Papel) {
+  return db.notificacao.findMany({
     where: filtroVisibilidade(papel),
     orderBy: { createdAt: "desc" },
     take: 50,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaAtualizarSchema } from "@/lib/schemas";
 import { INCLUDE_CATEGORIA } from "@/lib/despesas";
@@ -10,6 +10,9 @@ import { competenciaDe } from "@/lib/periodo";
  * R$ 80 acima do previsto e é agosto que muda, não a regra.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
     const dados = await lerJson(request, despesaAtualizarSchema);
@@ -28,7 +31,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       data.competencia = competenciaDe(dados.vencimento);
     }
 
-    const despesa = await prisma.despesa.update({
+    const despesa = await db.despesa.update({
       where: { id },
       data,
       include: INCLUDE_CATEGORIA,
@@ -60,9 +63,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
  * fosse aberto, e o dono ficaria excluindo a mesma conta para sempre.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
   const { id } = await params;
   try {
-    const atual = await prisma.despesa.findUnique({
+    const atual = await db.despesa.findUnique({
       where: { id },
       select: { recorrenteId: true },
     });
@@ -71,14 +77,14 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     }
 
     if (atual.recorrenteId) {
-      await prisma.despesa.update({
+      await db.despesa.update({
         where: { id },
         data: { cancelado: true, pago: false, valorPago: null, pagoEm: null, formaPagamento: null },
       });
       return NextResponse.json({ ok: true, cancelado: true });
     }
 
-    await prisma.despesa.delete({ where: { id } });
+    await db.despesa.delete({ where: { id } });
     return NextResponse.json({ ok: true, cancelado: false });
   } catch (err) {
     console.error(err);

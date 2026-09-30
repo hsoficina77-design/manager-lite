@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { produtoCriarSchema } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -21,6 +20,7 @@ import { normalizarBusca } from "@/lib/utils";
 export async function GET(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { searchParams } = new URL(request.url);
   const q = normalizarBusca(searchParams.get("q") ?? "");
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   // termo — então aqui basta o `contains` cru.
   if (q) where.busca = { contains: q };
 
-  const produtos = await prisma.produto.findMany({
+  const produtos = await db.produto.findMany({
     where,
     orderBy: { nome: "asc" },
     take: limite,
@@ -53,6 +53,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { transacao } = guarda;
 
   try {
     const dados = await lerJson(request, produtoCriarSchema);
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
     const custoUnit = guarda.usuario.podeFinanceiro ? dados.custoUnit ?? 0 : 0;
     const quantidade = dados.quantidade ?? 0;
 
-    const produto = await prisma.$transaction(async (tx) => {
+    const produto = await transacao(async (tx) => {
       const criado = await tx.produto.create({
         data: {
           nome: dados.nome,

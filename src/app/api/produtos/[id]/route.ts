@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { produtoAtualizarSchema } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
@@ -10,9 +9,10 @@ import { registrarExclusao } from "@/lib/exclusoes";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
-  const produto = await prisma.produto.findUnique({
+  const produto = await db.produto.findUnique({
     where: { id },
     include: {
       movimentos: { orderBy: { createdAt: "desc" }, take: 30 },
@@ -29,12 +29,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
   try {
     const dados = await lerJson(request, produtoAtualizarSchema);
 
-    const atual = await prisma.produto.findUnique({
+    const atual = await db.produto.findUnique({
       where: { id },
       select: { nome: true, codigo: true, fornecedor: true },
     });
@@ -71,7 +72,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       fornecedor: dados.fornecedor !== undefined ? dados.fornecedor : atual.fornecedor,
     });
 
-    const produto = await prisma.produto.update({ where: { id }, data });
+    const produto = await db.produto.update({ where: { id }, data });
     return NextResponse.json(semFinanceiro(produto, guarda.usuario.podeFinanceiro));
   } catch (err) {
     const invalido = respostaDeValidacao(err);
@@ -98,10 +99,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi({ exclusao: true });
   if (guarda.resposta) return guarda.resposta;
+  const { db } = guarda;
 
   const { id } = await params;
   try {
-    const produto = await prisma.produto.findUnique({
+    const produto = await db.produto.findUnique({
       where: { id },
       select: { nome: true, codigo: true },
     });
@@ -109,8 +111,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
     }
 
-    await prisma.produto.delete({ where: { id } });
+    await db.produto.delete({ where: { id } });
     await registrarExclusao(
+      db,
       "Produto",
       `${produto.nome}${produto.codigo ? ` (${produto.codigo})` : ""}`,
       guarda.usuario

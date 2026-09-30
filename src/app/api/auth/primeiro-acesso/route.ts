@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
+import { abrirSessao, criarOficinaComDono, sistemaVazio, transacaoDoSistema } from "@/lib/sistema";
 import { hashSenha, validarSenha } from "@/lib/senha";
-import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
@@ -30,7 +28,7 @@ export async function GET(request: Request) {
 
   try {
     return NextResponse.json({
-      disponivel: (await prisma.usuario.count()) === 0,
+      disponivel: await sistemaVazio(),
       exigeToken: tokenExigido() !== null,
     });
   } catch {
@@ -39,11 +37,12 @@ export async function GET(request: Request) {
 }
 
 /**
- * Cria o primeiro dono e já o deixa logado.
+ * Instala o sistema: cria a primeira oficina e o dono dela — que é também o dono da
+ * plataforma, quem convida as próximas oficinas — e já o deixa logado.
  *
- * Só funciona com a tabela de usuários vazia. Depois do primeiro cadastro esta rota
- * responde 409 para sempre — é o que impede alguém de chegar em `/primeiro-acesso` num
- * sistema já em uso e sair como dono.
+ * Só funciona com o sistema vazio. Depois do primeiro cadastro esta rota responde 409
+ * para sempre — é o que impede alguém de chegar em `/primeiro-acesso` num sistema já em
+ * uso e sair como dono. Oficinas novas entram por convite (`/convite/<token>`).
  */
 export async function POST(request: Request) {
   // Antes do corpo e do banco. Esta rota abre uma transação `Serializable` a cada
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
 
   try {
     const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
-    const { nome, email, senha, token: codigo } = corpo ?? {};
+    const { nome, email, senha, token: codigo, nomeOficina } = corpo ?? {};
 
     const esperado = tokenExigido();
     if (esperado && codigo !== esperado) {
@@ -78,23 +77,22 @@ export async function POST(request: Request) {
     if (problema) return NextResponse.json({ error: problema }, { status: 400 });
 
     const senhaHash = await hashSenha(senha);
+    const oficina =
+      typeof nomeOficina === "string" && nomeOficina.trim() ? nomeOficina.trim().slice(0, 120) : "Minha Oficina";
 
     // Serializable: dois cadastros disparados ao mesmo tempo não podem virar dois
     // donos — o segundo vê a tabela já preenchida e é recusado.
-    const usuario = await prisma.$transaction(
-      async (tx) => {
-        if ((await tx.usuario.count()) > 0) return null;
-        return tx.usuario.create({
-          data: {
-            nome: nome.trim(),
-            email: email.trim().toLowerCase(),
-            senhaHash,
-            papel: "ADMIN",
-          },
-        });
-      },
-      { isolationLevel: "Serializable" }
-    );
+    const usuario = await transacaoDoSistema(async (tx) => {
+      if ((await tx.usuario.count()) > 0) return null;
+      const criada = await criarOficinaComDono(tx, {
+        nomeOficina: oficina,
+        nome: nome.trim(),
+        email: email.trim().toLowerCase(),
+        senhaHash,
+        administraPlataforma: true,
+      });
+      return criada.usuario;
+    });
 
     if (!usuario) {
       return NextResponse.json(
@@ -103,19 +101,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const sessaoId = novoIdDeSessao();
-    const expiraEm = new Date(Date.now() + DURACAO_MS);
-    await prisma.sessao.create({
-      data: {
-        id: sessaoId,
-        usuarioId: usuario.id,
-        expiraEm,
-        userAgent: request.headers.get("user-agent")?.slice(0, 300) ?? null,
-      },
-    });
-
-    const token = await assinarToken(sessaoId, expiraEm, usuario.papel, true, true);
-    (await cookies()).set(COOKIE_SESSAO, token, opcoesDoCookie(expiraEm));
+    await abrirSessao(usuario, request);
 
     return NextResponse.json({ id: usuario.id, nome: usuario.nome, papel: usuario.papel }, { status: 201 });
   } catch (err) {
