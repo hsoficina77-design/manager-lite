@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+// 16px no celular: abaixo disso o iPhone dá zoom ao focar o campo.
 const inputCls =
-  "w-full rounded-lg border border-linha-forte px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  "w-full rounded-lg border border-linha-forte px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 export default function LoginForm({ destino }: { destino: string }) {
   const router = useRouter();
@@ -55,6 +56,9 @@ export default function LoginForm({ destino }: { destino: string }) {
         <input
           id="email"
           type="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           autoFocus
           autoComplete="username"
