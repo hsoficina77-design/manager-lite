@@ -224,7 +224,7 @@ async function main() {
     await chamar(A, "POST", "/api/plataforma/convites", { nomeOficina: `${MARCA} B` }),
     "convite"
   );
-  const token = convite.link.split("/convite/")[1];
+  const token = convite.caminho.split("/convite/")[1];
   const emailB = `${MARCA.toLowerCase()}@b.local`;
   const cadastroB = await chamar(null, "POST", `/api/convite/${token}`, {
     nomeOficina: `${MARCA} Oficina B`,

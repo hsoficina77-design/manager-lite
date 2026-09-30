@@ -28,11 +28,11 @@ export async function POST(request: Request) {
       email,
     });
 
-    // O link é montado a partir do endereço que o próprio dono está usando, então
-    // funciona igual no computador local e em produção.
-    const origem = new URL(request.url).origin;
+    // Só o caminho: quem monta o link completo é a tela, com o endereço que está no
+    // navegador. O servidor não sabe o próprio endereço público — no Railway, atrás do
+    // proxy, `request.url` é `localhost:8080`, e o link saía apontando para lá.
     return NextResponse.json(
-      { id: convite.id, expiraEm: convite.expiraEm, link: `${origem}/convite/${token}` },
+      { id: convite.id, expiraEm: convite.expiraEm, caminho: `/convite/${token}` },
       { status: 201 }
     );
   } catch (err) {

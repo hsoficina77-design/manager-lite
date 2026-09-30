@@ -77,7 +77,7 @@ export default function PlataformaPainel({ oficinaAtual }: { oficinaAtual: strin
         avisar(json.error || "Não foi possível criar o convite", "erro");
         return;
       }
-      setLinkNovo(json.link);
+      setLinkNovo(`${window.location.origin}${json.caminho}`);
       setForm({ nomeOficina: "", email: "" });
       carregar();
     } catch {
