@@ -11,7 +11,8 @@
 //   2. RLS no banco: abre a transação como o papel `app_oficina`, com a oficina em
 //      `app.oficina_id`. O Postgres passa a filtrar sozinho (trava 3) e o `oficinaId`
 //      de toda linha criada sai do default da coluna — inclusive as aninhadas, como os
-//      itens criados junto com a OS.
+//      itens criados junto com a OS. Se o banco não tiver o papel, só a oficina é
+//      definida e a trava 3 fica desligada, com aviso no log (ver `verificarRls`).
 //
 // O cliente cru (`@/lib/prisma`) passa por cima das duas coisas. Ele fica restrito a
 // login, sessão, cadastro de oficina e plataforma — `scripts/checar-isolamento.mjs`
@@ -75,11 +76,48 @@ function filtrar(modelo: string, operacao: string, args: Args | undefined, ofici
   return filtrados;
 }
 
-/** Abre a transação como a oficina: papel sem bypass de RLS + id da oficina. */
-function entrarNaOficina(oficinaId: string) {
-  // Os dois `true` tornam os valores locais à transação: somem no COMMIT e não
-  // contaminam a próxima requisição que pegar esta conexão do pool.
-  return Prisma.sql`SELECT set_config('role', 'app_oficina', true), set_config('app.oficina_id', ${oficinaId}, true)`;
+/**
+ * A trava 3 (RLS) está disponível neste banco?
+ *
+ * A migração que cria o papel `app_oficina` é tolerante: se o banco recusar criar o
+ * papel ou conceder a membresia (privilégios variam entre instalações), ela segue sem
+ * ele. Aqui se descobre isso uma vez, na primeira consulta, em vez de cada operação
+ * da oficina falhar com "permission denied to set role" e derrubar o sistema.
+ *
+ * Sem o papel, o sistema segue com as travas 1 (filtro) e 2 (gatilhos) e avisa no log.
+ * Erro que não seja de papel/permissão (banco fora do ar) não decide nada: o cache é
+ * descartado e a próxima operação tenta de novo.
+ */
+let rlsDisponivel: Promise<boolean> | null = null;
+
+function verificarRls(): Promise<boolean> {
+  rlsDisponivel ??= prisma
+    .$transaction([prisma.$executeRaw`SELECT set_config('role', 'app_oficina', true)`])
+    .then(() => true)
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/app_oficina|permission denied to set role|must be able to SET ROLE/i.test(msg)) {
+        console.warn(
+          "[isolamento] RLS por oficina DESLIGADA: o papel app_oficina não está disponível " +
+            "para esta conexão. As travas 1 (filtro) e 2 (gatilhos) seguem ativas. " +
+            `Detalhe: ${msg.trim().split(/\r?\n/).pop()}`
+        );
+        return false;
+      }
+      rlsDisponivel = null;
+      throw err;
+    });
+  return rlsDisponivel;
+}
+
+/** Abre a transação como a oficina: id da oficina e, se disponível, o papel sem bypass de RLS. */
+function entrarNaOficina(oficinaId: string, comRls: boolean) {
+  // Os `true` tornam os valores locais à transação: somem no COMMIT e não contaminam a
+  // próxima requisição que pegar esta conexão do pool. O `app.oficina_id` vale mesmo
+  // sem RLS — é dele que sai o default do `oficinaId` nas linhas criadas.
+  return comRls
+    ? Prisma.sql`SELECT set_config('role', 'app_oficina', true), set_config('app.oficina_id', ${oficinaId}, true)`
+    : Prisma.sql`SELECT set_config('app.oficina_id', ${oficinaId}, true)`;
 }
 
 function criarFiltrado(oficinaId: string) {
@@ -143,8 +181,9 @@ function criarBanco(oficinaId: string): BancoDaOficina {
     query: {
       $allModels: {
         async $allOperations({ args, query }) {
+          const comRls = await verificarRls();
           const [, resultado] = await prisma.$transaction([
-            prisma.$executeRaw(entrarNaOficina(oficinaId)),
+            prisma.$executeRaw(entrarNaOficina(oficinaId, comRls)),
             query(args),
           ]);
           return resultado;
@@ -156,11 +195,13 @@ function criarBanco(oficinaId: string): BancoDaOficina {
   // Dentro de uma transação interativa, a oficina é definida uma vez no começo e vale
   // até o fim. O `tx` vem do cliente filtrado (e não de `db`): a extensão de RLS abriria
   // uma transação separada por operação, fora desta.
-  const transacao = <T>(fn: (tx: Db) => Promise<T>, opcoes?: OpcoesTransacao) =>
-    filtrado.$transaction(async (tx) => {
-      await tx.$executeRaw(entrarNaOficina(oficinaId));
+  const transacao = async <T>(fn: (tx: Db) => Promise<T>, opcoes?: OpcoesTransacao) => {
+    const comRls = await verificarRls();
+    return filtrado.$transaction(async (tx) => {
+      await tx.$executeRaw(entrarNaOficina(oficinaId, comRls));
       return fn(tx as unknown as Db);
     }, opcoes);
+  };
 
   return { oficinaId, db: db as unknown as Db, transacao };
 }

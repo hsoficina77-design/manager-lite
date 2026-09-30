@@ -15,6 +15,13 @@
 -- trazer dado de outra oficina. Os dois valores são locais à transação (`true`), então
 -- não vazam para a próxima requisição que pegar a mesma conexão do pool.
 --
+-- Tolerante de propósito: criar papel e conceder a membresia dependem de privilégios
+-- que variam entre instalações (no Supabase o usuário `postgres` não é superusuário).
+-- Se algum passo for recusado, a migração segue com um WARNING e o sistema funciona
+-- com as travas 1 e 2 — `lib/db-oficina.ts` testa o papel ao subir e só o usa se
+-- estiver disponível, avisando no log quando não está. Uma migração que falhasse aqui
+-- deixaria a oficina fora do ar no deploy, o que é pior que ficar sem a terceira trava.
+--
 -- ATENÇÃO (continua valendo): nunca FORCE ROW LEVEL SECURITY. O dono das tabelas
 -- precisa continuar passando, senão login e migrações param.
 --
@@ -23,24 +30,29 @@
 -- "permission denied" (fechado por padrão, que é o lado certo de errar).
 
 DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_oficina') THEN
-    CREATE ROLE app_oficina NOLOGIN NOBYPASSRLS;
-  END IF;
-END $$;
-
--- A conexão da aplicação precisa poder assumir o papel.
-GRANT app_oficina TO CURRENT_USER;
-
-GRANT USAGE ON SCHEMA public TO app_oficina;
-
--- Dívida avulsa e pagamento de dívida têm id sequencial.
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_oficina;
-
-DO $$
 DECLARE
   tabela text;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_oficina') THEN
+    BEGIN
+      CREATE ROLE app_oficina NOLOGIN NOBYPASSRLS;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'RLS por oficina desligada: não foi possível criar o papel app_oficina (%)', SQLERRM;
+      RETURN;
+    END;
+  END IF;
+
+  -- A conexão da aplicação precisa poder assumir o papel.
+  BEGIN
+    EXECUTE format('GRANT app_oficina TO %I', current_user);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'RLS por oficina desligada: não foi possível conceder app_oficina a % (%)', current_user, SQLERRM;
+  END;
+
+  GRANT USAGE ON SCHEMA public TO app_oficina;
+  -- Dívida avulsa e pagamento de dívida têm id sequencial.
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_oficina;
+
   FOREACH tabela IN ARRAY ARRAY[
     'Cliente', 'Veiculo', 'OrdemServico', 'Mecanico', 'Meta', 'Orcamento',
     'ItemOrcamento', 'ItemOrdem', 'Produto', 'MovimentoEstoque', 'PagamentoOS',
