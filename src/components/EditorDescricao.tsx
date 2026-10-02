@@ -154,7 +154,7 @@ export function EditorDescricao({ value, onChange, maxLength, required, placehol
           type="button"
           onClick={() => setPrevia((p) => !p)}
           aria-pressed={previa}
-          className={`ml-auto rounded-md px-2.5 py-1.5 text-xs font-medium ${previa ? "bg-brand-50 text-brand-700" : "text-tinta-2 hover:bg-superficie-3"}`}
+          className={`ml-auto rounded-md px-2.5 py-1.5 text-xs font-medium ${previa ? "bg-brand-50 text-brand-texto" : "text-tinta-2 hover:bg-superficie-3"}`}
         >
           {previa ? "Voltar a editar" : "Ver como fica"}
         </button>

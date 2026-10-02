@@ -6,6 +6,7 @@ import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
   rodapeDoDocumento,
+  EMITIDO_COM,
   type Configuracao,
 } from "@/lib/configuracao";
 
@@ -293,7 +294,7 @@ export function OrcamentoPdfDocument({
           <Text style={s.footerText}>{rodape}</Text>
           <Text
             style={s.footerText}
-            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            render={({ pageNumber, totalPages }) => `${EMITIDO_COM}  ·  Página ${pageNumber} de ${totalPages}`}
           />
         </View>
       </Page>
@@ -326,7 +327,7 @@ export function OrcamentoPdfDocument({
             <Text style={s.footerText}>{rodape}</Text>
             <Text
               style={s.footerText}
-              render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+              render={({ pageNumber, totalPages }) => `${EMITIDO_COM}  ·  Página ${pageNumber} de ${totalPages}`}
             />
           </View>
         </Page>

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { getConfiguracao } from "@/lib/configuracao-db";
 import { lerConvite } from "@/lib/sistema";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import CadastroOficinaForm from "@/components/CadastroOficinaForm";
@@ -23,12 +22,12 @@ const MOTIVO = {
 
 export default async function ConvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const [{ situacao, convite }, config] = await Promise.all([lerConvite(token), getConfiguracao(null)]);
+  const { situacao, convite } = await lerConvite(token);
 
   if (situacao !== "valido") {
     const motivo = MOTIVO[situacao];
     return (
-      <TelaDeEntrada nome={config.nome} logoUrl={config.logoUrl} titulo={motivo.titulo} descricao={motivo.texto}>
+      <TelaDeEntrada titulo={motivo.titulo} descricao={motivo.texto}>
         <Link
           href="/login"
           className="block w-full rounded-lg bg-brand-600 py-2.5 text-center text-sm font-medium text-brand-fg hover:bg-brand-700"
@@ -41,8 +40,6 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
 
   return (
     <TelaDeEntrada
-      nome={config.nome}
-      logoUrl={config.logoUrl}
       titulo="Cadastre a sua oficina"
       descricao="Você foi convidado. Crie a oficina e o seu acesso de dono — depois você cadastra a equipe por dentro do sistema."
       rodape="Guarde bem esta senha: enquanto você for o único dono da oficina, não há como redefini-la pela tela."

@@ -83,7 +83,7 @@ export function ModalGasto({
     >
       <form onSubmit={salvar} className="space-y-3">
         {deRegra && (
-          <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+          <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-texto">
             Este lançamento vem de uma despesa fixa. A alteração vale só para este mês — para
             mudar de vez, edite a despesa fixa.
           </p>
@@ -165,7 +165,7 @@ export function ModalGasto({
             <button
               type="button"
               onClick={() => onFixar(gasto)}
-              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-brand-700 hover:bg-brand-50"
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-brand-texto hover:bg-brand-50"
             >
               <span>
                 Esta conta se repete todo mês?

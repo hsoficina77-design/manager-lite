@@ -1,6 +1,6 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import { labelFormaPagamento } from "@/lib/constants";
-import { CONFIG_PADRAO, rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
+import { CONFIG_PADRAO, EMITIDO_COM, rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
 
 type Pagamento = {
   id: string | number; valor: number; formaPagamento: string; data: string; obs: string | null;
@@ -271,7 +271,9 @@ export function ComprovantePagamentoPdfDocument({
 
         <View style={s.footer}>
           <Text style={s.footerText}>{rodapeDoDocumento(config)}</Text>
-          <Text style={s.footerGerado}>Comprovante gerado em {dataHora(geradoEm)}</Text>
+          <Text style={s.footerGerado}>
+            Comprovante gerado em {dataHora(geradoEm)}  ·  {EMITIDO_COM}
+          </Text>
         </View>
       </Page>
     </Document>

@@ -4,6 +4,7 @@
 // dos campos (ver `previa` no registro de seções).
 
 import { linhasDoCabecalho, rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
+import { LogoBoxOS } from "@/components/marca/LogoBoxOS";
 
 function Moldura({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
@@ -56,6 +57,10 @@ export function PreviaSistema() {
       <div className="overflow-hidden rounded-lg border border-linha">
         <div className="flex">
           <div className="w-20 shrink-0 space-y-1 bg-menu p-2">
+            {/* A marca do sistema fica no topo do menu, ao lado das cores da oficina. */}
+            <div className="px-1 pb-1 text-menu-fg">
+              <LogoBoxOS className="text-[11px]" />
+            </div>
             <div className="rounded bg-brand-700 px-2 py-1 text-[10px] font-medium text-brand-fg">
               Menu
             </div>
@@ -66,7 +71,7 @@ export function PreviaSistema() {
             <div className="rounded bg-brand-600 px-2 py-1.5 text-center text-[10px] font-medium text-brand-fg">
               Nova OS
             </div>
-            <div className="rounded border border-linha bg-superficie px-2 py-1.5 text-[10px] text-brand-600">
+            <div className="rounded border border-linha bg-superficie px-2 py-1.5 text-[10px] text-brand-texto">
               Link de exemplo
             </div>
           </div>

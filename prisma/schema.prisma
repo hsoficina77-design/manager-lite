@@ -606,9 +606,10 @@ model Configuracao {
   logoUrl  String?
   logoPath String? // caminho no Storage — usado para excluir a logo antiga
 
-  // Tema: as cores base do sistema, em hex (#rrggbb)
-  corPrimaria String @default("#dc2626")
-  corMenu     String @default("#09090b")
+  // Tema: as cores base do sistema, em hex (#rrggbb). Oficina nova nasce nas cores
+  // do boxOS (amarelo + grafite) até escolher as dela.
+  corPrimaria String @default("#f2a900")
+  corMenu     String @default("#1e2329")
 
   // Documentos (OS e orçamento impressos / PDF)
   rodapeDocumento       String?

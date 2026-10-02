@@ -461,7 +461,7 @@ async function Resultado({
         acao={
           <Link
             href="/despesas"
-            className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-brand-texto hover:underline"
           >
             Controle de gastos <SetaDireita tamanho={13} />
           </Link>
@@ -831,7 +831,7 @@ function ListaOS({
           verTodasHref && (
             <Link
               href={verTodasHref}
-              className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-600 transition-colors hover:bg-superficie-2"
+              className="flex min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-texto transition-colors hover:bg-superficie-2"
             >
               {verTodasLabel} · mais {extras.length} <SetaDireita tamanho={14} />
             </Link>

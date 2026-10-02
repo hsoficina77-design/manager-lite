@@ -233,7 +233,7 @@ export default function UsuariosPainel() {
                         {labelPapel(u.papel)}
                       </span>
                       {souEu && (
-                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-texto">
                           você
                         </span>
                       )}

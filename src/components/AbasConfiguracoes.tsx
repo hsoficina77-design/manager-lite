@@ -30,7 +30,7 @@ export default function AbasConfiguracoes() {
             className={cn(
               "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
               ativa
-                ? "border-brand-600 text-brand-700"
+                ? "border-brand-600 text-brand-texto"
                 : "border-transparent text-tinta-3 hover:text-tinta"
             )}
           >

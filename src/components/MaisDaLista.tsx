@@ -27,7 +27,7 @@ export function MaisDaLista({
         <button
           type="button"
           onClick={() => setVisiveis((v) => v + passo)}
-          className="flex w-full min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-600 transition-colors hover:bg-superficie-2"
+          className="flex w-full min-h-11 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium text-brand-texto transition-colors hover:bg-superficie-2"
         >
           {rotulo} · faltam {restantes} <Chevron tamanho={14} />
         </button>

@@ -61,7 +61,7 @@ export function BarraInferior() {
         {/* Ação primária no centro, onde o polegar alcança sem reposicionar a mão. */}
         <Link
           href="/os/nova"
-          className="flex flex-col items-center justify-center gap-0.5 py-1.5 text-brand-600"
+          className="flex flex-col items-center justify-center gap-0.5 py-1.5 text-brand-texto"
           aria-label="Nova OS"
         >
           <span className="flex h-8 w-12 items-center justify-center rounded-full bg-brand-600 text-brand-fg">
@@ -86,7 +86,7 @@ function BotaoBarra({ item, ativo }: { item: Item; ativo: boolean }) {
       aria-current={ativo ? "page" : undefined}
       className={cn(
         "flex min-h-[3.25rem] flex-col items-center justify-center gap-1 transition-colors",
-        ativo ? "text-brand-600" : "text-tinta-3"
+        ativo ? "text-brand-texto" : "text-tinta-3"
       )}
     >
       <Icone tamanho={19} />

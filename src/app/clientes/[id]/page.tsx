@@ -441,7 +441,7 @@ export default function ClienteDetailPage() {
                 </div>
               ))}
               {telefones.length < 3 && (
-                <button type="button" onClick={() => setTelefones([...telefones, ""])} className="text-sm text-brand-600 hover:underline">+ Adicionar telefone</button>
+                <button type="button" onClick={() => setTelefones([...telefones, ""])} className="text-sm text-brand-texto hover:underline">+ Adicionar telefone</button>
               )}
             </div>
 
@@ -520,7 +520,7 @@ export default function ClienteDetailPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-tinta">Veículos</h2>
-          <button onClick={abrirNovoVeiculo} className="text-sm text-brand-600 hover:underline">
+          <button onClick={abrirNovoVeiculo} className="text-sm text-brand-texto hover:underline">
             + Adicionar
           </button>
         </div>
@@ -574,8 +574,8 @@ export default function ClienteDetailPage() {
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-3">
                   <CopiarVeiculo veiculo={v} label="Copiar" />
-                  <button onClick={() => abrirEdicaoVeiculo(v)} className="text-sm text-brand-600 hover:underline">Editar</button>
-                  <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-brand-600 hover:underline">Nova OS</Link>
+                  <button onClick={() => abrirEdicaoVeiculo(v)} className="text-sm text-brand-texto hover:underline">Editar</button>
+                  <Link href={`/os/nova?clienteId=${cliente.id}&veiculoId=${v.id}`} className="text-sm text-brand-texto hover:underline">Nova OS</Link>
                   {podeExcluir && (
                     <button onClick={() => deleteVeiculo(v)} className="text-sm text-perigo hover:underline">Excluir</button>
                   )}
@@ -590,7 +590,7 @@ export default function ClienteDetailPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-tinta">Ordens de serviço</h2>
-          <Link href={`/os/nova?clienteId=${cliente.id}`} className="text-sm text-brand-600 hover:underline">+ Nova OS</Link>
+          <Link href={`/os/nova?clienteId=${cliente.id}`} className="text-sm text-brand-texto hover:underline">+ Nova OS</Link>
         </div>
 
         {cliente.ordens.length === 0 ? (

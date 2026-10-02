@@ -71,7 +71,7 @@ export function Campo({
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-tinta-2">
           {label}
-          {obrigatorio && <span className="text-brand-600"> *</span>}
+          {obrigatorio && <span className="text-brand-texto"> *</span>}
         </span>
         {children}
       </label>

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Poppins } from "next/font/google";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,7 +13,16 @@ import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
 import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
 import { cssDoTema } from "@/lib/tema";
+import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import "./globals.css";
+
+// Fonte da marca boxOS, só para a logo e os títulos (ver `font-marca` no Tailwind).
+// O `next/font` baixa o arquivo no build e o serve daqui — o navegador não chama o Google.
+const poppins = Poppins({
+  weight: ["600", "700"],
+  subsets: ["latin"],
+  variable: "--fonte-marca",
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -21,6 +31,8 @@ export const viewport: Viewport = {
   // `cover` é o que faz `env(safe-area-inset-*)` valer alguma coisa. Sem isto a
   // barra colada no rodapé fica sob o indicador de home do iPhone.
   viewportFit: "cover",
+  // Barra do navegador no Android na cor do ícone boxOS.
+  themeColor: GRAFITE_BOXOS,
 };
 
 /** Configuração da oficina de quem está logado; o padrão para quem não está. */
@@ -28,14 +40,23 @@ async function configuracaoDaSessao(usuario: Awaited<ReturnType<typeof getUsuari
   return getConfiguracao(usuario ? bancoDaOficina(usuario.oficinaId) : null);
 }
 
-// Título, descrição e ícone saem do painel de configurações — a aba do navegador
-// mostra o nome da oficina, não o de quem escreveu o sistema.
+// A aba e o ícone são do sistema (boxOS); a logo da oficina fica só nos documentos.
+// Logado, o nome da oficina vai na frente para distinguir abas de oficinas diferentes.
 export async function generateMetadata(): Promise<Metadata> {
-  const config = await configuracaoDaSessao(await getUsuarioAtual());
+  const usuario = await getUsuarioAtual();
+  const config = usuario ? await configuracaoDaSessao(usuario) : null;
   return {
-    title: config.nome,
-    description: "Gestão simples para oficinas mecânicas.",
-    icons: config.logoUrl ? { icon: config.logoUrl, apple: config.logoUrl } : undefined,
+    title: config ? `${nomeDoMenu(config)} · boxOS` : "boxOS",
+    applicationName: "boxOS",
+    description: "boxOS — gestão para oficinas mecânicas.",
+    icons: {
+      icon: [
+        { url: "/brand/favicon_16.png", sizes: "16x16", type: "image/png" },
+        { url: "/brand/favicon_32.png", sizes: "32x32", type: "image/png" },
+        { url: "/brand/favicon_48.png", sizes: "48x48", type: "image/png" },
+      ],
+      apple: { url: "/brand/favicon_180.png", sizes: "180x180", type: "image/png" },
+    },
   };
 }
 
@@ -72,10 +93,10 @@ export default async function RootLayout({
   );
 
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={poppins.variable}>
       <head>
         {/* Cores da oficina. Vai no <head> para o tema já valer na primeira pintura,
-            sem piscar o vermelho padrão antes de trocar. */}
+            sem piscar o amarelo padrão do boxOS antes de trocar. */}
         <style id="tema-da-marca" dangerouslySetInnerHTML={{ __html: cssDoTema(config) }} />
         {/* Claro ou escuro, também antes da primeira pintura — senão a tela nasce
             branca e pisca para escura no primeiro render. */}
@@ -137,7 +158,6 @@ async function AppComMenu({
       <Sidebar
         pendingCount={pendingCount}
         nome={nomeDoMenu(config)}
-        logoUrl={config.logoUrl}
         usuario={{ nome: usuario.nome, papel: usuario.papel, podeFinanceiro: usuario.podeFinanceiro }}
       />
       <main className="pt-14 pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-56 md:pt-0">

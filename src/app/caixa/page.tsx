@@ -84,7 +84,7 @@ export default function CaixaPage() {
             <Avancar tamanho={16} />
           </button>
           {!isHoje && (
-            <button onClick={() => setData(hojeISO())} className="text-xs text-brand-600 hover:underline">
+            <button onClick={() => setData(hojeISO())} className="text-xs text-brand-texto hover:underline">
               Hoje
             </button>
           )}

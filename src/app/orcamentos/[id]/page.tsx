@@ -6,6 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
 import { anoVeiculo, corStatusOrcamento, labelStatusOrcamento, ORCAMENTO_STATUS } from "@/lib/constants";
+import { EMITIDO_COM } from "@/lib/configuracao";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
@@ -335,7 +336,7 @@ export default function OrcamentoDetailPage() {
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-tinta-3">Orçamento</p>
-                <p className="text-3xl font-black text-brand-600">#{orc.numero}</p>
+                <p className="text-3xl font-black text-brand-texto">#{orc.numero}</p>
               </div>
               <div className="text-right">
                 <span className={corStatusOrcamento(orc.status)}>{labelStatusOrcamento(orc.status)}</span>
@@ -452,6 +453,7 @@ export default function OrcamentoDetailPage() {
             <p className="mt-6 text-center text-xs text-tinta-3">
               Este documento é um orçamento e não possui valor fiscal.
             </p>
+            <p className="mt-2 text-center text-[10px] text-tinta-3">{EMITIDO_COM}</p>
           </div>
         </div>
 

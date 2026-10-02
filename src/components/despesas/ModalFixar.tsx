@@ -100,7 +100,7 @@ export function ModalFixar({
       onFechar={onFechar}
     >
       <form onSubmit={salvar} className="space-y-3">
-        <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs leading-relaxed text-brand-800">
+        <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs leading-relaxed text-brand-texto">
           A partir de <strong>{rotuloMes(gasto.competencia)}</strong> esta conta passa a se
           lançar sozinha todo mês. O lançamento que já existe continua sendo o deste mês —
           não vira uma cobrança a mais.

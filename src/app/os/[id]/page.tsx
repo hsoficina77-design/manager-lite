@@ -24,7 +24,7 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { CampoDinheiro, Entrada, Selecao } from "@/components/ui/Campos";
 import { Modal } from "@/components/ui/Modal";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
-import { valorReserva, type Configuracao } from "@/lib/configuracao";
+import { EMITIDO_COM, valorReserva, type Configuracao } from "@/lib/configuracao";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Caixa, Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
 import { TextoFormatado } from "@/components/ui/TextoFormatado";
@@ -531,7 +531,7 @@ export default function OSDetailPage() {
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-tinta-3">Ordem de Serviço</p>
-                <p className="text-3xl font-black text-brand-600">#{os.numero}</p>
+                <p className="text-3xl font-black text-brand-texto">#{os.numero}</p>
               </div>
               <div className="text-right">
                 <span className={cn("rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap", corStatus(os.status))}>
@@ -703,6 +703,8 @@ export default function OSDetailPage() {
                 </div>
               </div>
             </div>
+
+            <p className="mt-8 text-center text-[10px] text-tinta-3">{EMITIDO_COM}</p>
           </div>
         </div>
 

@@ -28,25 +28,31 @@
        deixando fundo quase branco com letra cinza-clara ilegível. */
     color-scheme: light;
 
-    /* --- identidade padrão (vermelho + menu preto) ------------------------ */
-    --brand-50: 254 241 241;
-    --brand-100: 252 227 227;
-    --brand-200: 249 204 204;
-    --brand-300: 244 174 174;
-    --brand-400: 235 126 126;
-    --brand-500: 226 78 78;
-    --brand-600: 220 38 38;
-    --brand-700: 183 30 30;
-    --brand-800: 150 27 27;
-    --brand-900: 130 28 28;
-    --brand-950: 74 18 18;
-    --brand-fg: 255 255 255;
+    /* --- identidade padrão (amarelo + grafite do boxOS) -------------------
+       Gerada por `variaveisDoTema` (src/lib/tema.ts) com as cores padrão; o layout
+       sobrescreve com as cores da oficina. */
+    --brand-50: 255 250 240;
+    --brand-100: 255 245 223;
+    --brand-200: 255 237 196;
+    --brand-300: 255 226 157;
+    --brand-400: 255 207 97;
+    --brand-500: 255 189 36;
+    --brand-600: 242 169 0;
+    --brand-700: 201 140 0;
+    --brand-800: 166 117 3;
+    --brand-900: 143 102 8;
+    --brand-950: 84 61 7;
+    --brand-fg: 24 24 27;
+    --brand-texto-claro: 150 105 0;
+    --brand-texto-noturno: 242 169 0;
+    /* A marca como texto. O tema escuro troca para a versão noturna. */
+    --brand-texto: var(--brand-texto-claro);
 
-    --menu-bg: 9 9 11;
+    --menu-bg: 30 35 41;
     --menu-fg: 255 255 255;
-    --menu-borda: 37 37 45;
-    --menu-hover: 46 46 56;
-    --menu-texto: 162 162 162;
+    --menu-borda: 56 65 76;
+    --menu-hover: 64 75 88;
+    --menu-texto: 170 171 174;
 
     /* --- neutros -----------------------------------------------------------
        Levemente puxados para o azul-ardósia. Cinza puro é o cinza que ninguém
@@ -126,6 +132,8 @@
     :root:not([data-tema="claro"]) {
       color-scheme: dark;
 
+      --brand-texto: var(--brand-texto-noturno);
+
       --fundo: 14 19 23;
       --superficie: 22 29 36;
       --superficie-2: 28 36 44;
@@ -187,6 +195,8 @@
   /* Escolha explícita do usuário vence os dois lados. */
   :root[data-tema="escuro"] {
     color-scheme: dark;
+
+    --brand-texto: var(--brand-texto-noturno);
 
     --fundo: 14 19 23;
     --superficie: 22 29 36;
@@ -299,10 +309,17 @@
     }
   }
 
+  /* Títulos de tela na fonte da marca (Poppins). Regra única em vez de uma classe
+     em cada `h1` espalhado pelas telas. O nome da oficina no topo dos documentos
+     também é um `h1` e sai daqui com `font-sans`: a identidade ali é da oficina. */
+  h1 {
+    font-family: var(--fonte-marca), ui-sans-serif, system-ui, sans-serif;
+  }
+
   /* Foco visível e consistente. Antes cada componente resolvia por conta —
      inputs com anel, botões e links com nada. */
   :focus-visible {
-    outline: 2px solid rgb(var(--brand-600));
+    outline: 2px solid rgb(var(--brand-texto));
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -420,6 +437,7 @@
     --tinta-3: 91 104 117;
     --linha: 220 226 232;
     --linha-forte: 195 204 213;
+    --brand-texto: var(--brand-texto-claro);
   }
 
   body {

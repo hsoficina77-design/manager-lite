@@ -198,7 +198,7 @@ export default function ClienteSelect({
                       className={
                         "flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm min-h-[44px] " +
                         (i === destaque ? "bg-brand-50 " : "") +
-                        (ativo ? "font-semibold text-brand-700" : "text-tinta-2")
+                        (ativo ? "font-semibold text-brand-texto" : "text-tinta-2")
                       }
                     >
                       <span className="min-w-0">

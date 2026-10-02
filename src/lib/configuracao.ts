@@ -89,6 +89,12 @@ export function linhasDoCabecalho(config: Configuracao): string[] {
   return linhas;
 }
 
+/**
+ * Assinatura do sistema no fim dos documentos. Só texto, pequeno e cinza: o documento
+ * é da oficina (logo, nome, cor), e o boxOS não pode competir com ela.
+ */
+export const EMITIDO_COM = "Emitido com boxOS";
+
 /** Assinatura do rodapé: o texto livre configurado ou "Oficina · telefone". */
 export function rodapeDoDocumento(config: Configuracao): string {
   if (config.rodapeDocumento?.trim()) return config.rodapeDocumento.trim();

@@ -159,7 +159,7 @@ export function NotificacaoSino({
         <button
           type="button"
           onClick={marcarTodasLidas}
-          className="text-xs font-medium text-brand-600 hover:underline"
+          className="text-xs font-medium text-brand-texto hover:underline"
         >
           Marcar todas como lidas
         </button>

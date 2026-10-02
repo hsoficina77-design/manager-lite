@@ -222,7 +222,7 @@ export default function NovoClientePage() {
               <button
                 type="button"
                 onClick={addTelefone}
-                className="text-sm text-brand-600 hover:underline"
+                className="text-sm text-brand-texto hover:underline"
               >
                 + Adicionar telefone
               </button>

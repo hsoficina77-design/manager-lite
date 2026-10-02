@@ -1,39 +1,28 @@
-// Moldura das telas de fora do sistema (login e primeiro acesso).
+import { LogoBoxOS } from "./marca/LogoBoxOS";
+
+// Moldura das telas de fora do sistema (login, primeiro acesso e convite).
 //
-// Roda sem o menu lateral — quem está aqui ainda não entrou — e já mostra a marca da
-// oficina, para a pessoa reconhecer onde está antes de digitar a senha.
+// Roda sem o menu lateral — quem está aqui ainda não entrou — e mostra a marca do
+// sistema, boxOS. Não há oficina a mostrar: o mesmo endereço atende todas, e só o
+// e-mail digitado diz de qual oficina é a pessoa.
 
 export default function TelaDeEntrada({
-  nome,
-  logoUrl,
   titulo,
   descricao,
   children,
   rodape,
 }: {
-  nome: string;
-  logoUrl: string | null;
   titulo: string;
   descricao: string;
   children: React.ReactNode;
   rodape?: React.ReactNode;
 }) {
-  const inicial = nome.trim().charAt(0).toUpperCase() || "O";
-
   return (
     <div className="flex min-h-screen items-start justify-center bg-fundo px-4 py-10 sm:items-center sm:py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center text-center">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={nome} className="h-16 w-16 object-contain" />
-          ) : (
-            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-black text-brand-fg">
-              {inicial}
-            </span>
-          )}
-          <h1 className="mt-3 text-lg font-bold tracking-tight text-tinta">{nome}</h1>
-        </div>
+        <h1 className="mb-6 flex justify-center text-tinta">
+          <LogoBoxOS className="text-4xl" />
+        </h1>
 
         <div className="rounded-2xl border border-linha bg-superficie p-6 shadow-sm">
           <h2 className="text-base font-semibold text-tinta">{titulo}</h2>

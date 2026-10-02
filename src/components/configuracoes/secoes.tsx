@@ -202,7 +202,10 @@ function Marca({ form, setCampo, logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverL
 
   return (
     <>
-      <Cartao titulo="Logo" ajuda="Aparece no menu, na aba do navegador e no topo dos documentos.">
+      <Cartao
+        titulo="Logo da oficina"
+        ajuda="Aparece só nos documentos: OS, orçamento e comprovante. O sistema usa a marca boxOS."
+      >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-linha-forte bg-superficie-2">
             {logoUrl ? (
@@ -252,7 +255,10 @@ function Marca({ form, setCampo, logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverL
         </div>
       </Cartao>
 
-      <Cartao titulo="Cores" ajuda="Valem no sistema inteiro e nos documentos.">
+      <Cartao
+        titulo="Cores"
+        ajuda="Botões e menu do sistema, ao lado da marca boxOS, e destaques nos documentos."
+      >
         <div className="space-y-5">
           <SeletorDeCor
             titulo="Cor principal"

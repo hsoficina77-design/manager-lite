@@ -6,11 +6,14 @@
 // `bg-brand-600` com `hover:bg-brand-700` continua tendo hover mais escuro,
 // qualquer que seja a cor da oficina.
 
-export const COR_PRIMARIA_PADRAO = "#dc2626"; // red-600 — a cor com que o sistema nasceu
-export const COR_MENU_PADRAO = "#09090b"; // zinc-950
+// Oficina que não escolheu cor nasce nas cores do boxOS — e é nelas que ficam as telas
+// de fora do sistema (login, convite), que não pertencem a oficina nenhuma.
+export const COR_PRIMARIA_PADRAO = "#f2a900"; // amarelo boxOS
+export const COR_MENU_PADRAO = "#1e2329"; // grafite boxOS
 
 /** Sugestões prontas para quem não tem a cor da marca na ponta da língua. */
 export const PALETA_SUGERIDA = [
+  { nome: "boxOS", cor: "#f2a900" },
   { nome: "Vermelho", cor: "#dc2626" },
   { nome: "Laranja", cor: "#ea580c" },
   { nome: "Âmbar", cor: "#d97706" },
@@ -24,6 +27,7 @@ export const PALETA_SUGERIDA = [
 ] as const;
 
 export const MENUS_SUGERIDOS = [
+  { nome: "boxOS", cor: "#1e2329" },
   { nome: "Preto", cor: "#09090b" },
   { nome: "Grafite", cor: "#27272a" },
   { nome: "Azul noite", cor: "#1e293b" },
@@ -159,6 +163,35 @@ export function corDeTexto(hex: string): string {
   return luminancia(hexParaRgb(hex)) > 0.42 ? "#18181b" : "#ffffff";
 }
 
+function contraste(a: RGB, b: RGB): number {
+  const [claro, escuro] = [luminancia(a), luminancia(b)].sort((x, y) => y - x);
+  return (claro + 0.05) / (escuro + 0.05);
+}
+
+// Superfícies contra as quais a cor da marca vira texto (link, número da OS, aba
+// ativa). Precisam bater com `--superficie` em globals.css, nos dois temas.
+const SUPERFICIE_CLARA: RGB = { r: 255, g: 255, b: 255 };
+const SUPERFICIE_ESCURA: RGB = { r: 22, g: 29, b: 36 };
+// Um pouco acima do 4,5:1 do AA: o mesmo texto também aparece sobre `brand-50`,
+// que é quase — mas não exatamente — a superfície.
+const CONTRASTE_TEXTO = 4.8;
+
+/**
+ * A cor da marca no tom mais próximo que ainda se lê como texto sobre a superfície:
+ * escurece (tema claro) ou clareia (tema escuro) só o necessário. Vermelho e azul
+ * saem quase iguais; o amarelo do boxOS vira um âmbar escuro no tema claro — como
+ * texto, o amarelo puro dá 2:1 sobre branco.
+ */
+function corDeTextoDaMarca(hex: string, superficie: RGB, sentido: 1 | -1): RGB {
+  const hsl = rgbParaHsl(hexParaRgb(hex));
+  let cor = hexParaRgb(hex);
+  for (let l = hsl.l; l >= 0 && l <= 100; l += sentido) {
+    cor = hslParaRgb({ ...hsl, l });
+    if (contraste(cor, superficie) >= CONTRASTE_TEXTO) break;
+  }
+  return cor;
+}
+
 function mistura(de: RGB, para: RGB, t: number): RGB {
   return {
     r: Math.round(de.r + (para.r - de.r) * t),
@@ -188,6 +221,11 @@ export function variaveisDoTema(cores: CoresDoTema): Record<string, string> {
     vars[`--brand-${passo}`] = valor;
   }
   vars["--brand-fg"] = triplo(hexParaRgb(corDeTexto(primaria)));
+  // As duas versões, e não `--brand-texto` direto: a prévia do painel aplica estas
+  // variáveis como estilo inline, que venceria a troca de tema. Quem escolhe entre
+  // as duas é globals.css, conforme o tema claro ou escuro.
+  vars["--brand-texto-claro"] = triplo(corDeTextoDaMarca(primaria, SUPERFICIE_CLARA, -1));
+  vars["--brand-texto-noturno"] = triplo(corDeTextoDaMarca(primaria, SUPERFICIE_ESCURA, 1));
 
   // O menu pode ser claro ou escuro; o contraste tem que andar para o lado certo.
   const menuRgb = hexParaRgb(menu);

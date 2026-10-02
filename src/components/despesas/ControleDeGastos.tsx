@@ -428,7 +428,7 @@ export function ControleDeGastos({
                       : [...new Set([...marcados, ...listadas.map((d) => d.id)])]
                   )
                 }
-                className="min-h-11 text-brand-600 hover:underline"
+                className="min-h-11 text-brand-texto hover:underline"
               >
                 {listadas.every((d) => marcados.includes(d.id))
                   ? "Desmarcar os da lista"
@@ -477,7 +477,7 @@ export function ControleDeGastos({
                       enviar(`/api/despesas/${d.id}`, "PUT", { cancelado: false })
                     )
                   }
-                  className="shrink-0 rounded-md px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 disabled:opacity-50"
+                  className="shrink-0 rounded-md px-2 py-1 text-xs text-brand-texto hover:bg-brand-50 disabled:opacity-50"
                 >
                   Trazer de volta
                 </button>
@@ -525,7 +525,7 @@ function NavegacaoMes({
       {!ehMesAtual && (
         <Link
           href={`/despesas?mes=${chaveMes(new Date())}`}
-          className="text-xs text-brand-600 hover:underline"
+          className="text-xs text-brand-texto hover:underline"
         >
           Mês atual
         </Link>

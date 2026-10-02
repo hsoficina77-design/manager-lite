@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { labelPapel, type Papel } from "@/lib/permissoes";
+import { LogoBoxOS, SimboloBoxOS } from "./marca/LogoBoxOS";
 import { BarraInferior } from "./ui/BarraInferior";
 import { NotificacaoSino } from "./ui/Notificacoes";
 import { usePedirSaida } from "./ui/SaidaSegura";
@@ -43,12 +44,10 @@ type LinkDef = {
 export function Sidebar({
   pendingCount = 0,
   nome = "Minha Oficina",
-  logoUrl = null,
   usuario,
 }: {
   pendingCount?: number;
   nome?: string;
-  logoUrl?: string | null;
   usuario: { nome: string; papel: Papel; podeFinanceiro: boolean };
 }) {
   const pathname = usePathname();
@@ -138,34 +137,13 @@ export function Sidebar({
   const toggleExpand = (href: string) =>
     setExpanded((prev) => ({ ...prev, [href]: !prev[href] }));
 
-  // Sem logo configurada, a marca cai numa inicial em bloco — nunca uma imagem quebrada.
-  const inicial = nome.trim().charAt(0).toUpperCase() || "O";
-
-  const marca = (tamanho: "sm" | "md") => {
-    const box = tamanho === "sm" ? "h-8 w-8" : "h-11 w-11";
-    return logoUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={logoUrl} alt={nome} className={cn("shrink-0 object-contain", box)} />
-    ) : (
-      <span
-        aria-hidden
-        className={cn(
-          "flex shrink-0 items-center justify-center rounded-lg bg-brand-600 font-black text-brand-fg",
-          box,
-          tamanho === "sm" ? "text-sm" : "text-lg"
-        )}
-      >
-        {inicial}
-      </span>
-    );
-  };
-
+  // O menu é do sistema: logo boxOS em cima e a oficina logo abaixo, pequena — a
+  // logo da oficina fica para os documentos. As hastes e o "box" seguem a cor do
+  // texto do menu, então a logo se acerta sozinha em menu claro ou escuro.
   const brand = (
-    <div className="flex min-w-0 items-center gap-2.5">
-      {marca("md")}
-      <span className="min-w-0 truncate text-sm font-bold tracking-tight text-menu-fg">
-        {nome}
-      </span>
+    <div className="min-w-0 text-menu-fg">
+      <LogoBoxOS className="text-2xl" />
+      <p className="mt-1.5 truncate text-xs font-medium text-menu-texto">{nome}</p>
     </div>
   );
 
@@ -310,7 +288,10 @@ export function Sidebar({
         >
           <IconeMenu tamanho={22} />
         </button>
-        {marca("sm")}
+        {/* No celular não cabe a logo inteira e o nome: fica o símbolo boxOS. */}
+        <span role="img" aria-label="boxOS" className="text-menu-fg">
+          <SimboloBoxOS className="h-7 w-[2.15rem]" />
+        </span>
         <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight text-menu-fg">
           {nome}
         </span>

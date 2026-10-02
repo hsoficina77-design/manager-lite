@@ -38,6 +38,9 @@ const config: Config = {
           DEFAULT: marca("600"),
           // Texto legível sobre a cor da marca (branco ou tinta escura).
           fg: "rgb(var(--brand-fg) / <alpha-value>)",
+          // A marca usada como texto sobre a superfície (link, número da OS, aba
+          // ativa). Escurecida ou clareada até ler bem — ver `corDeTextoDaMarca`.
+          texto: "rgb(var(--brand-texto) / <alpha-value>)",
         },
         // Menu lateral — cor de fundo própria, também configurável.
         menu: {
@@ -96,6 +99,12 @@ const config: Config = {
         // Altura da barra de navegação inferior do celular, usada pelo respiro
         // que as telas reservam para não terminar embaixo dela.
         "barra-inferior": "3.5rem",
+      },
+      fontFamily: {
+        // Poppins, a fonte da marca boxOS. Só na logo e nos títulos de tela — texto
+        // corrido, tabelas e valores continuam na fonte do sistema, que lê melhor
+        // número pequeno. A variável é declarada pelo `next/font` no layout raiz.
+        marca: ["var(--fonte-marca)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

@@ -524,7 +524,7 @@ export default function ContasReceberPage() {
                             <div className="flex flex-wrap items-center gap-2 text-sm">
                               <Link
                                 href={`/os/${os.id}`}
-                                className="shrink-0 font-medium tabular-nums text-brand-600 hover:underline"
+                                className="shrink-0 font-medium tabular-nums text-brand-texto hover:underline"
                               >
                                 #{os.numero}
                               </Link>

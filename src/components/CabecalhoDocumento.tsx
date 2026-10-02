@@ -41,7 +41,7 @@ export default function CabecalhoDocumento() {
         />
       )}
       <div className="min-w-0 flex-1 text-center">
-        <h1 className="text-lg font-black uppercase tracking-wider sm:text-2xl">{config.nome}</h1>
+        <h1 className="font-sans text-lg font-black uppercase tracking-wider sm:text-2xl">{config.nome}</h1>
         {linhas.map((linha) => (
           <p key={linha} className="mt-0.5 text-xs text-tinta-3">
             {linha}

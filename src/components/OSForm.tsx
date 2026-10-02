@@ -441,7 +441,7 @@ export default function OSForm({
                 ) : (
                   <p className="text-sm text-tinta-3">
                     Nenhum mecânico cadastrado.{" "}
-                    <Link href="/mecanicos" className="text-brand-600 underline">Cadastrar mecânico</Link>
+                    <Link href="/mecanicos" className="text-brand-texto underline">Cadastrar mecânico</Link>
                   </p>
                 )}
               </div>

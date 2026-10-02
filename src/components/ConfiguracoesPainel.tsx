@@ -431,11 +431,11 @@ function ItemDaTrilha({
       className={cn(
         "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors",
         ativo
-          ? "bg-brand-50 font-medium text-brand-700"
+          ? "bg-brand-50 font-medium text-brand-texto"
           : "text-tinta-2 hover:bg-superficie-3/70 hover:text-tinta"
       )}
     >
-      <span className={cn(ativo ? "text-brand-600" : "text-tinta-3")}>{secao.icone}</span>
+      <span className={cn(ativo ? "text-brand-texto" : "text-tinta-3")}>{secao.icone}</span>
       <span className="min-w-0 truncate">{secao.titulo}</span>
     </button>
   );
@@ -448,7 +448,7 @@ function ItemDoIndice({ secao, onClick }: { secao: Secao; onClick: () => void })
       onClick={onClick}
       className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-superficie-2 active:bg-superficie-3"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-texto">
         {secao.icone}
       </span>
       <span className="min-w-0 flex-1">
