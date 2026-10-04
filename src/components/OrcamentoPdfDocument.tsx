@@ -2,7 +2,7 @@ import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/
 import { anoVeiculo } from "@/lib/constants";
 import type { FotoPdf } from "@/lib/foto-pdf";
 import { TextoFormatadoPdf } from "@/components/TextoFormatadoPdf";
-import { AMARELO_BOXOS, AMARELO_TEXTO_BOXOS } from "@/components/marca/LogoBoxOS";
+import { corDeTextoNoPapel } from "@/lib/cor-documento";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -144,9 +144,10 @@ export function OrcamentoPdfDocument({
   fotos?: FotoPdf[];
   config?: Configuracao;
 }) {
-  // Identidade da oficina — nome, contatos e rodapé saem do painel; a cor é a do boxOS.
+  // Identidade da oficina — nome, contatos, rodapé e cor saem do painel.
   const cabecalho = linhasDoCabecalho(config);
   const rodape = rodapeDoDocumento(config);
+  const marca = config.corDocumento;
 
   const clienteNome = orc.cliente?.nome || orc.clienteNome?.trim() || "Sem identificação";
   const clienteTelefone = orc.cliente ? orc.cliente.telefone : orc.clienteTelefone;
@@ -175,14 +176,14 @@ export function OrcamentoPdfDocument({
           </View>
           <View>
             <Text style={s.osLabel}>Orçamento</Text>
-            <Text style={[s.osNum, { color: AMARELO_TEXTO_BOXOS }]}>Nº {orc.numero}</Text>
+            <Text style={[s.osNum, { color: corDeTextoNoPapel(marca) }]}>Nº {orc.numero}</Text>
             <Text style={s.osDate}>Data: {dia(orc.createdAt)}</Text>
             {orc.validade ? <Text style={s.osDate}>Validade: {dia(orc.validade)}</Text> : null}
             <Text style={s.osStatus}>Status: {STATUS_LABEL[orc.status] ?? orc.status}</Text>
           </View>
         </View>
 
-        <View style={[s.rule, { backgroundColor: AMARELO_BOXOS }]} />
+        <View style={[s.rule, { backgroundColor: marca }]} />
 
         {/* Cliente e Veículo */}
         <View style={s.infoBox}>

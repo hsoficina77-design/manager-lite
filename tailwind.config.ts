@@ -41,6 +41,11 @@ const config: Config = {
           // ativa): escurecida no tema claro até ler bem sobre branco.
           texto: "rgb(var(--brand-texto) / <alpha-value>)",
         },
+        // Cor da oficina, só dentro da folha do documento (classe `documento`).
+        doc: {
+          DEFAULT: cor("doc-cor"),
+          texto: cor("doc-texto"),
+        },
         // Menu lateral: branco no tema claro, grafite no escuro.
         menu: {
           DEFAULT: cor("menu-bg"),

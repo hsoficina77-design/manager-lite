@@ -2,7 +2,7 @@ import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/
 import { FOTO_TIPOS, tipoDaFoto, labelStatus, anoVeiculo } from "@/lib/constants";
 import type { FotoPdf } from "@/lib/foto-pdf";
 import { TextoFormatadoPdf } from "@/components/TextoFormatadoPdf";
-import { AMARELO_BOXOS, AMARELO_TEXTO_BOXOS } from "@/components/marca/LogoBoxOS";
+import { corDeTextoNoPapel } from "@/lib/cor-documento";
 import {
   CONFIG_PADRAO,
   linhasDoCabecalho,
@@ -171,9 +171,10 @@ export function OSPdfDocument({
   fotos?: FotoPdf[];
   config?: Configuracao;
 }) {
-  // Identidade da oficina — nome, contatos e rodapé saem do painel; a cor é a do boxOS.
+  // Identidade da oficina — nome, contatos, rodapé e cor saem do painel.
   const cabecalho = linhasDoCabecalho(config);
   const rodape = rodapeDoDocumento(config);
+  const marca = config.corDocumento;
 
   const veicLinha2: string[] = [];
   if (os.veiculo.cor) veicLinha2.push(`Cor: ${os.veiculo.cor}`);
@@ -200,14 +201,14 @@ export function OSPdfDocument({
           </View>
           <View>
             <Text style={s.osLabel}>Ordem de Serviço</Text>
-            <Text style={[s.osNum, { color: AMARELO_TEXTO_BOXOS }]}>Nº {os.numero}</Text>
+            <Text style={[s.osNum, { color: corDeTextoNoPapel(marca) }]}>Nº {os.numero}</Text>
             <Text style={s.osDate}>Abertura: {dia(os.abertura)}</Text>
             {os.fechamento ? <Text style={s.osDate}>Fechamento: {dia(os.fechamento)}</Text> : null}
             <Text style={s.osStatus}>Status: {STATUS_LABEL[os.status] ?? labelStatus(os.status)}</Text>
           </View>
         </View>
 
-        <View style={[s.rule, { backgroundColor: AMARELO_BOXOS }]} />
+        <View style={[s.rule, { backgroundColor: marca }]} />
 
         {/* Cliente e Veículo */}
         <View style={s.infoBox}>

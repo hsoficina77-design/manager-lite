@@ -456,6 +456,11 @@ export const configuracaoSchema = z.object({
   estado: nulavel("Estado", LIMITES.estado).optional(),
   rodapeDocumento: nulavel("Rodapé do documento", LIMITES.documento).optional(),
   mensagemDocumento: nulavel("Mensagem do documento", LIMITES.documento).optional(),
+  corDocumento: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Cor dos documentos: use o formato #rrggbb")
+    .optional(),
   mostrarAssinatura: z.boolean().optional(),
   validadeOrcamentoDias: z.coerce
     .number()

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { guardaApi } from "@/lib/auth";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { CAMPOS_TEXTO } from "@/lib/configuracao";
+import { COR_DOCUMENTO_PADRAO } from "@/lib/cor-documento";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { configuracaoSchema } from "@/lib/schemas";
 
@@ -22,6 +23,8 @@ export async function PUT(request: Request) {
       // O painel manda o formulário inteiro: campo ausente é campo apagado.
       ...Object.fromEntries(CAMPOS_TEXTO.map((campo) => [campo, body[campo] ?? null])),
       nome: body.nome,
+      // Coluna antiga, uso novo: é a cor dos documentos (ver configuracao-db.ts).
+      corPrimaria: body.corDocumento?.toLowerCase() ?? COR_DOCUMENTO_PADRAO,
       mostrarAssinatura: body.mostrarAssinatura ?? false,
       validadeOrcamentoDias: body.validadeOrcamentoDias,
       reservaLucroAtiva: body.reservaLucroAtiva ?? false,

@@ -1,7 +1,6 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import { labelFormaPagamento } from "@/lib/constants";
 import { CONFIG_PADRAO, EMITIDO_COM, rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
-import { AMARELO_BOXOS } from "@/components/marca/LogoBoxOS";
 
 type Pagamento = {
   id: string | number; valor: number; formaPagamento: string; data: string; obs: string | null;
@@ -172,7 +171,7 @@ export function ComprovantePagamentoPdfDocument({
           </View>
         </View>
 
-        <View style={[s.rule, { backgroundColor: AMARELO_BOXOS }]} />
+        <View style={[s.rule, { backgroundColor: config.corDocumento }]} />
 
         <Text style={s.title}>Comprovante de Pagamento</Text>
         {unico ? (

@@ -3,8 +3,9 @@
 // Peças visuais compartilhadas pelas seções do painel. Ficam aqui para uma seção
 // nova nascer com a mesma cara das outras sem copiar classe de Tailwind.
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { corValida } from "@/lib/cor-documento";
 
 export const inputCls =
   "w-full rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm text-tinta " +
@@ -75,6 +76,80 @@ export function Campo({
         {children}
       </label>
       {ajuda && <p className="mt-1 text-xs text-tinta-3">{ajuda}</p>}
+    </div>
+  );
+}
+
+/** Campo de cor: amostra clicável, hex digitável e atalhos prontos. */
+export function SeletorDeCor({
+  titulo,
+  valor,
+  padrao,
+  sugestoes,
+  onChange,
+}: {
+  titulo: string;
+  valor: string;
+  padrao: string;
+  sugestoes: readonly { nome: string; cor: string }[];
+  onChange: (cor: string) => void;
+}) {
+  // O campo de texto guarda o que está sendo digitado; só cor válida vai para o formulário.
+  const [texto, setTexto] = useState(valor);
+  useEffect(() => setTexto(valor), [valor]);
+
+  return (
+    <div>
+      {valor.toLowerCase() !== padrao && (
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => onChange(padrao)}
+            className="text-xs text-tinta-3 underline hover:text-tinta-2"
+          >
+            Voltar ao laranja boxOS
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="color"
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={titulo}
+          className="h-10 w-14 cursor-pointer rounded-lg border border-linha-forte bg-superficie p-1"
+        />
+        <input
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            if (corValida(e.target.value)) onChange(e.target.value.toLowerCase());
+          }}
+          onBlur={() => setTexto(valor)}
+          spellCheck={false}
+          aria-label={`${titulo} em hexadecimal`}
+          className={cn(inputCls, "w-28 font-mono uppercase")}
+        />
+        <div className="flex flex-wrap gap-1.5">
+          {sugestoes.map((s) => (
+            <button
+              key={s.cor}
+              type="button"
+              title={s.nome}
+              aria-label={s.nome}
+              onClick={() => onChange(s.cor)}
+              style={{ backgroundColor: s.cor }}
+              className={cn(
+                "h-8 w-8 rounded-full border transition-transform hover:scale-110",
+                valor.toLowerCase() === s.cor
+                  ? "border-contraste ring-2 ring-linha-forte"
+                  : "border-linha"
+              )}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

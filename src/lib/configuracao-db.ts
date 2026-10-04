@@ -1,6 +1,7 @@
 // Leitura da configuração da oficina no banco. Server-side apenas (importa Prisma).
 
 import type { BancoDaOficina } from "@/lib/db-oficina";
+import { normalizaCor } from "@/lib/cor-documento";
 import { CONFIG_PADRAO, type Configuracao } from "@/lib/configuracao";
 import { URL_TTL_SEGUNDOS, urlAssinada } from "@/lib/supabase-storage";
 
@@ -62,6 +63,9 @@ export async function getConfiguracao(banco: BancoDaOficina | null): Promise<Con
       cidade: row.cidade,
       estado: row.estado,
       logoUrl: await urlDaLogo(row.logoPath, row.logoUrl),
+      // A coluna ainda se chama `corPrimaria` (era a cor do sistema inteiro); hoje
+      // só pinta os documentos, e cada oficina mantém a cor que já tinha escolhido.
+      corDocumento: normalizaCor(row.corPrimaria),
       rodapeDocumento: row.rodapeDocumento,
       mensagemDocumento: row.mensagemDocumento,
       mostrarAssinatura: row.mostrarAssinatura,

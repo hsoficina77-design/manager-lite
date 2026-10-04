@@ -7,6 +7,7 @@ import { CONFIG_PADRAO, type Configuracao } from "@/lib/configuracao";
 export type Form = {
   nome: string; nomeCurto: string; cnpj: string; telefone: string; whatsapp: string;
   email: string; site: string; cep: string; endereco: string; cidade: string; estado: string;
+  corDocumento: string;
   rodapeDocumento: string; mensagemDocumento: string;
   mostrarAssinatura: boolean; validadeOrcamentoDias: string;
   reservaLucroAtiva: boolean; reservaLucroPercentual: string;
@@ -25,6 +26,7 @@ export function paraForm(c: Configuracao): Form {
     endereco: c.endereco ?? "",
     cidade: c.cidade ?? "",
     estado: c.estado ?? "",
+    corDocumento: c.corDocumento,
     rodapeDocumento: c.rodapeDocumento ?? "",
     mensagemDocumento: c.mensagemDocumento ?? "",
     mostrarAssinatura: c.mostrarAssinatura,
@@ -51,6 +53,7 @@ export function paraConfig(form: Form, logoUrl: string | null): Configuracao {
     cidade: texto(form.cidade),
     estado: texto(form.estado),
     logoUrl,
+    corDocumento: form.corDocumento,
     rodapeDocumento: texto(form.rodapeDocumento),
     mensagemDocumento: texto(form.mensagemDocumento),
     mostrarAssinatura: form.mostrarAssinatura,

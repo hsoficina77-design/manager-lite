@@ -25,6 +25,7 @@ import { CampoDinheiro, Entrada, Selecao } from "@/components/ui/Campos";
 import { Modal } from "@/components/ui/Modal";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
 import { EMITIDO_COM, valorReserva, type Configuracao } from "@/lib/configuracao";
+import { estiloDoDocumento } from "@/lib/cor-documento";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Caixa, Chevron, Lapis, Lixeira, Olho, Voltar } from "@/components/ui/Icones";
 import { TextoFormatado } from "@/components/ui/TextoFormatado";
@@ -522,7 +523,10 @@ export default function OSDetailPage() {
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
       {/* Documento da OS — preview de como sai para o cliente (imprimível) */}
       <div className="min-w-0">
-        <div className="print-doc rounded-xl border border-linha bg-superficie text-tinta shadow-sm">
+        <div
+          className="documento print-doc rounded-xl border border-linha bg-superficie text-tinta shadow-sm"
+          style={estiloDoDocumento(config?.corDocumento)}
+        >
           {/* Cabeçalho da oficina — vem do painel de configurações */}
           <CabecalhoDocumento />
 
@@ -531,7 +535,7 @@ export default function OSDetailPage() {
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-tinta-3">Ordem de Serviço</p>
-                <p className="text-3xl font-black text-brand-texto">#{os.numero}</p>
+                <p className="text-3xl font-black text-doc-texto">#{os.numero}</p>
               </div>
               <div className="text-right">
                 <span className={cn("rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap", corStatus(os.status))}>

@@ -284,6 +284,25 @@
     --idade-4-bg: 51 27 25;  --idade-4-fg: 242 145 137; --idade-4-ponto: 214 84 74;
   }
 
+  /* Folha do documento (OS e orçamento na tela). É o único lugar com a cor da
+     oficina: `estiloDoDocumento` (src/lib/cor-documento.ts) escreve as três
+     variáveis no `style` do elemento; sem elas vale o laranja boxOS. O texto
+     usa a versão que lê bem sobre a folha de cada tema. */
+  .documento {
+    --doc-cor: 242 169 0;
+    --doc-texto-claro: 150 105 0;
+    --doc-texto-noturno: 242 169 0;
+    --doc-texto: var(--doc-texto-claro);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tema="claro"]) .documento {
+      --doc-texto: var(--doc-texto-noturno);
+    }
+  }
+  :root[data-tema="escuro"] .documento {
+    --doc-texto: var(--doc-texto-noturno);
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: rgb(var(--linha-forte)) transparent;
@@ -471,6 +490,11 @@
     --brand-200: 255 237 196;
     --brand-300: 255 226 157;
     --brand-texto: 150 105 0;
+  }
+
+  /* Impresso é papel branco: o número volta à versão escura da cor. */
+  .documento {
+    --doc-texto: var(--doc-texto-claro) !important;
   }
 
   body {

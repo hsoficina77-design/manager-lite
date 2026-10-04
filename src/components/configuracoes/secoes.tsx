@@ -13,7 +13,8 @@
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { cn } from "@/lib/utils";
 import { rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
-import { Campo, Cartao, Grade, Icone, inputCls } from "./campos";
+import { COR_DOCUMENTO_PADRAO, PALETA_DOCUMENTO } from "@/lib/cor-documento";
+import { Campo, Cartao, Grade, Icone, SeletorDeCor, inputCls } from "./campos";
 import type { Form } from "./form";
 
 export type SecaoProps = {
@@ -191,64 +192,79 @@ function Endereco({ form, setCampo, setForm }: SecaoProps) {
 
 /* ── Marca ──────────────────────────────────────────────────────────────── */
 
-// Só a logo. As cores são as do boxOS em toda oficina — sistema e documentos — e
-// não se escolhem mais aqui: é o que mantém a identidade do software reconhecível.
-function Marca({ logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverLogo }: SecaoProps) {
+// A logo e a cor da oficina valem só nos documentos que ela emite. O sistema é
+// sempre laranja boxOS — é o que mantém a identidade do software reconhecível.
+function Marca({ form, setCampo, logoUrl, enviandoLogo, aoEnviarLogo, aoRemoverLogo }: SecaoProps) {
   const inputLogo = useRef<HTMLInputElement>(null);
 
   return (
-    <Cartao
-      titulo="Logo da oficina"
-      ajuda="Aparece só nos documentos: OS, orçamento e comprovante. O sistema usa a marca boxOS."
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-linha-forte bg-superficie-2">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="Logo da oficina" className="h-20 w-20 object-contain" />
-          ) : (
-            <span className="px-2 text-center text-xs text-tinta-3">Sem logo</span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <input
-            ref={inputLogo}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(e) => {
-              const arquivo = e.target.files?.[0];
-              if (arquivo) aoEnviarLogo(arquivo);
-              e.target.value = "";
-            }}
-          />
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={enviandoLogo}
-              onClick={() => inputLogo.current?.click()}
-              className="min-h-11 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50"
-            >
-              {enviandoLogo ? "Enviando..." : logoUrl ? "Trocar logo" : "Enviar logo"}
-            </button>
-            {logoUrl && (
+    <>
+      <Cartao
+        titulo="Logo da oficina"
+        ajuda="Aparece só nos documentos: OS, orçamento e comprovante. O sistema usa a marca boxOS."
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-linha-forte bg-superficie-2">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="Logo da oficina" className="h-20 w-20 object-contain" />
+            ) : (
+              <span className="px-2 text-center text-xs text-tinta-3">Sem logo</span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <input
+              ref={inputLogo}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                if (arquivo) aoEnviarLogo(arquivo);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={enviandoLogo}
-                onClick={aoRemoverLogo}
-                className="min-h-11 rounded-lg border border-perigo-linha px-3 py-2 text-sm text-perigo hover:bg-perigo-fraco disabled:opacity-50"
+                onClick={() => inputLogo.current?.click()}
+                className="min-h-11 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50"
               >
-                Remover
+                {enviandoLogo ? "Enviando..." : logoUrl ? "Trocar logo" : "Enviar logo"}
               </button>
-            )}
+              {logoUrl && (
+                <button
+                  type="button"
+                  disabled={enviandoLogo}
+                  onClick={aoRemoverLogo}
+                  className="min-h-11 rounded-lg border border-perigo-linha px-3 py-2 text-sm text-perigo hover:bg-perigo-fraco disabled:opacity-50"
+                >
+                  Remover
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-tinta-3">
+              PNG, JPG, WebP ou SVG, até 2MB. PNG com fundo transparente fica melhor no cabeçalho.
+              A logo é salva assim que você escolhe o arquivo.
+            </p>
           </div>
-          <p className="mt-2 text-xs text-tinta-3">
-            PNG, JPG, WebP ou SVG, até 2MB. PNG com fundo transparente fica melhor no cabeçalho.
-            A logo é salva assim que você escolhe o arquivo.
-          </p>
         </div>
-      </div>
-    </Cartao>
+      </Cartao>
+
+      <Cartao
+        titulo="Cor dos documentos"
+        ajuda="Só na OS, no orçamento e no comprovante: o filete do cabeçalho e o número. O sistema continua no laranja boxOS."
+      >
+        <SeletorDeCor
+          titulo="Cor dos documentos"
+          valor={form.corDocumento}
+          padrao={COR_DOCUMENTO_PADRAO}
+          sugestoes={PALETA_DOCUMENTO}
+          onChange={(cor) => setCampo("corDocumento", cor)}
+        />
+      </Cartao>
+    </>
   );
 }
 
@@ -493,10 +509,10 @@ export const SECOES: Secao[] = [
   },
   {
     id: "marca",
-    titulo: "Logo",
-    descricao: "A logo da oficina nos documentos.",
+    titulo: "Logo e cor",
+    descricao: "A cara da oficina nos documentos que ela emite.",
     grupo: "Aparência",
-    palavras: ["logo", "logotipo", "marca", "imagem", "identidade visual"],
+    palavras: ["logo", "logotipo", "marca", "imagem", "cor", "identidade visual"],
     previa: "documento",
     icone: (
       <Icone>

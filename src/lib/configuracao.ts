@@ -7,9 +7,10 @@
 // botões de PDF são componentes de cliente e importam os mesmos derivados. A leitura
 // no banco fica em `configuracao-db.ts`.
 //
-// Cor não é configuração: o sistema e os documentos saem sempre nas cores do boxOS
-// (ver globals.css e `marca/LogoBoxOS.tsx`). As colunas `corPrimaria`/`corMenu` da
-// tabela ficaram sem uso.
+// O sistema sai sempre nas cores do boxOS (globals.css). A oficina escolhe cor só para
+// os documentos que emite — `corDocumento`, ver `cor-documento.ts`.
+
+import { COR_DOCUMENTO_PADRAO } from "@/lib/cor-documento";
 
 export type Configuracao = {
   nome: string;
@@ -24,6 +25,8 @@ export type Configuracao = {
   cidade: string | null;
   estado: string | null;
   logoUrl: string | null;
+  /** Filete e número nos documentos emitidos (#rrggbb). Não pinta o sistema. */
+  corDocumento: string;
   rodapeDocumento: string | null;
   mensagemDocumento: string | null;
   mostrarAssinatura: boolean;
@@ -45,6 +48,7 @@ export const CONFIG_PADRAO: Configuracao = {
   cidade: null,
   estado: null,
   logoUrl: null,
+  corDocumento: COR_DOCUMENTO_PADRAO,
   rodapeDocumento: null,
   mensagemDocumento: null,
   mostrarAssinatura: true,
@@ -89,7 +93,7 @@ export function linhasDoCabecalho(config: Configuracao): string[] {
 
 /**
  * Assinatura do sistema no fim dos documentos. Só texto, pequeno e cinza: o documento
- * é da oficina (logo, nome), e o boxOS não pode competir com ela.
+ * é da oficina (logo, nome, cor), e o boxOS não pode competir com ela.
  */
 export const EMITIDO_COM = "Emitido com boxOS";
 

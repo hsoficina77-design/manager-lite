@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import { cn, formatCurrency, formatDate, nomeCliente, telefoneCliente, descricaoVeiculo, ehRascunho } from "@/lib/utils";
 import { anoVeiculo, corStatusOrcamento, labelStatusOrcamento, ORCAMENTO_STATUS } from "@/lib/constants";
 import { EMITIDO_COM } from "@/lib/configuracao";
+import { estiloDoDocumento } from "@/lib/cor-documento";
+import { useConfiguracao } from "@/lib/useConfiguracao";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Esqueleto, Metrica } from "@/components/ui/Dados";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
@@ -65,6 +67,7 @@ export default function OrcamentoDetailPage() {
   const confirmar = useConfirmar();
   const avisar = useAvisar();
   const [orc, setOrc] = useState<Orcamento | null>(null);
+  const config = useConfiguracao();
   const [loading, setLoading] = useState(true);
   const [changingStatus, setChangingStatus] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -327,7 +330,10 @@ export default function OrcamentoDetailPage() {
 
       {/* Documento do orçamento — imprimível */}
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 sm:py-8">
-        <div className="print-doc rounded-xl border border-linha bg-superficie text-tinta shadow-sm">
+        <div
+          className="documento print-doc rounded-xl border border-linha bg-superficie text-tinta shadow-sm"
+          style={estiloDoDocumento(config?.corDocumento)}
+        >
           {/* Cabeçalho da oficina — vem do painel de configurações */}
           <CabecalhoDocumento />
 
@@ -336,7 +342,7 @@ export default function OrcamentoDetailPage() {
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-tinta-3">Orçamento</p>
-                <p className="text-3xl font-black text-brand-texto">#{orc.numero}</p>
+                <p className="text-3xl font-black text-doc-texto">#{orc.numero}</p>
               </div>
               <div className="text-right">
                 <span className={corStatusOrcamento(orc.status)}>{labelStatusOrcamento(orc.status)}</span>
