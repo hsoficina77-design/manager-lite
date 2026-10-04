@@ -139,7 +139,7 @@ export function Sidebar({
 
   // O menu é do sistema: logo boxOS em cima e a oficina logo abaixo, pequena — a
   // logo da oficina fica para os documentos. As hastes e o "box" seguem a cor do
-  // texto do menu, então a logo se acerta sozinha em menu claro ou escuro.
+  // texto do menu: grafite no menu branco do tema claro, brancas no grafite do escuro.
   const brand = (
     <div className="min-w-0 text-menu-fg">
       <LogoBoxOS className="text-2xl" />
@@ -147,9 +147,8 @@ export function Sidebar({
     </div>
   );
 
-  // O contador de pendências não usa o vermelho da marca: numa oficina de
-  // identidade vermelha ele sumiria dentro do próprio menu. O anel na cor do
-  // fundo o separa de qualquer identidade escolhida.
+  // O contador de pendências é perigo, não marca: em laranja ele se confundiria
+  // com o item ativo. O anel na cor do fundo o descola do ícone ao lado.
   const contador = (n: number, className?: string) => (
     <span
       className={cn(
@@ -175,7 +174,7 @@ export function Sidebar({
               className={cn(
                 "flex items-center rounded-md transition-colors",
                 isActive && !childActive
-                  ? "bg-brand-700 text-brand-fg"
+                  ? "bg-brand-600 text-brand-fg"
                   : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
               )}
             >
@@ -213,7 +212,7 @@ export function Sidebar({
                     className={cn(
                       "flex min-h-11 items-center rounded-md px-3 py-2 text-sm transition-colors",
                       isLinkActive(child)
-                        ? "bg-brand-700 font-medium text-brand-fg"
+                        ? "bg-brand-600 font-medium text-brand-fg"
                         : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
                     )}
                   >
@@ -239,7 +238,7 @@ export function Sidebar({
           className={cn(
             "flex min-h-11 items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
             pathname.startsWith("/configuracoes")
-              ? "bg-brand-700 text-brand-fg"
+              ? "bg-brand-600 text-brand-fg"
               : "text-menu-texto hover:bg-menu-hover hover:text-menu-fg"
           )}
         >
@@ -270,7 +269,8 @@ export function Sidebar({
   return (
     <>
       {/* Menu lateral do desktop. Fixo, porque agora quem rola é o documento. */}
-      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-menu text-menu-fg md:flex">
+      {/* A borda separa o menu branco do fundo no tema claro. */}
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-menu-borda bg-menu text-menu-fg md:flex">
         <div className="flex items-center justify-between gap-2 border-b border-menu-borda px-4 py-5">
           {brand}
           <NotificacaoSino papel={usuario.papel} className="-mr-1" painelDesktop="esquerda" />
@@ -280,7 +280,7 @@ export function Sidebar({
       </aside>
 
       {/* Barra superior do celular */}
-      <header className="no-print fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 bg-menu px-4 text-menu-fg md:hidden">
+      <header className="no-print fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-menu-borda bg-menu px-4 text-menu-fg md:hidden">
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"

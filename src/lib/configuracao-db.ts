@@ -1,7 +1,6 @@
 // Leitura da configuração da oficina no banco. Server-side apenas (importa Prisma).
 
 import type { BancoDaOficina } from "@/lib/db-oficina";
-import { COR_MENU_PADRAO, COR_PRIMARIA_PADRAO, normalizaCor } from "@/lib/tema";
 import { CONFIG_PADRAO, type Configuracao } from "@/lib/configuracao";
 import { URL_TTL_SEGUNDOS, urlAssinada } from "@/lib/supabase-storage";
 
@@ -63,8 +62,6 @@ export async function getConfiguracao(banco: BancoDaOficina | null): Promise<Con
       cidade: row.cidade,
       estado: row.estado,
       logoUrl: await urlDaLogo(row.logoPath, row.logoUrl),
-      corPrimaria: normalizaCor(row.corPrimaria, COR_PRIMARIA_PADRAO),
-      corMenu: normalizaCor(row.corMenu, COR_MENU_PADRAO),
       rodapeDocumento: row.rodapeDocumento,
       mensagemDocumento: row.mensagemDocumento,
       mostrarAssinatura: row.mostrarAssinatura,

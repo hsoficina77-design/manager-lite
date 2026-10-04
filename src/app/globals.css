@@ -7,14 +7,14 @@
    ----------------------------------------------------------------------------
    Duas famílias, com papéis separados de propósito:
 
-   brand-* / menu-*  identidade da oficina, escolhida no painel de configurações.
+   brand-* / menu-*  identidade do boxOS: o laranja da logo (#F2A900) sobre
+                     branco no tema claro e sobre grafite no escuro. Fixa — a
+                     oficina não escolhe cor; a marca do software é uma só.
    tudo o resto      significado: superfície, tinta, linha, e os três semáforos
                      (ok, atenção, perigo).
 
-   Perigo é token próprio e não deriva da marca. Uma oficina com identidade
-   vermelha não pode fazer "Excluir" parecer "Nova OS" — por isso o vermelho de
-   alerta é mais escuro e mais alaranjado que o vermelho padrão da marca, e as
-   ações destrutivas são sempre contornadas, nunca sólidas.
+   Perigo é token próprio e não deriva da marca: "Excluir" nunca pode parecer
+   "Nova OS", e as ações destrutivas são sempre contornadas, nunca sólidas.
 
    O tema escuro troca só os valores destas variáveis. Nenhum componente usa
    `dark:` — se um token existe, ele já funciona nos dois temas.
@@ -28,9 +28,10 @@
        deixando fundo quase branco com letra cinza-clara ilegível. */
     color-scheme: light;
 
-    /* --- identidade padrão (amarelo + grafite do boxOS) -------------------
-       Gerada por `variaveisDoTema` (src/lib/tema.ts) com as cores padrão; o layout
-       sobrescreve com as cores da oficina. */
+    /* --- identidade boxOS ---------------------------------------------------
+       Escala do laranja da logo, ancorada no 600 = #F2A900 (AMARELO_BOXOS em
+       marca/LogoBoxOS.tsx). Sobre o 600 o texto é tinta escura: branco sobre
+       este laranja dá 2:1. */
     --brand-50: 255 250 240;
     --brand-100: 255 245 223;
     --brand-200: 255 237 196;
@@ -43,16 +44,16 @@
     --brand-900: 143 102 8;
     --brand-950: 84 61 7;
     --brand-fg: 24 24 27;
-    --brand-texto-claro: 150 105 0;
-    --brand-texto-noturno: 242 169 0;
-    /* A marca como texto. O tema escuro troca para a versão noturna. */
-    --brand-texto: var(--brand-texto-claro);
+    /* A marca como texto (link, número da OS, aba ativa): o laranja escurecido até
+       4,8:1 sobre branco — o puro dá 2:1. No escuro ele já lê bem como está. */
+    --brand-texto: 150 105 0;
 
-    --menu-bg: 30 35 41;
-    --menu-fg: 255 255 255;
-    --menu-borda: 56 65 76;
-    --menu-hover: 64 75 88;
-    --menu-texto: 170 171 174;
+    /* Menu branco, com a logo na versão principal (hastes grafite). */
+    --menu-bg: 255 255 255;
+    --menu-fg: 30 35 41;
+    --menu-borda: 220 226 232;
+    --menu-hover: 239 241 244;
+    --menu-texto: 61 71 82;
 
     /* --- neutros -----------------------------------------------------------
        Levemente puxados para o azul-ardósia. Cinza puro é o cinza que ninguém
@@ -132,7 +133,21 @@
     :root:not([data-tema="claro"]) {
       color-scheme: dark;
 
-      --brand-texto: var(--brand-texto-noturno);
+      /* Os tons claros da marca viram âmbar escuro: são fundo de item selecionado e
+       de aviso (`bg-brand-50 text-brand-texto`), e um creme no meio da tela
+       escura ofuscaria e apagaria o texto em laranja por cima. */
+    --brand-50: 48 39 18;
+    --brand-100: 61 49 20;
+    --brand-200: 90 70 22;
+    --brand-300: 134 99 19;
+    --brand-texto: 242 169 0;
+
+    /* Menu grafite, com a logo na versão de fundo escuro (hastes brancas). */
+    --menu-bg: 30 35 41;
+    --menu-fg: 255 255 255;
+    --menu-borda: 56 65 76;
+    --menu-hover: 64 75 88;
+    --menu-texto: 170 171 174;
 
       --fundo: 14 19 23;
       --superficie: 22 29 36;
@@ -196,7 +211,21 @@
   :root[data-tema="escuro"] {
     color-scheme: dark;
 
-    --brand-texto: var(--brand-texto-noturno);
+    /* Os tons claros da marca viram âmbar escuro: são fundo de item selecionado e
+       de aviso (`bg-brand-50 text-brand-texto`), e um creme no meio da tela
+       escura ofuscaria e apagaria o texto em laranja por cima. */
+    --brand-50: 48 39 18;
+    --brand-100: 61 49 20;
+    --brand-200: 90 70 22;
+    --brand-300: 134 99 19;
+    --brand-texto: 242 169 0;
+
+    /* Menu grafite, com a logo na versão de fundo escuro (hastes brancas). */
+    --menu-bg: 30 35 41;
+    --menu-fg: 255 255 255;
+    --menu-borda: 56 65 76;
+    --menu-hover: 64 75 88;
+    --menu-texto: 170 171 174;
 
     --fundo: 14 19 23;
     --superficie: 22 29 36;
@@ -437,7 +466,11 @@
     --tinta-3: 91 104 117;
     --linha: 220 226 232;
     --linha-forte: 195 204 213;
-    --brand-texto: var(--brand-texto-claro);
+    --brand-50: 255 250 240;
+    --brand-100: 255 245 223;
+    --brand-200: 255 237 196;
+    --brand-300: 255 226 157;
+    --brand-texto: 150 105 0;
   }
 
   body {

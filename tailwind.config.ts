@@ -20,9 +20,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Cor da oficina, escolhida no painel de configurações. As variáveis são
-        // escritas pelo layout raiz a partir do banco (ver src/lib/tema.ts) — o
-        // fallback em globals.css mantém o vermelho original se nada for definido.
+        // Laranja do boxOS, fixo para todas as oficinas. A escala e as trocas do
+        // tema escuro moram em globals.css.
         brand: {
           50: marca("50"),
           100: marca("100"),
@@ -36,13 +35,13 @@ const config: Config = {
           900: marca("900"),
           950: marca("950"),
           DEFAULT: marca("600"),
-          // Texto legível sobre a cor da marca (branco ou tinta escura).
+          // Texto legível sobre a cor da marca (tinta escura sobre o laranja).
           fg: "rgb(var(--brand-fg) / <alpha-value>)",
           // A marca usada como texto sobre a superfície (link, número da OS, aba
-          // ativa). Escurecida ou clareada até ler bem — ver `corDeTextoDaMarca`.
+          // ativa): escurecida no tema claro até ler bem sobre branco.
           texto: "rgb(var(--brand-texto) / <alpha-value>)",
         },
-        // Menu lateral — cor de fundo própria, também configurável.
+        // Menu lateral: branco no tema claro, grafite no escuro.
         menu: {
           DEFAULT: cor("menu-bg"),
           fg: cor("menu-fg"),
@@ -74,8 +73,8 @@ const config: Config = {
         },
 
         // --- semáforo ----------------------------------------------------------
-        // Independentes da marca de propósito: uma oficina de identidade vermelha
-        // não pode ter "Excluir" com a mesma cor de "Nova OS".
+        // Independentes da marca de propósito: "Excluir" não pode ter a mesma cor
+        // de "Nova OS".
         ok: {
           DEFAULT: cor("ok"),
           fraco: cor("ok-fraco"),

@@ -6,8 +6,10 @@
 // Este arquivo é puro de propósito (sem Prisma): o cabeçalho dos documentos e os
 // botões de PDF são componentes de cliente e importam os mesmos derivados. A leitura
 // no banco fica em `configuracao-db.ts`.
-
-import { COR_MENU_PADRAO, COR_PRIMARIA_PADRAO } from "@/lib/tema";
+//
+// Cor não é configuração: o sistema e os documentos saem sempre nas cores do boxOS
+// (ver globals.css e `marca/LogoBoxOS.tsx`). As colunas `corPrimaria`/`corMenu` da
+// tabela ficaram sem uso.
 
 export type Configuracao = {
   nome: string;
@@ -22,8 +24,6 @@ export type Configuracao = {
   cidade: string | null;
   estado: string | null;
   logoUrl: string | null;
-  corPrimaria: string;
-  corMenu: string;
   rodapeDocumento: string | null;
   mensagemDocumento: string | null;
   mostrarAssinatura: boolean;
@@ -45,8 +45,6 @@ export const CONFIG_PADRAO: Configuracao = {
   cidade: null,
   estado: null,
   logoUrl: null,
-  corPrimaria: COR_PRIMARIA_PADRAO,
-  corMenu: COR_MENU_PADRAO,
   rodapeDocumento: null,
   mensagemDocumento: null,
   mostrarAssinatura: true,
@@ -91,7 +89,7 @@ export function linhasDoCabecalho(config: Configuracao): string[] {
 
 /**
  * Assinatura do sistema no fim dos documentos. Só texto, pequeno e cinza: o documento
- * é da oficina (logo, nome, cor), e o boxOS não pode competir com ela.
+ * é da oficina (logo, nome), e o boxOS não pode competir com ela.
  */
 export const EMITIDO_COM = "Emitido com boxOS";
 

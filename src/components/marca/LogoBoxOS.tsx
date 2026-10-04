@@ -8,7 +8,12 @@
 
 import { cn } from "@/lib/utils";
 
+// As cores do boxOS são fixas: valem no sistema inteiro e nos documentos de toda
+// oficina. Na tela elas chegam pelos tokens `brand-*`/`menu-*` de globals.css; estas
+// constantes servem a quem não lê CSS (SVG da logo, PDF, metadados do navegador).
 export const AMARELO_BOXOS = "#F2A900";
+/** O laranja como texto sobre branco (4,8:1) — o puro dá 2:1 e não se lê. */
+export const AMARELO_TEXTO_BOXOS = "#966900";
 export const GRAFITE_BOXOS = "#1E2329";
 
 /** O elevador de box, nas coordenadas originais do pacote (72 × 60). */

@@ -442,10 +442,6 @@ export const despesaPagamentoSchema = z.object({
 
 // ── Configuração da oficina ─────────────────────────────────────────────────
 
-const HEX = /^#[0-9a-fA-F]{6}$/;
-const cor = (rotulo: string) =>
-  z.string().trim().regex(HEX, `${rotulo}: use o formato #rrggbb`).optional();
-
 export const configuracaoSchema = z.object({
   nome: obrigatorio("O nome da oficina", LIMITES.nome),
   nomeCurto: nulavel("Nome curto", LIMITES.nomeCurto).optional(),
@@ -460,8 +456,6 @@ export const configuracaoSchema = z.object({
   estado: nulavel("Estado", LIMITES.estado).optional(),
   rodapeDocumento: nulavel("Rodapé do documento", LIMITES.documento).optional(),
   mensagemDocumento: nulavel("Mensagem do documento", LIMITES.documento).optional(),
-  corPrimaria: cor("Cor primária"),
-  corMenu: cor("Cor do menu"),
   mostrarAssinatura: z.boolean().optional(),
   validadeOrcamentoDias: z.coerce
     .number()

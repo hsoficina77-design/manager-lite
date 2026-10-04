@@ -1,10 +1,9 @@
 "use client";
 
-// Pré-visualizações do painel. Cada seção declara qual delas quer ver ao lado
-// dos campos (ver `previa` no registro de seções).
+// Pré-visualização do painel. Cada seção declara se quer vê-la ao lado dos campos
+// (ver `previa` no registro de seções).
 
 import { linhasDoCabecalho, rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
-import { LogoBoxOS } from "@/components/marca/LogoBoxOS";
 
 function Moldura({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
@@ -15,7 +14,7 @@ function Moldura({ titulo, children }: { titulo: string; children: React.ReactNo
   );
 }
 
-/** Topo da OS/orçamento como o cliente recebe: logo, contatos e a cor da marca. */
+/** Topo da OS/orçamento como o cliente recebe: logo, contatos e o laranja do boxOS. */
 export function PreviaDocumento({ config }: { config: Configuracao }) {
   return (
     <Moldura titulo="Topo da OS">
@@ -35,51 +34,15 @@ export function PreviaDocumento({ config }: { config: Configuracao }) {
           </div>
           {config.logoUrl && <div aria-hidden className="h-12 w-12 shrink-0" />}
         </div>
-        <div className="my-3 h-0.5" style={{ backgroundColor: config.corPrimaria }} />
+        <div className="my-3 h-0.5 bg-brand-600" />
         <div className="flex items-end justify-between gap-2">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-tinta-3">Ordem de Serviço</p>
-            <p className="text-xl font-black" style={{ color: config.corPrimaria }}>
-              #128
-            </p>
+            <p className="text-xl font-black text-brand-texto">#128</p>
           </div>
           <p className="truncate text-[10px] text-tinta-3">{rodapeDoDocumento(config)}</p>
         </div>
       </div>
-    </Moldura>
-  );
-}
-
-/** Menu e botões com as cores escolhidas — o tema já está aplicado na tela real. */
-export function PreviaSistema() {
-  return (
-    <Moldura titulo="Sistema">
-      <div className="overflow-hidden rounded-lg border border-linha">
-        <div className="flex">
-          <div className="w-20 shrink-0 space-y-1 bg-menu p-2">
-            {/* A marca do sistema fica no topo do menu, ao lado das cores da oficina. */}
-            <div className="px-1 pb-1 text-menu-fg">
-              <LogoBoxOS className="text-[11px]" />
-            </div>
-            <div className="rounded bg-brand-700 px-2 py-1 text-[10px] font-medium text-brand-fg">
-              Menu
-            </div>
-            <div className="px-2 py-1 text-[10px] text-menu-texto">Clientes</div>
-            <div className="px-2 py-1 text-[10px] text-menu-texto">OS</div>
-          </div>
-          <div className="flex-1 space-y-2 bg-fundo p-3">
-            <div className="rounded bg-brand-600 px-2 py-1.5 text-center text-[10px] font-medium text-brand-fg">
-              Nova OS
-            </div>
-            <div className="rounded border border-linha bg-superficie px-2 py-1.5 text-[10px] text-brand-texto">
-              Link de exemplo
-            </div>
-          </div>
-        </div>
-      </div>
-      <p className="mt-3 text-xs text-tinta-3">
-        As cores já estão aplicadas na tela. Sair sem salvar desfaz.
-      </p>
     </Moldura>
   );
 }

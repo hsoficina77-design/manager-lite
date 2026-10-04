@@ -12,7 +12,6 @@ import { bancoDaOficina, type Db } from "@/lib/db-oficina";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
 import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
-import { cssDoTema } from "@/lib/tema";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import "./globals.css";
 
@@ -31,8 +30,12 @@ export const viewport: Viewport = {
   // `cover` é o que faz `env(safe-area-inset-*)` valer alguma coisa. Sem isto a
   // barra colada no rodapé fica sob o indicador de home do iPhone.
   viewportFit: "cover",
-  // Barra do navegador no Android na cor do ícone boxOS.
-  themeColor: GRAFITE_BOXOS,
+  // Barra do navegador no Android na cor do menu: branca no tema claro, grafite no
+  // escuro. Segue a preferência do aparelho — a escolha manual de tema não chega aqui.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: GRAFITE_BOXOS },
+  ],
 };
 
 /** Configuração da oficina de quem está logado; o padrão para quem não está. */
@@ -70,8 +73,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const [usuario, cabecalhos] = await Promise.all([getUsuarioAtual(), headers()]);
-  // Marca e cores são da oficina de quem entrou. Sem ninguém logado (login, convite),
-  // vale o tema padrão — a tela de entrada é da plataforma, não de uma oficina.
+  // Nome da oficina de quem entrou, para o menu. As cores não vêm daqui: são as do
+  // boxOS para todo mundo (globals.css).
   const config = await configuracaoDaSessao(usuario);
 
   // Cookie válido mas sem usuário significa sessão que deixou de existir — acesso
@@ -95,10 +98,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" className={poppins.variable}>
       <head>
-        {/* Cores da oficina. Vai no <head> para o tema já valer na primeira pintura,
-            sem piscar o amarelo padrão do boxOS antes de trocar. */}
-        <style id="tema-da-marca" dangerouslySetInnerHTML={{ __html: cssDoTema(config) }} />
-        {/* Claro ou escuro, também antes da primeira pintura — senão a tela nasce
+        {/* Claro ou escuro antes da primeira pintura — senão a tela nasce
             branca e pisca para escura no primeiro render. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>

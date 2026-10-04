@@ -19,10 +19,9 @@ import { cn } from "@/lib/utils";
 import { compressLogo } from "@/lib/image-compress";
 import { CONFIG_PADRAO, type Configuracao } from "@/lib/configuracao";
 import { invalidarConfiguracao } from "@/lib/useConfiguracao";
-import { variaveisDoTema } from "@/lib/tema";
 import { useSaidaSegura } from "./ui/SaidaSegura";
 import { Icone } from "./configuracoes/campos";
-import { PreviaDocumento, PreviaSistema } from "./configuracoes/previa";
+import { PreviaDocumento } from "./configuracoes/previa";
 import { SECOES, acharSecao, gruposDeSecoes, type Secao } from "./configuracoes/secoes";
 import { mudou, paraConfig, paraForm, type Form } from "./configuracoes/form";
 
@@ -81,20 +80,7 @@ export default function ConfiguracoesPainel() {
     return () => window.removeEventListener("hashchange", daHash);
   }, []);
 
-  // Pré-visualização ao vivo: as cores escolhidas valem no app inteiro (menu
-  // incluído) enquanto esta tela está aberta. Sair sem salvar desfaz sozinho,
-  // porque a limpeza remove as variáveis e o tema volta ao que veio do banco.
-  useEffect(() => {
-    if (carregando) return;
-    const raiz = document.documentElement;
-    const vars = variaveisDoTema({ corPrimaria: form.corPrimaria, corMenu: form.corMenu });
-    for (const [chave, valor] of Object.entries(vars)) raiz.style.setProperty(chave, valor);
-    return () => {
-      for (const chave of Object.keys(vars)) raiz.style.removeProperty(chave);
-    };
-  }, [form.corPrimaria, form.corMenu, carregando]);
-
-  // Sair daqui com edição pendente pede confirmação: cor e texto digitados nesta
+  // Sair daqui com edição pendente pede confirmação: o texto digitado nesta
   // tela não têm rascunho salvo em lugar nenhum — fechar perde mesmo.
   //
   // O "voltar" fica de fora da guarda porque esta tela já usa o histórico por
@@ -200,7 +186,7 @@ export default function ConfiguracoesPainel() {
       setLogoUrl(json.logoUrl);
       setSalvoAgora(true);
       invalidarConfiguracao();
-      // Recarrega o layout do servidor para o menu e o tema virem do banco.
+      // Recarrega o layout do servidor para o nome no menu vir do banco.
       router.refresh();
       return true;
     } catch (e) {
@@ -281,7 +267,7 @@ export default function ConfiguracoesPainel() {
               <span className="hidden lg:inline">Configurações</span>
             </h1>
             <p className="hidden truncate text-xs text-tinta-3 sm:block">
-              {ativa ? secao.descricao : "Identidade, marca e o que sai nos documentos."}
+              {ativa ? secao.descricao : "Identidade, logo e o que sai nos documentos."}
             </p>
           </div>
 
@@ -396,9 +382,8 @@ export default function ConfiguracoesPainel() {
 
                 {secao.previa && (
                   <aside>
-                    <div className="space-y-4 xl:sticky xl:top-24">
+                    <div className="xl:sticky xl:top-24">
                       <PreviaDocumento config={previa} />
-                      {secao.previa === "marca" && <PreviaSistema />}
                     </div>
                   </aside>
                 )}

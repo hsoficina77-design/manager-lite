@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { guardaApi } from "@/lib/auth";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { CAMPOS_TEXTO } from "@/lib/configuracao";
-import { COR_MENU_PADRAO, COR_PRIMARIA_PADRAO } from "@/lib/tema";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { configuracaoSchema } from "@/lib/schemas";
 
@@ -23,8 +22,6 @@ export async function PUT(request: Request) {
       // O painel manda o formulário inteiro: campo ausente é campo apagado.
       ...Object.fromEntries(CAMPOS_TEXTO.map((campo) => [campo, body[campo] ?? null])),
       nome: body.nome,
-      corPrimaria: body.corPrimaria?.toLowerCase() ?? COR_PRIMARIA_PADRAO,
-      corMenu: body.corMenu?.toLowerCase() ?? COR_MENU_PADRAO,
       mostrarAssinatura: body.mostrarAssinatura ?? false,
       validadeOrcamentoDias: body.validadeOrcamentoDias,
       reservaLucroAtiva: body.reservaLucroAtiva ?? false,
