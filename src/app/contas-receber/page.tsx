@@ -499,7 +499,7 @@ export default function ContasReceberPage() {
                         </Botao>
                         <BaixarComprovante
                           dados={{ cliente: { nome: c.nome }, itens: itensDoCliente(c) }}
-                          rotulo="Comprovante geral"
+                          rotulo="Extrato geral"
                           titulo="Uma imagem só com todas as OS e dívidas em aberto deste cliente"
                         />
                       </div>

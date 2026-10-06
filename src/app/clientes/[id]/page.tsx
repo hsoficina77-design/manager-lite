@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { formatCurrency, formatDate, situacaoRecebimento } from "@/lib/utils";
 import { labelStatus, corStatus, ORIGENS, anoVeiculo } from "@/lib/constants";
@@ -14,6 +15,9 @@ import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Fechar, Mais, Voltar } from "@/components/ui/Icones";
 import { resumoDoTexto } from "@/lib/texto-formatado";
 import { useSaidaSegura } from "@/components/ui/SaidaSegura";
+
+// Puxa o react-pdf; só carrega quando alguém abre o extrato.
+const ExtratoCliente = dynamic(() => import("@/components/ExtratoCliente"), { ssr: false });
 
 const ESTADOS_BR = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS",
@@ -93,6 +97,7 @@ export default function ClienteDetailPage() {
   const [telefones, setTelefones] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [extratoAberto, setExtratoAberto] = useState(false);
   // Um formulário só para cadastrar e editar: `veiculoEditando` guarda o id
   // quando é edição (null = veículo novo).
   const [showVeiculoForm, setShowVeiculoForm] = useState(false);
@@ -336,7 +341,17 @@ export default function ClienteDetailPage() {
 
       {/* Scorecard: quão bom é este cliente */}
       <div>
-        <h2 className="font-semibold text-tinta mb-3">Histórico com o cliente</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-tinta">Histórico com o cliente</h2>
+          <Botao
+            variante="secundario"
+            tamanho="denso"
+            onClick={() => setExtratoAberto(true)}
+            title="Imagem para o cliente com o que foi quitado e o que está em aberto"
+          >
+            Extrato de pagamentos
+          </Botao>
+        </div>
         {stats.totalOS === 0 ? (
           <div className="rounded-xl border border-linha bg-superficie py-8 text-center text-sm text-tinta-3">
             Ainda sem ordens de serviço registradas.
@@ -635,6 +650,8 @@ export default function ClienteDetailPage() {
           </div>
         )}
       </div>
+
+      {extratoAberto && <ExtratoCliente clienteId={cliente.id} onFechar={() => setExtratoAberto(false)} />}
     </div>
   );
 }

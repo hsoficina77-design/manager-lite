@@ -93,12 +93,12 @@ export default function BaixarComprovante({
 
 /**
  * Ex.: "Comprovante - OS 123 - João Silva" com um débito só; com vários, o nome
- * cai para "Comprovante - João Silva" — enfileirar as OS no nome do arquivo não
+ * cai para "Extrato - João Silva" — enfileirar as OS no nome do arquivo não
  * caberia na tela do celular de quem recebe.
  */
 function nomeArquivo({ cliente, itens }: ComprovanteDados) {
   const nome = limparNome(cliente.nome);
-  if (itens.length !== 1) return ["Comprovante", nome].filter(Boolean).join(" - ");
+  if (itens.length !== 1) return ["Extrato", nome].filter(Boolean).join(" - ");
   const identificacao = itens[0].numero != null ? `OS ${itens[0].numero}` : "Dívida";
   return [`Comprovante - ${identificacao}`, nome].filter(Boolean).join(" - ");
 }

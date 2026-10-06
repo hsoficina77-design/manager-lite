@@ -17,6 +17,8 @@ export type ComprovanteItem = {
   veiculo?: { marca: string; modelo: string; placa: string | null };
   /** Desconto já abatido de `total`. Dívida avulsa não tem desconto. */
   desconto?: number;
+  /** Entrega da OS (ou abertura, enquanto não sai) / criação da dívida. Só aparece no extrato. */
+  data?: string;
   total: number;
   valorPago: number;
   pago: boolean;
@@ -25,9 +27,10 @@ export type ComprovanteItem = {
 
 /**
  * Um comprovante por cliente, não por OS: com um débito só ele sai como o recibo
- * de sempre; com vários, ganha a lista de débitos e o histórico marcado com a
- * origem de cada pagamento — é assim que o cliente com duas OS em aberto recebe
- * uma conta só, em vez de duas imagens para juntar de cabeça.
+ * de sempre; com vários, vira extrato — a lista de serviços, cada um marcado
+ * como quitado ou com o saldo, e o histórico com a origem de cada pagamento. É
+ * assim que o cliente com uma OS recém-quitada e outra em aberto recebe uma
+ * conta só, em vez de duas imagens para juntar de cabeça.
  */
 export type ComprovanteDados = {
   cliente: { nome: string };
@@ -37,6 +40,9 @@ export type ComprovanteDados = {
 function brl(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
+function dataCurta(d: string | Date) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
+}
 function dataHora(d: string | Date) {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
@@ -45,6 +51,10 @@ function dataHora(d: string | Date) {
 
 export function identificacaoDoItem(item: ComprovanteItem) {
   return item.numero != null ? `OS Nº ${item.numero}` : (item.descricao ?? "Dívida avulsa");
+}
+export function saldoDoItem(item: ComprovanteItem) {
+  // Centavo de arredondamento do Float não pode deixar um serviço quitado "em aberto".
+  return item.pago ? 0 : Math.max(0, Math.round((item.total - item.valorPago) * 100) / 100);
 }
 function veiculoDoItem(item: ComprovanteItem) {
   if (!item.veiculo) return "";
@@ -85,7 +95,9 @@ const s = StyleSheet.create({
   debInfo: { flex: 1 },
   debLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.ink },
   debSub: { fontSize: 7.5, color: C.mute, marginTop: 1.5 },
+  debDireita: { alignItems: "flex-end" },
   debSaldo: { fontSize: 9.5, fontFamily: "Helvetica-Bold" },
+  debSituacao: { fontSize: 7, marginTop: 1.5, textTransform: "uppercase", letterSpacing: 0.5 },
 
   grid: {
     flexDirection: "row", borderWidth: 1, borderColor: C.line, borderRadius: 10,
@@ -115,6 +127,7 @@ const s = StyleSheet.create({
   histLinha1: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" },
   histValor: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: C.ink },
   histForma: { fontSize: 8.5, color: C.sub, marginLeft: 6 },
+  histObs: { fontSize: 8, color: C.sub, marginTop: 2, lineHeight: 1.35 },
   histData: { fontSize: 8, color: C.mute, marginTop: 2 },
 
   footer: { marginTop: 18, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 },
@@ -139,10 +152,12 @@ export function ComprovantePagamentoPdfDocument({
 
   const total = itens.reduce((acc, i) => acc + i.total, 0);
   const valorPago = itens.reduce((acc, i) => acc + i.valorPago, 0);
-  const saldo = Math.max(0, total - valorPago);
+  const saldo = itens.reduce((acc, i) => acc + saldoDoItem(i), 0);
   // `total` já vem líquido; o bruto só existe aqui, para o cliente enxergar o abatimento.
   const desconto = itens.reduce((acc, i) => acc + (i.desconto ?? 0), 0);
-  const quitado = itens.length > 0 && itens.every((i) => i.pago);
+  const emAberto = itens.filter((i) => saldoDoItem(i) > 0).length;
+  const quitados = itens.length - emAberto;
+  const quitado = itens.length > 0 && emAberto === 0;
 
   const unico = varios ? null : itens[0];
   const veiculoUnico = unico ? veiculoDoItem(unico) : "";
@@ -157,7 +172,11 @@ export function ComprovantePagamentoPdfDocument({
 
   const tituloDoc = unico
     ? `Comprovante - ${identificacaoDoItem(unico)} - ${cliente.nome}`
-    : `Comprovante - ${cliente.nome}`;
+    : `Extrato - ${cliente.nome}`;
+  const resumoContagem = [
+    emAberto > 0 ? `${emAberto} em aberto` : "",
+    quitados > 0 ? `${quitados} ${quitados === 1 ? "quitado" : "quitados"}` : "",
+  ].filter(Boolean).join(" · ");
 
   return (
     <Document title={tituloDoc} author={config.nome}>
@@ -173,7 +192,7 @@ export function ComprovantePagamentoPdfDocument({
 
         <View style={[s.rule, { backgroundColor: config.corDocumento }]} />
 
-        <Text style={s.title}>Comprovante de Pagamento</Text>
+        <Text style={s.title}>{varios ? "Extrato de Pagamentos" : "Comprovante de Pagamento"}</Text>
         {unico ? (
           <Text style={s.subtitle}>
             {identificacaoDoItem(unico)} · {cliente.nome}
@@ -182,29 +201,38 @@ export function ComprovantePagamentoPdfDocument({
         ) : (
           <Text style={s.subtitle}>
             {cliente.nome}
-            {`\n${itens.length} débitos em aberto`}
+            {`\n${resumoContagem}`}
           </Text>
         )}
 
         {varios ? (
           <View style={s.debitos}>
-            <Text style={s.secTitle}>Débitos</Text>
+            <Text style={s.secTitle}>{quitados > 0 ? "Serviços" : "Débitos"}</Text>
             {itens.map((item, idx) => {
-              const saldoItem = Math.max(0, item.total - item.valorPago);
-              const veiculo = veiculoDoItem(item);
+              const saldoItem = saldoDoItem(item);
+              const contexto = [veiculoDoItem(item), item.data ? dataCurta(item.data) : ""]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <View key={idx} style={s.debRow}>
                   <View style={s.debInfo}>
                     <Text style={s.debLabel}>{identificacaoDoItem(item)}</Text>
+                    {contexto ? <Text style={s.debSub}>{contexto}</Text> : null}
                     <Text style={s.debSub}>
-                      {veiculo ? `${veiculo} · ` : ""}
                       Total {brl(item.total)}
                       {item.valorPago > 0 ? ` · Pago ${brl(item.valorPago)}` : ""}
                     </Text>
                   </View>
-                  <Text style={[s.debSaldo, { color: saldoItem > 0 ? C.red : C.green }]}>
-                    {brl(saldoItem)}
-                  </Text>
+                  {saldoItem > 0 ? (
+                    <View style={s.debDireita}>
+                      <Text style={[s.debSaldo, { color: C.red }]}>{brl(saldoItem)}</Text>
+                      <Text style={[s.debSituacao, { color: C.red }]}>Em aberto</Text>
+                    </View>
+                  ) : (
+                    <View style={s.debDireita}>
+                      <Text style={[s.debSaldo, { color: C.green }]}>Quitado</Text>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -257,8 +285,10 @@ export function ComprovantePagamentoPdfDocument({
                 <View style={s.histLinha1}>
                   <Text style={s.histValor}>{brl(p.valor)}</Text>
                   <Text style={s.histForma}>{labelFormaPagamento(p.formaPagamento)}</Text>
-                  {p.obs ? <Text style={s.histForma}>· {p.obs}</Text> : null}
                 </View>
+                {/* Linha própria: na mesma linha do valor, uma observação longa
+                    quebrava recuada debaixo da forma de pagamento. */}
+                {p.obs ? <Text style={s.histObs}>{p.obs}</Text> : null}
                 <Text style={s.histData}>
                   {dataHora(p.data)}
                   {varios ? ` · ${p.origem}` : ""}
@@ -271,7 +301,7 @@ export function ComprovantePagamentoPdfDocument({
         <View style={s.footer}>
           <Text style={s.footerText}>{rodapeDoDocumento(config)}</Text>
           <Text style={s.footerGerado}>
-            Comprovante gerado em {dataHora(geradoEm)}  ·  {EMITIDO_COM}
+            {varios ? "Extrato" : "Comprovante"} gerado em {dataHora(geradoEm)}  ·  {EMITIDO_COM}
           </Text>
         </View>
       </Page>
