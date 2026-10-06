@@ -95,10 +95,24 @@ export const ROTAS_PUBLICAS = [
   "/api/auth/login",
   "/api/auth/primeiro-acesso",
   "/api/convite",
+  // Teste grátis: o link da bio do Instagram. Quem chega ainda não tem conta.
+  "/teste",
+  "/api/teste",
+  "/termos",
+  "/privacidade",
+  // Avisos do gateway de pagamento. Sem cookie, mas com segredo e assinatura próprios,
+  // conferidos na rota antes de qualquer coisa.
+  "/api/webhooks",
 ];
 
 /** Cabeçalho com a rota atual, escrito pelo proxy e lido pelo layout raiz. */
 export const HEADER_ROTA = "x-rota-atual";
+
+/**
+ * Método da requisição, escrito pelo proxy. `guardaApi` precisa dele para o modo só
+ * leitura (leitura passa, gravação não), e o route handler não o expõe por `headers()`.
+ */
+export const HEADER_METODO = "x-metodo-atual";
 
 export function ehRotaPublica(pathname: string): boolean {
   return ROTAS_PUBLICAS.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));

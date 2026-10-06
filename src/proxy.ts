@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
-import { HEADER_ROTA, ehRotaPublica, exigeDono, exigeFinanceiro, exigeExclusao } from "@/lib/permissoes";
+import { HEADER_METODO, HEADER_ROTA, ehRotaPublica, exigeDono, exigeFinanceiro, exigeExclusao } from "@/lib/permissoes";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 
 /** POST de foto: `/api/os/<id>/fotos` e `/api/orcamentos/<id>/fotos`. */
@@ -98,8 +98,11 @@ export default async function proxy(request: NextRequest) {
   // O layout raiz precisa saber que rota está sendo servida para poder mandar ao
   // login quem tem cookie válido mas já não tem sessão — caso de acesso desativado
   // ou derrubado, que só o banco revela e aqui no Edge não dá para consultar.
+  // O método vai junto para o modo só leitura (`guardaApi`). `set` sobrescreve o que o
+  // navegador tiver mandado com o mesmo nome — o valor que chega ao servidor é este.
   const headers = new Headers(request.headers);
   headers.set(HEADER_ROTA, pathname);
+  headers.set(HEADER_METODO, request.method);
   return NextResponse.next({ request: { headers } });
 }
 

@@ -41,6 +41,12 @@ export const REGRAS = {
   primeiroAcesso: { limite: 10, janelaMs: 15 * 60_000 },
   /** Leitura do estado da instalação: a tela chama uma vez, mas faz `count()` no banco. */
   primeiroAcessoLeitura: { limite: 60, janelaMs: 15 * 60_000 },
+  /**
+   * Cadastro do teste grátis (rota pública, aberta a qualquer um que tenha o link da
+   * bio). Uma oficina de verdade se cadastra uma vez; três por hora já dá margem para
+   * errar o e-mail e tentar de novo.
+   */
+  cadastroTeste: { limite: 3, janelaMs: 60 * 60_000 },
   /** Upload de foto: 10MB cada, cobrado do Storage. Um serviço grande rende ~20. */
   upload: { limite: 60, janelaMs: 10 * 60_000 },
 } as const satisfies Record<string, Regra>;

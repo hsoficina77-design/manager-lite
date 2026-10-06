@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import OSForm, { type OSFormInitial } from "@/components/OSForm";
 import { OS_CONCLUIDA } from "@/lib/constants";
 import { Esqueleto } from "@/components/ui/Dados";
+import { ExigeEscrita } from "@/components/plano/Bloqueio";
 
 export default function EditarOSPage() {
   const { id } = useParams<{ id: string }>();
@@ -69,8 +70,10 @@ export default function EditarOSPage() {
   if (erro || !initial) return <div className="p-6 text-sm text-tinta-3">OS não encontrada.</div>;
 
   return (
-    <Suspense>
-      <OSForm mode="edit" osId={id} initial={initial} />
-    </Suspense>
+    <ExigeEscrita>
+      <Suspense>
+        <OSForm mode="edit" osId={id} initial={initial} />
+      </Suspense>
+    </ExigeEscrita>
   );
 }

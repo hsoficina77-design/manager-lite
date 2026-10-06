@@ -32,6 +32,21 @@ model Oficina {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Plano. A situação (teste, assinante, só leitura) não é guardada: sai destas datas a
+  // cada requisição (`lib/plano.ts`), então vencer o prazo não depende de job nenhum.
+  // As duas nulas = liberada sem prazo (oficinas antigas, convites, cortesia).
+  /// Fim do teste grátis. Só existe em oficina criada pelo cadastro público (`/teste`).
+  testeAte            DateTime?
+  /// Pago até — estendido pelo webhook de pagamento.
+  pagoAte             DateTime?
+  /// Contato de quem se cadastrou pelo link público.
+  whatsapp            String?
+  /// De onde veio o cadastro (`?origem=` do link — ex.: "instagram").
+  origem              String?
+  /// Ids no gateway de pagamento (AbacatePay).
+  gatewayClienteId    String?
+  gatewayAssinaturaId String?
+
   configuracao       Configuracao?
   usuarios           Usuario[]
   clientes           Cliente[]
@@ -55,6 +70,7 @@ model Oficina {
   despesasRecorrente DespesaRecorrente[]
   despesas           Despesa[]
   convites           Convite[]
+  eventosPagamento   EventoPagamento[]
 }
 
 // Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
@@ -79,6 +95,23 @@ model Convite {
   oficina Oficina? @relation(fields: [oficinaId], references: [id])
 
   @@index([createdAt])
+}
+
+// Evento recebido do gateway de pagamento. O `id` é o do próprio evento: o gateway
+// reenvia o mesmo evento até receber 200, e a chave primária é o que impede um
+// pagamento de estender o prazo duas vezes. Tabela do sistema, como `Convite`.
+model EventoPagamento {
+  id        String   @id
+  tipo      String
+  oficinaId String?
+  /// Em centavos, quando o evento traz valor.
+  valor     Int?
+  payload   Json
+  createdAt DateTime @default(now())
+
+  oficina Oficina? @relation(fields: [oficinaId], references: [id], onDelete: SetNull)
+
+  @@index([oficinaId, createdAt])
 }
 
 model Cliente {

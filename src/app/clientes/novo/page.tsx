@@ -8,8 +8,17 @@ import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoFormDeRascunho } from "@/components/VeiculoCampos";
 import { Fechar, Voltar } from "@/components/ui/Icones";
 import { useSaidaSegura } from "@/components/ui/SaidaSegura";
+import { ExigeEscrita } from "@/components/plano/Bloqueio";
 
 export default function NovoClientePage() {
+  return (
+    <ExigeEscrita>
+      <NovoClienteForm />
+    </ExigeEscrita>
+  );
+}
+
+function NovoClienteForm() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

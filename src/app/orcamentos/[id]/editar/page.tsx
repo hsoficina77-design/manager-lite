@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import OrcamentoForm, { type OrcamentoFormInitial } from "@/components/OrcamentoForm";
 import { Esqueleto } from "@/components/ui/Dados";
+import { ExigeEscrita } from "@/components/plano/Bloqueio";
 
 export default function EditarOrcamentoPage() {
   const { id } = useParams<{ id: string }>();
@@ -65,8 +66,10 @@ export default function EditarOrcamentoPage() {
   if (erro || !initial) return <div className="p-6 text-sm text-tinta-3">Orçamento não encontrado.</div>;
 
   return (
-    <Suspense>
-      <OrcamentoForm mode="edit" orcamentoId={id} initial={initial} />
-    </Suspense>
+    <ExigeEscrita>
+      <Suspense>
+        <OrcamentoForm mode="edit" orcamentoId={id} initial={initial} />
+      </Suspense>
+    </ExigeEscrita>
   );
 }

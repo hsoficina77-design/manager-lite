@@ -10,6 +10,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
+import { validarSenha } from "@/lib/senha";
+import { CARENCIA_DIAS, fimDoTeste, situacaoDaOficina } from "@/lib/plano";
+import type { EventoGateway } from "@/lib/abacatepay";
 
 /** Categorias de despesa com que toda oficina nasce. O dono edita depois. */
 const CATEGORIAS_PADRAO = [
@@ -42,9 +45,18 @@ export async function criarOficinaComDono(
     email: string;
     senhaHash: string;
     administraPlataforma?: boolean;
+    /** Só no cadastro público: a oficina nasce em teste grátis. */
+    teste?: { whatsapp: string; origem: string | null };
   }
 ) {
-  const oficina = await tx.oficina.create({ data: { nome: dados.nomeOficina } });
+  const oficina = await tx.oficina.create({
+    data: {
+      nome: dados.nomeOficina,
+      ...(dados.teste
+        ? { testeAte: fimDoTeste(), whatsapp: dados.teste.whatsapp, origem: dados.teste.origem }
+        : {}),
+    },
+  });
 
   await tx.configuracao.create({ data: { oficinaId: oficina.id, nome: dados.nomeOficina } });
   await tx.categoriaDespesa.createMany({
@@ -63,6 +75,103 @@ export async function criarOficinaComDono(
   });
 
   return { oficina, usuario };
+}
+
+// ─── Cadastro ────────────────────────────────────────────────────────────────
+
+export type DadosCadastro = { nomeOficina: string; nome: string; email: string; senha: string };
+
+/**
+ * Confere o formulário de oficina nova — o mesmo no convite e no teste grátis. Devolve
+ * a mensagem de erro para a tela, ou os dados já limpos.
+ */
+export function validarCadastroOficina(
+  corpo: Record<string, unknown> | null
+): { erro: string; dados: null } | { erro: null; dados: DadosCadastro } {
+  const { nomeOficina, nome, email, senha } = corpo ?? {};
+
+  if (typeof nomeOficina !== "string" || !nomeOficina.trim()) return { erro: "Informe o nome da oficina", dados: null };
+  if (typeof nome !== "string" || !nome.trim()) return { erro: "Informe seu nome", dados: null };
+  if (typeof email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+    return { erro: "Informe um e-mail válido", dados: null };
+  }
+  if (typeof senha !== "string") return { erro: "Informe uma senha", dados: null };
+  const problema = validarSenha(senha);
+  if (problema) return { erro: problema, dados: null };
+
+  return {
+    erro: null,
+    dados: {
+      nomeOficina: nomeOficina.trim().slice(0, 120),
+      nome: nome.trim().slice(0, 120),
+      email: email.trim().toLowerCase(),
+      senha,
+    },
+  };
+}
+
+/** Chave de emergência: `CADASTRO_TESTE_ABERTO=0` fecha o cadastro público sem deploy. */
+export function cadastroTesteAberto() {
+  return process.env.CADASTRO_TESTE_ABERTO !== "0";
+}
+
+/**
+ * Cria uma oficina em teste grátis — o cadastro aberto do link da bio.
+ *
+ * Um teste por pessoa: o e-mail já é único no sistema, e o WhatsApp não pode ter
+ * aberto outro teste. As duas checagens rodam dentro da transação Serializable, para
+ * dois envios simultâneos não passarem juntos.
+ *
+ * Devolve o motivo da recusa em vez de lançar, para a rota responder 409 com a frase certa.
+ */
+export async function criarOficinaDeTeste(dados: {
+  nomeOficina: string;
+  nome: string;
+  email: string;
+  senhaHash: string;
+  whatsapp: string;
+  origem: string | null;
+}) {
+  const criada = await prisma.$transaction(
+    async (tx) => {
+      if ((await tx.usuario.count({ where: { email: dados.email } })) > 0) return "email" as const;
+      if ((await tx.oficina.count({ where: { whatsapp: dados.whatsapp } })) > 0) return "whatsapp" as const;
+      return criarOficinaComDono(tx, {
+        nomeOficina: dados.nomeOficina,
+        nome: dados.nome,
+        email: dados.email,
+        senhaHash: dados.senhaHash,
+        teste: { whatsapp: dados.whatsapp, origem: dados.origem },
+      });
+    },
+    { isolationLevel: "Serializable" }
+  );
+
+  if (typeof criada !== "string") {
+    // Fora da transação: o aviso não pode desfazer um cadastro que deu certo.
+    avisarPlataforma({
+      titulo: "Nova oficina em teste",
+      mensagem: `${dados.nomeOficina} (${dados.nome}) começou o teste grátis${dados.origem ? ` — veio de ${dados.origem}` : ""}.`,
+      link: "/configuracoes/plataforma",
+    }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do cadastro:", err));
+  }
+  return criada;
+}
+
+/**
+ * Notificação para o dono da plataforma, na oficina dele. Cliente cru porque quem
+ * dispara (um cadastro público, o webhook) não está logado em oficina nenhuma.
+ */
+async function avisarPlataforma(aviso: { titulo: string; mensagem: string; link: string }) {
+  const dono = await prisma.usuario.findFirst({
+    where: { administraPlataforma: true, ativo: true },
+    orderBy: { createdAt: "asc" },
+    select: { oficinaId: true },
+  });
+  if (!dono) return;
+  await prisma.notificacao.create({
+    data: { oficinaId: dono.oficinaId, tipo: "PLATAFORMA", publico: "ADMIN", ...aviso },
+  });
 }
 
 /** Abre a sessão e grava o cookie. Usado pelo login, pelo primeiro acesso e pelo convite. */
@@ -216,6 +325,11 @@ export async function listarOficinas() {
       nome: true,
       ativa: true,
       createdAt: true,
+      testeAte: true,
+      pagoAte: true,
+      whatsapp: true,
+      origem: true,
+      gatewayAssinaturaId: true,
       _count: { select: { usuarios: true, ordens: true, clientes: true } },
     },
   });
@@ -232,6 +346,12 @@ export async function listarOficinas() {
     nome: o.nome,
     ativa: o.ativa,
     criadaEm: o.createdAt,
+    situacao: situacaoDaOficina(o),
+    testeAte: o.testeAte,
+    pagoAte: o.pagoAte,
+    whatsapp: o.whatsapp,
+    origem: o.origem,
+    assinaturaAutomatica: Boolean(o.gatewayAssinaturaId),
     usuarios: o._count.usuarios,
     ordens: o._count.ordens,
     clientes: o._count.clientes,
@@ -257,6 +377,24 @@ export async function definirOficinaAtiva(id: string, ativa: boolean, oficinaDeQ
   return oficina;
 }
 
+/**
+ * Estende o teste de uma oficina em `dias`, contando de hoje se o teste já tinha
+ * vencido — "mais 3 dias" para quem acabou de encerrar dá 3 dias de verdade.
+ */
+export async function estenderTeste(id: string, dias: number) {
+  const oficina = await prisma.oficina.findUniqueOrThrow({ where: { id }, select: { testeAte: true } });
+  const base = Math.max(Date.now(), oficina.testeAte?.getTime() ?? 0);
+  return prisma.oficina.update({
+    where: { id },
+    data: { testeAte: new Date(base + dias * 24 * 60 * 60 * 1000) },
+  });
+}
+
+/** Cortesia: tira o prazo (as duas datas nulas = liberada, como as oficinas antigas). */
+export async function liberarCortesia(id: string) {
+  return prisma.oficina.update({ where: { id }, data: { testeAte: null, pagoAte: null } });
+}
+
 /** Usuário pelo e-mail, em qualquer oficina — só o login precisa disto. */
 export function usuarioPorEmail(email: string) {
   return prisma.usuario.findUnique({
@@ -268,4 +406,135 @@ export function usuarioPorEmail(email: string) {
 /** E-mail já usado por alguém, em qualquer oficina. O e-mail é a chave do login. */
 export async function emailEmUso(email: string) {
   return (await prisma.usuario.count({ where: { email } })) > 0;
+}
+
+// ─── Pagamento ───────────────────────────────────────────────────────────────
+//
+// O que o gateway precisa saber da oficina, e o que o webhook muda nela. Fica aqui (e
+// não na rota) porque mexe na tabela `Oficina` e em `EventoPagamento`, do sistema.
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+export async function dadosDeCobranca(oficinaId: string) {
+  return prisma.oficina.findUniqueOrThrow({
+    where: { id: oficinaId },
+    select: { nome: true, whatsapp: true, pagoAte: true, gatewayClienteId: true, gatewayAssinaturaId: true },
+  });
+}
+
+export async function salvarClienteGateway(oficinaId: string, clienteId: string) {
+  await prisma.oficina.update({ where: { id: oficinaId }, data: { gatewayClienteId: clienteId } });
+}
+
+/** Assinatura cancelada (pelo dono, aqui, ou no gateway). O `pagoAte` fica: o mês pago é dele. */
+export async function esquecerAssinatura(oficinaId: string) {
+  await prisma.oficina.update({ where: { id: oficinaId }, data: { gatewayAssinaturaId: null } });
+}
+
+export type ResultadoEvento = "aplicado" | "repetido" | "ignorado";
+
+/**
+ * Aplica um evento do gateway. Gravar o evento e mexer no prazo acontecem na mesma
+ * transação, com o `id` do evento como chave primária: reentrega do mesmo evento bate
+ * na chave e não estende o prazo de novo.
+ *
+ * Regras do prazo:
+ *   - cartão (assinatura criada ou renovada): pago até daqui a um mês. Sem somar — se
+ *     o gateway mandar dois eventos para o mesmo pagamento, o resultado é o mesmo.
+ *   - Pix avulso: soma 30 dias ao que já havia. Pagar adiantado não perde dias.
+ *   - estorno, contestação: volta na hora para só leitura, sem carência.
+ *   - cancelamento: só desliga a renovação; o mês pago continua.
+ */
+export async function processarEventoPagamento(evento: EventoGateway, payload: unknown): Promise<ResultadoEvento> {
+  // Evento de sandbox não libera oficina de verdade, e vice-versa: o modo do evento
+  // precisa bater com o da chave em uso (ABACATEPAY_DEV_MODE=1 na chave de teste).
+  const aceitaDev = process.env.ABACATEPAY_DEV_MODE === "1";
+  const modoBate = evento.devMode === aceitaDev;
+
+  return prisma.$transaction(
+    async (tx) => {
+      const oficina =
+        evento.oficinaId &&
+        (await tx.oficina.findUnique({
+          where: { id: evento.oficinaId },
+          select: { id: true, nome: true, pagoAte: true },
+        }));
+
+      // Consulta antes de gravar: um insert recusado aborta a transação inteira no
+      // Postgres. Duas entregas simultâneas do mesmo evento ainda batem na chave
+      // primária (ou no Serializable) — a rota trata esse erro como "repetido".
+      if (await tx.eventoPagamento.findUnique({ where: { id: evento.id }, select: { id: true } })) {
+        return "repetido";
+      }
+      await tx.eventoPagamento.create({
+        data: {
+          id: evento.id,
+          tipo: evento.tipo,
+          oficinaId: oficina ? oficina.id : null,
+          valor: evento.valor,
+          payload: payload as object,
+        },
+      });
+
+      if (!oficina || !modoBate) return "ignorado";
+
+      const agora = Date.now();
+      const pagoAte = oficina.pagoAte?.getTime() ?? 0;
+
+      switch (evento.tipo) {
+        case "subscription.completed":
+        case "subscription.renewed": {
+          const umMes = new Date(agora);
+          umMes.setMonth(umMes.getMonth() + 1);
+          await tx.oficina.update({
+            where: { id: oficina.id },
+            data: {
+              pagoAte: new Date(Math.max(pagoAte, umMes.getTime())),
+              ...(evento.assinaturaId ? { gatewayAssinaturaId: evento.assinaturaId } : {}),
+            },
+          });
+          return "aplicado";
+        }
+
+        case "checkout.completed": {
+          // O primeiro pagamento da assinatura também é um checkout; quem cuida dele é
+          // o `subscription.completed`. Aqui, só o Pix avulso.
+          if (evento.forma !== "pix") return "ignorado";
+          await tx.oficina.update({
+            where: { id: oficina.id },
+            data: { pagoAte: new Date(Math.max(agora, pagoAte) + 30 * DIA_MS) },
+          });
+          return "aplicado";
+        }
+
+        case "subscription.cancelled":
+          await tx.oficina.update({ where: { id: oficina.id }, data: { gatewayAssinaturaId: null } });
+          return "aplicado";
+
+        case "checkout.refunded":
+        case "checkout.disputed":
+        case "checkout.lost":
+          // Antes da carência, para cair em só leitura já.
+          await tx.oficina.update({
+            where: { id: oficina.id },
+            data: { pagoAte: new Date(agora - (CARENCIA_DIAS + 1) * DIA_MS) },
+          });
+          return "aplicado";
+
+        default:
+          return "ignorado";
+      }
+    },
+    { isolationLevel: "Serializable" }
+  ).then(async (resultado) => {
+    if (resultado === "aplicado" && evento.oficinaId && /completed|renewed/.test(evento.tipo)) {
+      const oficina = await prisma.oficina.findUnique({ where: { id: evento.oficinaId }, select: { nome: true } });
+      avisarPlataforma({
+        titulo: "Pagamento recebido",
+        mensagem: `${oficina?.nome ?? "Uma oficina"} pagou o boxOS (${evento.tipo === "subscription.renewed" ? "renovação" : evento.forma === "pix" ? "Pix" : "assinatura no cartão"}).`,
+        link: "/configuracoes/plataforma",
+      }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do pagamento:", err));
+    }
+    return resultado;
+  });
 }

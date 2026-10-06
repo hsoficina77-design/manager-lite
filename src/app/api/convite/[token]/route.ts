@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { hashSenha, validarSenha } from "@/lib/senha";
-import { abrirSessao, emailEmUso, lerConvite, usarConvite } from "@/lib/sistema";
+import { hashSenha } from "@/lib/senha";
+import { abrirSessao, emailEmUso, lerConvite, usarConvite, validarCadastroOficina } from "@/lib/sistema";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
@@ -40,24 +40,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     }
 
     const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
-    const { nomeOficina, nome, email, senha } = corpo ?? {};
+    const { erro, dados } = validarCadastroOficina(corpo);
+    if (!dados) return NextResponse.json({ error: erro }, { status: 400 });
+    const { nomeOficina, nome, email: emailLimpo, senha } = dados;
 
-    if (typeof nomeOficina !== "string" || !nomeOficina.trim()) {
-      return NextResponse.json({ error: "Informe o nome da oficina" }, { status: 400 });
-    }
-    if (typeof nome !== "string" || !nome.trim()) {
-      return NextResponse.json({ error: "Informe seu nome" }, { status: 400 });
-    }
-    if (typeof email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
-      return NextResponse.json({ error: "Informe um e-mail válido" }, { status: 400 });
-    }
-    if (typeof senha !== "string") {
-      return NextResponse.json({ error: "Informe uma senha" }, { status: 400 });
-    }
-    const problema = validarSenha(senha);
-    if (problema) return NextResponse.json({ error: problema }, { status: 400 });
-
-    const emailLimpo = email.trim().toLowerCase();
     // O e-mail é a chave do login no sistema inteiro — não pode repetir entre oficinas.
     if (await emailEmUso(emailLimpo)) {
       return NextResponse.json(
@@ -67,8 +53,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     }
 
     const criada = await usarConvite(token, {
-      nomeOficina: nomeOficina.trim().slice(0, 120),
-      nome: nome.trim(),
+      nomeOficina,
+      nome,
       email: emailLimpo,
       senhaHash: await hashSenha(senha),
     });

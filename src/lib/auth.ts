@@ -9,7 +9,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
-import { ehPapelValido, type Papel } from "@/lib/permissoes";
+import { HEADER_METODO, HEADER_ROTA, ehPapelValido, type Papel } from "@/lib/permissoes";
+import {
+  CODIGO_SOMENTE_LEITURA,
+  MENSAGEM_SOMENTE_LEITURA,
+  acaoBloqueada,
+  situacaoDaOficina,
+  type Situacao,
+} from "@/lib/plano";
 import { bancoDaOficina, type BancoDaOficina } from "@/lib/db-oficina";
 import { sistemaVazio } from "@/lib/sistema";
 
@@ -28,6 +35,14 @@ export type UsuarioSessao = {
   oficinaId: string;
   /** Dono da plataforma: gera convites. Não abre dados de outras oficinas. */
   administraPlataforma: boolean;
+  /** Plano da oficina, calculado agora a partir das datas (ver `lib/plano.ts`). */
+  situacao: Situacao;
+  testeAte: Date | null;
+  pagoAte: Date | null;
+  /** Teste ou pagamento vencido: vê tudo, não grava nada. */
+  somenteLeitura: boolean;
+  /** Assinatura no cartão, que renova sozinha (Pix é mês a mês). */
+  assinaturaAutomatica: boolean;
 };
 
 /**
@@ -62,7 +77,9 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
             ativo: true,
             oficinaId: true,
             administraPlataforma: true,
-            oficina: { select: { ativa: true } },
+            oficina: {
+              select: { ativa: true, testeAte: true, pagoAte: true, gatewayAssinaturaId: true },
+            },
           },
         },
       },
@@ -83,6 +100,8 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
     const { usuario } = sessao;
     const papel = ehPapelValido(usuario.papel) ? usuario.papel : "OPERADOR";
     const ehDono = papel === "ADMIN";
+    const { testeAte, pagoAte } = usuario.oficina;
+    const situacao = situacaoDaOficina({ testeAte, pagoAte });
     return {
       id: usuario.id,
       nome: usuario.nome,
@@ -93,6 +112,11 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
       sessaoId: lido.sessaoId,
       oficinaId: usuario.oficinaId,
       administraPlataforma: usuario.administraPlataforma,
+      situacao,
+      testeAte,
+      pagoAte,
+      somenteLeitura: situacao === "SOMENTE_LEITURA",
+      assinaturaAutomatica: Boolean(usuario.oficina.gatewayAssinaturaId),
     };
   } catch (err) {
     console.error("Falha ao ler a sessão:", err);
@@ -163,11 +187,16 @@ export async function exigirOficina(
 
 // ─── Rotas de API ─────────────────────────────────────────────────────────────
 
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 /**
  * Guarda para rotas de API. Devolve `{ usuario, db, transacao }` — o banco já preso à
  * oficina de quem está logado — ou `{ resposta }` já pronta.
+ *
+ * É também a trava do modo só leitura: com o teste (ou o pagamento) vencido, qualquer
+ * gravação sai daqui com 402, antes de a rota tocar no banco ou no Storage. Como toda
+ * rota de oficina começa por aqui, nenhuma precisa lembrar disso.
  *
  *   const guarda = await guardaApi({ dono: true });
  *   if (guarda.resposta) return guarda.resposta;
@@ -194,6 +223,23 @@ export async function guardaApi(
   }
   if (opcoes.plataforma && !usuario.administraPlataforma) {
     return { resposta: NextResponse.json({ error: "Acesso restrito à plataforma" }, { status: 403 }) };
+  }
+  if (usuario.somenteLeitura) {
+    // Método e rota vêm do proxy, que sobrescreve o que o navegador mandar nesses
+    // cabeçalhos — não dá para forjar um "GET" e passar.
+    const cabecalhos = await headers();
+    const metodo = cabecalhos.get(HEADER_METODO);
+    const rota = cabecalhos.get(HEADER_ROTA) ?? "";
+    // Sem o cabeçalho, não há como saber se é leitura: fecha. Toda rota de API passa
+    // pelo proxy, então isso só aconteceria se o matcher deixasse a rota de fora.
+    if (!metodo || acaoBloqueada(metodo, rota)) {
+      return {
+        resposta: NextResponse.json(
+          { error: MENSAGEM_SOMENTE_LEITURA, codigo: CODIGO_SOMENTE_LEITURA },
+          { status: 402 }
+        ),
+      };
+    }
   }
   // O banco entregue à rota já vem preso à oficina da sessão — é a trava 1.
   return { usuario, ...bancoDaOficina(usuario.oficinaId) };

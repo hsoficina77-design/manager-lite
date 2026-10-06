@@ -13,6 +13,8 @@ import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
 import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
+import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
+import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
 import "./globals.css";
 
 // Fonte da marca boxOS, só para a logo e os títulos (ver `font-marca` no Tailwind).
@@ -116,6 +118,12 @@ export default async function RootLayout({
                   podeFinanceiro: usuario.podeFinanceiro,
                   podeExcluir: usuario.podeExcluir,
                   administraPlataforma: usuario.administraPlataforma,
+                  plano: {
+                    situacao: usuario.situacao,
+                    testeAte: usuario.testeAte?.toISOString() ?? null,
+                    pagoAte: usuario.pagoAte?.toISOString() ?? null,
+                    somenteLeitura: usuario.somenteLeitura,
+                  },
                 }
               : null
           }
@@ -161,8 +169,10 @@ async function AppComMenu({
         usuario={{ nome: usuario.nome, papel: usuario.papel, podeFinanceiro: usuario.podeFinanceiro }}
       />
       <main className="pt-14 pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-56 md:pt-0">
+        <AvisoDePlano usuario={usuario} />
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
+      <BloqueioDeAcao />
     </>
   );
 }
