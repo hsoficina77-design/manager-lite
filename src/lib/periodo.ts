@@ -179,6 +179,12 @@ export function chaveMesDeslocada(chave: string, passos: number): string {
   return chaveMes(brMidnightUTC(c.ano, c.mes + passos, 1));
 }
 
+/** A competência `passos` meses depois (ou antes, se negativo) da informada. */
+export function competenciaDeslocada(competencia: Date, passos: number): Date {
+  const c = camposBR(competencia);
+  return brMidnightUTC(c.ano, c.mes + passos, 1);
+}
+
 /** Quantos meses civis separam duas competências (positivo quando `b` é posterior). */
 export function mesesEntre(a: Date, b: Date): number {
   const ca = camposBR(a);

@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { guardaApi } from "@/lib/auth";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { despesaCriarSchema } from "@/lib/schemas";
-import { INCLUDE_CATEGORIA, mesDeGastos } from "@/lib/despesas";
+import { INCLUDE_CATEGORIA, dividirEmParcelas, mesDeGastos } from "@/lib/despesas";
 import { competenciaDe } from "@/lib/periodo";
 
 /**
@@ -19,13 +20,49 @@ export async function GET(request: Request) {
   return NextResponse.json({ mes: janela.label, lancamentos });
 }
 
-/** Gasto avulso — o que não tem regra: uma peça de fornecedor, um conserto do portão. */
+/**
+ * Gasto avulso — o que não tem regra: uma peça de fornecedor, um conserto do portão.
+ * Com `parcelas` > 1 é uma compra dividida: `valor` é o total e vira N lançamentos.
+ */
 export async function POST(request: Request) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
   const { db } = guarda;
   try {
     const dados = await lerJson(request, despesaCriarSchema);
+
+    if (dados.parcelas && dados.parcelas > 1) {
+      if (Math.round(dados.valor * 100) < dados.parcelas) {
+        return NextResponse.json(
+          { error: "O valor total é pequeno demais para tantas parcelas" },
+          { status: 400 }
+        );
+      }
+      // Um INSERT só: ou nascem todas as parcelas, ou nenhuma — metade de um
+      // parcelamento no banco seria pior do que o erro.
+      const parcelamentoId = randomUUID();
+      const partes = dividirEmParcelas(
+        dados.valor,
+        dados.parcelas,
+        dados.vencimento,
+        dados.intervalo ?? "SEMANAL"
+      );
+      await db.despesa.createMany({
+        data: partes.map((p) => ({
+          categoriaId: dados.categoriaId,
+          descricao: dados.descricao,
+          valor: p.valor,
+          vencimento: p.vencimento,
+          competencia: competenciaDe(p.vencimento),
+          fornecedor: dados.fornecedor ?? null,
+          observacao: dados.observacao ?? null,
+          parcelamentoId,
+          parcela: p.parcela,
+          parcelas: dados.parcelas,
+        })),
+      });
+      return NextResponse.json({ parcelamentoId, parcelas: partes.length }, { status: 201 });
+    }
 
     const despesa = await db.despesa.create({
       data: {

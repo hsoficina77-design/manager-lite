@@ -4,7 +4,13 @@
 // que passe por `lib/prisma` arrasta o cliente Prisma para o bundle do navegador.
 // Aqui só entra o que roda nos dois lados.
 
-import { competenciaDe, janelaHoje, mesesEntre } from "@/lib/periodo";
+import {
+  competenciaDe,
+  competenciaDeslocada,
+  diaDaCompetencia,
+  janelaHoje,
+  mesesEntre,
+} from "@/lib/periodo";
 
 export const PERIODICIDADES = [
   { value: "MENSAL", label: "Todo mês", passo: 1 },
@@ -88,6 +94,50 @@ export function competenciasDoIntervalo(inicio: Date, fim: Date): Date[] {
     cursor = competenciaDe(new Date(cursor.getTime() + 40 * 86_400_000));
   }
   return meses;
+}
+
+// ─── Parcelamento ─────────────────────────────────────────────────────────────
+
+/**
+ * Compra dividida em parcelas — "parcelei em 3×, pago toda sexta".
+ *
+ * Não é despesa fixa: tem começo e fim, e a regra fixa só sabe gerar um lançamento
+ * por mês. Vira N gastos avulsos, cada um no mês do seu vencimento — é por isso que o
+ * dashboard, que soma por vencimento, já os enxerga sem nada a mais.
+ */
+export const INTERVALOS_PARCELA = [
+  { value: "SEMANAL", label: "Toda semana" },
+  { value: "MENSAL", label: "Todo mês" },
+] as const;
+
+export type IntervaloParcela = (typeof INTERVALOS_PARCELA)[number]["value"];
+
+/**
+ * Valor e vencimento de cada parcela.
+ *
+ * A conta é em centavos e a sobra da divisão vai para a última: R$ 100 em 3× dá
+ * 33,33 + 33,33 + 33,34, e a soma fecha com o total digitado. Mensal mantém o dia da
+ * 1ª parcela, limitado ao último dia do mês (dia 31 cai em 30/04, 28/02).
+ */
+export function dividirEmParcelas(
+  total: number,
+  parcelas: number,
+  primeiroVencimento: Date,
+  intervalo: IntervaloParcela
+): { parcela: number; valor: number; vencimento: Date }[] {
+  const centavos = Math.round(total * 100);
+  const base = Math.floor(centavos / parcelas);
+  const competencia = competenciaDe(primeiroVencimento);
+  const dia = Math.round((primeiroVencimento.getTime() - competencia.getTime()) / 86_400_000) + 1;
+
+  return Array.from({ length: parcelas }, (_, i) => ({
+    parcela: i + 1,
+    valor: (i === parcelas - 1 ? centavos - base * (parcelas - 1) : base) / 100,
+    vencimento:
+      intervalo === "SEMANAL"
+        ? new Date(primeiroVencimento.getTime() + i * 7 * 86_400_000)
+        : diaDaCompetencia(competenciaDeslocada(competencia, i), dia),
+  }));
 }
 
 // ─── Leitura ──────────────────────────────────────────────────────────────────

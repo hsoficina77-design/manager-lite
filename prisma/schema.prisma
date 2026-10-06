@@ -735,6 +735,12 @@ model Despesa {
   /// "Não teve este mês". A linha fica de lápide: apagá-la de vez faria a regra
   /// gerar o lançamento de novo na próxima abertura do mês. Some das somas.
   cancelado      Boolean   @default(false)
+  /// Compra dividida: as parcelas nascem juntas e compartilham este id, que é o que
+  /// deixa excluir "esta e as próximas" de uma vez. Null em gasto não parcelado.
+  parcelamentoId String?
+  /// Posição desta parcela (1, 2, 3…) e o total delas — o "2/3" da tela.
+  parcela        Int?
+  parcelas       Int?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -748,4 +754,5 @@ model Despesa {
   @@index([oficinaId, pago])
   @@index([oficinaId, vencimento])
   @@index([categoriaId])
+  @@index([parcelamentoId])
 }

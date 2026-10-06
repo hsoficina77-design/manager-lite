@@ -19,6 +19,7 @@ import { useConfirmar } from "@/components/ui/Avisos";
 import { Avancar, Mais, Voltar } from "@/components/ui/Icones";
 import { enviar, mensagemDoErro } from "./api";
 import { ModalCategorias } from "./ModalCategorias";
+import { ModalExcluirParcela } from "./ModalExcluirParcela";
 import { ModalFixar } from "./ModalFixar";
 import { ModalFixas } from "./ModalFixas";
 import { ModalGasto } from "./ModalGasto";
@@ -69,6 +70,7 @@ export function ControleDeGastos({
     | { tipo: "gasto"; gasto: Lancamento | null }
     | { tipo: "pagamento"; gasto: Lancamento }
     | { tipo: "fixar"; gasto: Lancamento }
+    | { tipo: "excluirParcela"; gasto: Lancamento }
     | { tipo: "fixas" }
     | { tipo: "categorias" }
     | null
@@ -188,6 +190,13 @@ export function ControleDeGastos({
       )}
       {modal?.tipo === "fixar" && (
         <ModalFixar gasto={modal.gasto} onFechar={() => setModal(null)} onSalvo={fechar} />
+      )}
+      {modal?.tipo === "excluirParcela" && (
+        <ModalExcluirParcela
+          gasto={modal.gasto}
+          onFechar={() => setModal(null)}
+          onExcluido={fechar}
+        />
       )}
       {modal?.tipo === "fixas" && (
         <ModalFixas
@@ -394,6 +403,12 @@ export function ControleDeGastos({
                       )
                     }
                     onRemover={async () => {
+                      // Parcela com outras depois dela pergunta o alcance; a última
+                      // parcela cai na confirmação de sempre, que só tem uma resposta.
+                      if (d.parcelamentoId && (d.parcela ?? 0) < (d.parcelas ?? 0)) {
+                        setModal({ tipo: "excluirParcela", gasto: d });
+                        return;
+                      }
                       const ok = await confirmar(
                         d.recorrenteId
                           ? {
@@ -836,6 +851,11 @@ function Linha({
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-tinta">{d.descricao}</span>
         <ChipCategoria nome={d.categoria.nome} cor={d.categoria.cor} />
+        {d.parcela !== null && d.parcelas !== null && (
+          <span className="rounded-full bg-superficie-3 px-2 py-0.5 text-xs font-medium tabular-nums text-tinta-2">
+            Parcela {d.parcela}/{d.parcelas}
+          </span>
+        )}
         {/* O antigo chip "Fixa" saiu daqui: agora quem diz isso é o bloco em que a
             linha está, e repetir em toda linha só engordava a lista no celular. */}
         <span

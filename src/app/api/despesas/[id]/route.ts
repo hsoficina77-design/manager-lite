@@ -61,19 +61,30 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
  * Avulso some de vez. O que veio de uma despesa fixa vira lápide (`cancelado`) em vez
  * de sumir: apagar a linha faria a regra recriar o lançamento na próxima vez que o mês
  * fosse aberto, e o dono ficaria excluindo a mesma conta para sempre.
+ *
+ * Parcela aceita `?escopo=seguintes`: leva junto as parcelas posteriores do mesmo
+ * parcelamento — o caminho de quem lançou a compra errada ou quitou o resto antes.
  */
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaApi();
   if (guarda.resposta) return guarda.resposta;
   const { db } = guarda;
   const { id } = await params;
+  const escopo = new URL(request.url).searchParams.get("escopo");
   try {
     const atual = await db.despesa.findUnique({
       where: { id },
-      select: { recorrenteId: true },
+      select: { recorrenteId: true, parcelamentoId: true, parcela: true },
     });
     if (!atual) {
       return NextResponse.json({ error: "Gasto não encontrado" }, { status: 404 });
+    }
+
+    if (escopo === "seguintes" && atual.parcelamentoId && atual.parcela !== null) {
+      const { count } = await db.despesa.deleteMany({
+        where: { parcelamentoId: atual.parcelamentoId, parcela: { gte: atual.parcela } },
+      });
+      return NextResponse.json({ ok: true, cancelado: false, excluidas: count });
     }
 
     if (atual.recorrenteId) {

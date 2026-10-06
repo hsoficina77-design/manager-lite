@@ -343,6 +343,9 @@ const PERIODICIDADES_DESPESA = [
   "ANUAL",
 ] as const;
 
+const INTERVALOS_PARCELA_VALORES = ["SEMANAL", "MENSAL"] as const;
+const MAX_PARCELAS = 48;
+
 const FORMAS_PAGAMENTO_DESPESA = [
   "DINHEIRO",
   "PIX",
@@ -383,6 +386,7 @@ export const despesaRecorrenteAtualizarSchema = despesaRecorrenteCriarSchema.par
   propagar: z.boolean().optional(),
 });
 
+/** Com `parcelas` acima de 1, `valor` é o total da compra e `vencimento` o da 1ª parcela. */
 export const despesaCriarSchema = z.object({
   categoriaId: id("Categoria"),
   descricao: obrigatorio("Descrição", LIMITES.descricao),
@@ -390,6 +394,13 @@ export const despesaCriarSchema = z.object({
   vencimento: dataObrigatoria("Data de vencimento"),
   fornecedor: nulavel("Fornecedor", LIMITES.nome).optional(),
   observacao: nulavel("Observação", LIMITES.observacao).optional(),
+  parcelas: z.coerce
+    .number({ invalid_type_error: "Parcelas deve ser um número" })
+    .int("Parcelas deve ser um número inteiro")
+    .min(1, "Parcelas: mínimo de 1")
+    .max(MAX_PARCELAS, `Parcelas: máximo de ${MAX_PARCELAS}`)
+    .optional(),
+  intervalo: enumDe("Intervalo das parcelas", INTERVALOS_PARCELA_VALORES).optional(),
 });
 
 export const despesaAtualizarSchema = z.object({

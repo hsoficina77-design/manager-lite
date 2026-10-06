@@ -26,6 +26,10 @@ export type Lancamento = {
   formaPagamento: string | null;
   observacao: string | null;
   cancelado: boolean;
+  /** Compra dividida: as parcelas compartilham o id; `parcela` de `parcelas` é o "2/3". */
+  parcelamentoId: string | null;
+  parcela: number | null;
+  parcelas: number | null;
   categoria: CategoriaChip;
 };
 
