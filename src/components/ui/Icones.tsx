@@ -256,6 +256,44 @@ export const Cofre = (p: Props) => (
   </Base>
 );
 
+/* --- assinatura ------------------------------------------------------------ */
+
+export const Cartao = (p: Props) => (
+  <Base {...p}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <path d="M2 10h20" />
+    <path d="M6 15h4" />
+  </Base>
+);
+
+/** Pix — um QR code genérico; o logotipo do Pix é marca do Banco Central. */
+export const QrCode = (p: Props) => (
+  <Base {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <path d="M14 14h3v3h-3z" />
+    <path d="M21 14v.01" />
+    <path d="M17 21h4v-4" />
+  </Base>
+);
+
+export const Escudo = (p: Props) => (
+  <Base {...p}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+    <path d="m9 12 2 2 4-4" />
+  </Base>
+);
+
+export const Calendario = (p: Props) => (
+  <Base {...p}>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4" />
+    <path d="M8 2v4" />
+    <path d="M3 10h18" />
+  </Base>
+);
+
 /* --- tema ------------------------------------------------------------------ */
 
 export const Sol = (p: Props) => (
