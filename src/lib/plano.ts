@@ -8,7 +8,7 @@
 // próxima ação já é recusada; pagou, a próxima já passa. Não existe job para esquecer
 // de rodar.
 
-export const DIAS_TESTE = 5;
+export const DIAS_TESTE = 30;
 
 /**
  * Folga depois do `pagoAte`. Cobre as novas tentativas de cobrança do cartão (o gateway
