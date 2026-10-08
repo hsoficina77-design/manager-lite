@@ -5,8 +5,10 @@ import {
   cancelarAssinatura,
   criarCliente,
   criarCobranca,
+  ehClienteAsaas,
   gatewayConfigurado,
-} from "@/lib/abacatepay";
+  normalizarCpfCnpj,
+} from "@/lib/asaas";
 import { dadosDeCobranca, esquecerAssinatura, salvarClienteGateway } from "@/lib/sistema";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
@@ -26,8 +28,9 @@ export async function GET() {
 }
 
 /**
- * Abre a cobrança e devolve a `url` da página de pagamento da AbacatePay.
- * Corpo: `{ forma: "cartao" | "pix" }`.
+ * Abre a cobrança e devolve a `url` da fatura do Asaas.
+ * Corpo: `{ forma: "cartao" | "pix", cpfCnpj?: string }` — o CPF/CNPJ só na primeira vez,
+ * quando o cliente ainda não existe no Asaas (ele exige um dos dois).
  */
 export async function POST(request: Request) {
   const guarda = await guardaApi({ dono: true });
@@ -41,9 +44,9 @@ export async function POST(request: Request) {
     );
   }
 
-  let corpo: { forma?: unknown } | null;
+  let corpo: { forma?: unknown; cpfCnpj?: unknown } | null;
   try {
-    corpo = (await lerJsonCru(request)) as { forma?: unknown } | null;
+    corpo = (await lerJsonCru(request)) as { forma?: unknown; cpfCnpj?: unknown } | null;
   } catch (err) {
     return respostaDeValidacao(err) ?? NextResponse.json({ error: "Corpo inválido" }, { status: 400 });
   }
@@ -64,8 +67,16 @@ export async function POST(request: Request) {
     }
 
     let clienteId = oficina.gatewayClienteId;
-    if (!clienteId) {
-      clienteId = await criarCliente({ nome: usuario.nome, email: usuario.email, celular: oficina.whatsapp });
+    if (!ehClienteAsaas(clienteId)) {
+      const cpfCnpj = normalizarCpfCnpj(corpo?.cpfCnpj);
+      if (!cpfCnpj) return NextResponse.json({ error: "Informe um CPF ou CNPJ válido" }, { status: 400 });
+      clienteId = await criarCliente({
+        nome: usuario.nome,
+        email: usuario.email,
+        celular: oficina.whatsapp,
+        cpfCnpj,
+        oficinaId: usuario.oficinaId,
+      });
       await salvarClienteGateway(usuario.oficinaId, clienteId);
     }
 

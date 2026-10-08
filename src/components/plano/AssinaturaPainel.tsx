@@ -6,10 +6,11 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Botao } from "@/components/ui/Botao";
 import { Painel } from "@/components/ui/Dados";
+import { Campo, Entrada } from "@/components/ui/Campos";
 import { diasAte, linkWhatsappBoxOS, type Situacao } from "@/lib/plano";
 
-// A tela de assinar. A oficina escolhe a forma, vai para a página de pagamento da
-// AbacatePay e volta em `/assinatura/obrigado`. Quem libera é o webhook, não esta tela.
+// A tela de assinar. A oficina escolhe a forma, vai para a fatura do Asaas e volta em
+// `/assinatura/obrigado`. Quem libera é o webhook, não esta tela.
 
 function textoDaSituacao(p: {
   situacao: Situacao;
@@ -41,20 +42,30 @@ export default function AssinaturaPainel(props: {
   assinaturaAutomatica: boolean;
   precoCentavos: number | null;
   pagamentoDisponivel: boolean;
+  /** Primeira cobrança: o Asaas exige CPF ou CNPJ de quem paga. */
+  pedeDocumento: boolean;
+  documentoSugerido: string;
 }) {
   const router = useRouter();
   const avisar = useAvisar();
   const confirmar = useConfirmar();
   const [abrindo, setAbrindo] = useState<"cartao" | "pix" | null>(null);
+  const [documento, setDocumento] = useState(props.documentoSugerido);
   const whatsapp = linkWhatsappBoxOS("Olá! Quero assinar o boxOS para a minha oficina.");
 
   async function pagar(forma: "cartao" | "pix") {
+    // Conferência rápida; a de verdade (dígitos verificadores) é no servidor.
+    const digitos = documento.replace(/\D/g, "");
+    if (props.pedeDocumento && digitos.length !== 11 && digitos.length !== 14) {
+      avisar("Informe o CPF ou o CNPJ de quem paga", "erro");
+      return;
+    }
     setAbrindo(forma);
     try {
       const res = await fetch("/api/assinatura", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ forma }),
+        body: JSON.stringify({ forma, ...(props.pedeDocumento ? { cpfCnpj: digitos } : {}) }),
       });
       const json = await res.json();
       if (!res.ok || !json.url) {
@@ -62,7 +73,7 @@ export default function AssinaturaPainel(props: {
         setAbrindo(null);
         return;
       }
-      // Página de pagamento da AbacatePay; de lá, volta para /assinatura/obrigado.
+      // Fatura do Asaas; de lá, volta para /assinatura/obrigado.
       window.location.href = json.url;
     } catch {
       avisar("Sem conexão com o servidor", "erro");
@@ -112,29 +123,47 @@ export default function AssinaturaPainel(props: {
               ajuda="Tudo o que você usou no teste, sem limite de OS, clientes ou acessos da equipe."
             >
               {props.pagamentoDisponivel ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-linha p-4">
-                    <p className="font-medium text-tinta">Cartão de crédito</p>
-                    <p className="mt-1 text-xs text-tinta-3">Renova sozinho todo mês. Cancele quando quiser.</p>
-                    <Botao className="mt-3 w-full" disabled={abrindo !== null} onClick={() => pagar("cartao")}>
-                      {abrindo === "cartao" ? "Abrindo..." : "Assinar no cartão"}
-                    </Botao>
-                  </div>
-                  <div className="rounded-lg border border-linha p-4">
-                    <p className="font-medium text-tinta">Pix</p>
-                    <p className="mt-1 text-xs text-tinta-3">
-                      Paga um mês por vez. Avisamos aqui 5 dias antes de vencer.
-                    </p>
-                    <Botao
-                      variante="secundario"
-                      className="mt-3 w-full"
-                      disabled={abrindo !== null}
-                      onClick={() => pagar("pix")}
+                <>
+                  {props.pedeDocumento && (
+                    <Campo
+                      rotulo="CPF ou CNPJ de quem paga"
+                      ajuda="Vai na cobrança do boxOS. Pedimos só na primeira vez."
+                      obrigatorio
+                      className="mb-4 max-w-xs"
                     >
-                      {abrindo === "pix" ? "Abrindo..." : "Pagar 1 mês no Pix"}
-                    </Botao>
+                      <Entrada
+                        value={documento}
+                        onChange={(e) => setDocumento(e.target.value.replace(/[^\d./-]/g, ""))}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={18}
+                      />
+                    </Campo>
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-linha p-4">
+                      <p className="font-medium text-tinta">Cartão de crédito</p>
+                      <p className="mt-1 text-xs text-tinta-3">Renova sozinho todo mês. Cancele quando quiser.</p>
+                      <Botao className="mt-3 w-full" disabled={abrindo !== null} onClick={() => pagar("cartao")}>
+                        {abrindo === "cartao" ? "Abrindo..." : "Assinar no cartão"}
+                      </Botao>
+                    </div>
+                    <div className="rounded-lg border border-linha p-4">
+                      <p className="font-medium text-tinta">Pix</p>
+                      <p className="mt-1 text-xs text-tinta-3">
+                        Paga um mês por vez. Avisamos aqui 5 dias antes de vencer.
+                      </p>
+                      <Botao
+                        variante="secundario"
+                        className="mt-3 w-full"
+                        disabled={abrindo !== null}
+                        onClick={() => pagar("pix")}
+                      >
+                        {abrindo === "pix" ? "Abrindo..." : "Pagar 1 mês no Pix"}
+                      </Botao>
+                    </div>
                   </div>
-                </div>
+                </>
               ) : (
                 <p className="text-sm text-tinta-2">
                   O pagamento online ainda não está disponível.{" "}

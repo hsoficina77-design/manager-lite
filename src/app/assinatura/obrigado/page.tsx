@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { BotaoLink } from "@/components/ui/Botao";
 
 // Volta da página de pagamento. Esta tela **não** libera nada — qualquer um poderia
-// abri-la digitando o endereço. Ela só espera o webhook da AbacatePay chegar,
+// abri-la digitando o endereço. Ela só espera o webhook do Asaas chegar,
 // consultando a situação a cada poucos segundos.
 
 const INTERVALO_MS = 3000;

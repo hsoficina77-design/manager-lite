@@ -43,7 +43,7 @@ model Oficina {
   whatsapp            String?
   /// De onde veio o cadastro (`?origem=` do link — ex.: "instagram").
   origem              String?
-  /// Ids no gateway de pagamento (AbacatePay).
+  /// Ids no gateway de pagamento (Asaas: `cus_…` e `sub_…`).
   gatewayClienteId    String?
   gatewayAssinaturaId String?
 

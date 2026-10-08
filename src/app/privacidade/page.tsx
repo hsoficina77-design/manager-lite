@@ -22,8 +22,9 @@ export default function PrivacidadePage() {
           valores.
         </li>
         <li>
-          <strong>Do pagamento:</strong> a confirmação do pagamento e os identificadores da cobrança. Os dados do cartão
-          ficam com o processador de pagamentos (AbacatePay) e não passam pelo boxOS.
+          <strong>Do pagamento:</strong> a confirmação do pagamento e os identificadores da cobrança. Nome, e-mail,
+          celular e CPF/CNPJ de quem paga vão para o processador de pagamentos (Asaas), que exige esses dados na
+          cobrança. Os dados do cartão ficam com o Asaas e não passam pelo boxOS.
         </li>
       </ul>
 

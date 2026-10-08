@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
 import { validarSenha } from "@/lib/senha";
 import { CARENCIA_DIAS, fimDoTeste, situacaoDaOficina } from "@/lib/plano";
-import type { EventoGateway } from "@/lib/abacatepay";
+import { EVENTOS_DE_PAGAMENTO, type EventoGateway } from "@/lib/asaas";
 
 /** Categorias de despesa com que toda oficina nasce. O dono edita depois. */
 const CATEGORIAS_PADRAO = [
@@ -418,7 +418,15 @@ const DIA_MS = 24 * 60 * 60 * 1000;
 export async function dadosDeCobranca(oficinaId: string) {
   return prisma.oficina.findUniqueOrThrow({
     where: { id: oficinaId },
-    select: { nome: true, whatsapp: true, pagoAte: true, gatewayClienteId: true, gatewayAssinaturaId: true },
+    select: {
+      nome: true,
+      whatsapp: true,
+      pagoAte: true,
+      gatewayClienteId: true,
+      gatewayAssinaturaId: true,
+      // Sugestão para o CPF/CNPJ que o Asaas exige — o dono confirma na tela.
+      configuracao: { select: { cnpj: true } },
+    },
   });
 }
 
@@ -431,34 +439,39 @@ export async function esquecerAssinatura(oficinaId: string) {
   await prisma.oficina.update({ where: { id: oficinaId }, data: { gatewayAssinaturaId: null } });
 }
 
-export type ResultadoEvento = "aplicado" | "repetido" | "ignorado";
+export type ResultadoEvento = "aplicado" | "repetido" | "ignorado" | "abandonada";
 
 /**
  * Aplica um evento do gateway. Gravar o evento e mexer no prazo acontecem na mesma
  * transação, com o `id` do evento como chave primária: reentrega do mesmo evento bate
- * na chave e não estende o prazo de novo.
+ * na chave e não estende o prazo de novo (o `id` de pagamento é o da cobrança — ver
+ * `lerEvento` em lib/asaas.ts).
  *
  * Regras do prazo:
- *   - cartão (assinatura criada ou renovada): pago até daqui a um mês. Sem somar — se
- *     o gateway mandar dois eventos para o mesmo pagamento, o resultado é o mesmo.
+ *   - cartão (cobrança de assinatura paga): pago até daqui a um mês. Sem somar.
  *   - Pix avulso: soma 30 dias ao que já havia. Pagar adiantado não perde dias.
  *   - estorno, contestação: volta na hora para só leitura, sem carência.
- *   - cancelamento: só desliga a renovação; o mês pago continua.
+ *   - assinatura removida no Asaas: só desliga a renovação; o mês pago continua.
+ *
+ * "abandonada": a oficina abriu a assinatura no cartão e não pagou a primeira fatura,
+ * que venceu. A rota cancela a assinatura no Asaas, senão ela gera fatura todo mês.
  */
 export async function processarEventoPagamento(evento: EventoGateway, payload: unknown): Promise<ResultadoEvento> {
-  // Evento de sandbox não libera oficina de verdade, e vice-versa: o modo do evento
-  // precisa bater com o da chave em uso (ABACATEPAY_DEV_MODE=1 na chave de teste).
-  const aceitaDev = process.env.ABACATEPAY_DEV_MODE === "1";
-  const modoBate = evento.devMode === aceitaDev;
+  // Sandbox e produção são contas separadas no Asaas, cada uma com o seu webhook e o
+  // seu token — evento de teste não chega aqui com o token de produção.
+  const onde = [
+    ...(evento.oficinaId ? [{ id: evento.oficinaId }] : []),
+    ...(evento.clienteId ? [{ gatewayClienteId: evento.clienteId }] : []),
+  ];
 
   return prisma.$transaction(
     async (tx) => {
-      const oficina =
-        evento.oficinaId &&
-        (await tx.oficina.findUnique({
-          where: { id: evento.oficinaId },
-          select: { id: true, nome: true, pagoAte: true },
-        }));
+      const oficina = onde.length
+        ? await tx.oficina.findFirst({
+            where: { OR: onde },
+            select: { id: true, nome: true, pagoAte: true, gatewayAssinaturaId: true },
+          })
+        : null;
 
       // Consulta antes de gravar: um insert recusado aborta a transação inteira no
       // Postgres. Duas entregas simultâneas do mesmo evento ainda batem na chave
@@ -476,44 +489,43 @@ export async function processarEventoPagamento(evento: EventoGateway, payload: u
         },
       });
 
-      if (!oficina || !modoBate) return "ignorado";
+      if (!oficina) return "ignorado";
 
       const agora = Date.now();
       const pagoAte = oficina.pagoAte?.getTime() ?? 0;
 
-      switch (evento.tipo) {
-        case "subscription.completed":
-        case "subscription.renewed": {
+      if (EVENTOS_DE_PAGAMENTO.has(evento.tipo)) {
+        if (evento.assinaturaId) {
           const umMes = new Date(agora);
           umMes.setMonth(umMes.getMonth() + 1);
           await tx.oficina.update({
             where: { id: oficina.id },
-            data: {
-              pagoAte: new Date(Math.max(pagoAte, umMes.getTime())),
-              ...(evento.assinaturaId ? { gatewayAssinaturaId: evento.assinaturaId } : {}),
-            },
+            data: { pagoAte: new Date(Math.max(pagoAte, umMes.getTime())), gatewayAssinaturaId: evento.assinaturaId },
           });
-          return "aplicado";
-        }
-
-        case "checkout.completed": {
-          // O primeiro pagamento da assinatura também é um checkout; quem cuida dele é
-          // o `subscription.completed`. Aqui, só o Pix avulso.
-          if (evento.forma !== "pix") return "ignorado";
+        } else {
           await tx.oficina.update({
             where: { id: oficina.id },
             data: { pagoAte: new Date(Math.max(agora, pagoAte) + 30 * DIA_MS) },
           });
-          return "aplicado";
         }
+        return "aplicado";
+      }
 
-        case "subscription.cancelled":
+      switch (evento.tipo) {
+        case "PAYMENT_OVERDUE":
+          // Só a assinatura que nunca foi paga; a renovação que falhou é da carência.
+          return evento.assinaturaId && evento.assinaturaId !== oficina.gatewayAssinaturaId ? "abandonada" : "ignorado";
+
+        case "SUBSCRIPTION_DELETED":
+        case "SUBSCRIPTION_INACTIVATED":
+          // As abandonadas também chegam aqui; só importa a que está valendo.
+          if (evento.assinaturaId !== oficina.gatewayAssinaturaId) return "ignorado";
           await tx.oficina.update({ where: { id: oficina.id }, data: { gatewayAssinaturaId: null } });
           return "aplicado";
 
-        case "checkout.refunded":
-        case "checkout.disputed":
-        case "checkout.lost":
+        case "PAYMENT_REFUNDED":
+        case "PAYMENT_CHARGEBACK_REQUESTED":
+        case "PAYMENT_CHARGEBACK_DISPUTE":
           // Antes da carência, para cair em só leitura já.
           await tx.oficina.update({
             where: { id: oficina.id },
@@ -527,11 +539,11 @@ export async function processarEventoPagamento(evento: EventoGateway, payload: u
     },
     { isolationLevel: "Serializable" }
   ).then(async (resultado) => {
-    if (resultado === "aplicado" && evento.oficinaId && /completed|renewed/.test(evento.tipo)) {
-      const oficina = await prisma.oficina.findUnique({ where: { id: evento.oficinaId }, select: { nome: true } });
+    if (resultado === "aplicado" && EVENTOS_DE_PAGAMENTO.has(evento.tipo)) {
+      const oficina = await prisma.oficina.findFirst({ where: { OR: onde }, select: { nome: true } });
       avisarPlataforma({
         titulo: "Pagamento recebido",
-        mensagem: `${oficina?.nome ?? "Uma oficina"} pagou o boxOS (${evento.tipo === "subscription.renewed" ? "renovação" : evento.forma === "pix" ? "Pix" : "assinatura no cartão"}).`,
+        mensagem: `${oficina?.nome ?? "Uma oficina"} pagou o boxOS (${evento.assinaturaId ? "assinatura no cartão" : "Pix"}).`,
         link: "/configuracoes/plataforma",
       }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do pagamento:", err));
     }
