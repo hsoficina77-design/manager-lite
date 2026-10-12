@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUsuarioAtual, precisaPrimeiroAcesso } from "@/lib/auth";
+import { cadastroTesteAberto } from "@/lib/sistema";
+import { DIAS_TESTE } from "@/lib/plano";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import LoginForm from "@/components/LoginForm";
 
@@ -26,6 +29,18 @@ export default async function LoginPage({
       rodape="Esqueceu a senha? Peça ao dono da oficina para definir uma nova."
     >
       <LoginForm destino={destino} />
+      {/* Quem cai aqui sem conta (link direto, Google) precisa de um caminho para o teste. */}
+      {cadastroTesteAberto() && (
+        <div className="mt-5 border-t border-linha pt-5 text-center">
+          <p className="text-sm text-tinta-2">Ainda não tem acesso?</p>
+          <Link
+            href="/teste?origem=login"
+            className="mt-2 block w-full rounded-lg border border-brand-600 py-2.5 text-center text-sm font-medium text-brand-texto hover:bg-superficie-2"
+          >
+            Testar grátis por {DIAS_TESTE} dias
+          </Link>
+        </div>
+      )}
     </TelaDeEntrada>
   );
 }
