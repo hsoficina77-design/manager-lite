@@ -13,9 +13,10 @@
 // tabela por tabela, antes e depois do ataque.
 //
 // Uso:
-//   BASE_URL=http://localhost:3000 DONO_EMAIL=... DONO_SENHA=... node scripts/teste-isolamento.mjs
+//   BASE_URL=http://localhost:3000 DONO_EMAIL=... DONO_SENHA=... //   PLATAFORMA_EMAIL=... PLATAFORMA_SENHA=... node scripts/teste-isolamento.mjs
 //
-// O dono informado precisa ser dono da plataforma (é quem gera o convite da B).
+// DONO_* é o dono de uma oficina (a A). PLATAFORMA_* é a conta do painel admin, que
+// gera o convite da B e a suspende no fim.
 // Grava dados de teste nas duas oficinas e apaga tudo no fim — use só em banco local.
 
 import { PrismaClient } from "@prisma/client";
@@ -23,8 +24,10 @@ import { PrismaClient } from "@prisma/client";
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const DONO_EMAIL = process.env.DONO_EMAIL;
 const DONO_SENHA = process.env.DONO_SENHA;
-if (!DONO_EMAIL || !DONO_SENHA) {
-  console.error("Defina DONO_EMAIL e DONO_SENHA (dono da plataforma no banco local).");
+const PLATAFORMA_EMAIL = process.env.PLATAFORMA_EMAIL;
+const PLATAFORMA_SENHA = process.env.PLATAFORMA_SENHA;
+if (!DONO_EMAIL || !DONO_SENHA || !PLATAFORMA_EMAIL || !PLATAFORMA_SENHA) {
+  console.error("Defina DONO_EMAIL/DONO_SENHA (dono de oficina) e PLATAFORMA_EMAIL/PLATAFORMA_SENHA (painel admin), no banco local.");
   process.exit(2);
 }
 
@@ -135,6 +138,11 @@ async function main() {
   const donoA = await prisma.usuario.findUnique({ where: { email: DONO_EMAIL.toLowerCase() } });
   const OFICINA_A = donoA.oficinaId;
 
+  // Conta da plataforma: gera o convite da B e suspende no fim.
+  const loginP = await chamar(null, "POST", "/api/auth/login", { email: PLATAFORMA_EMAIL, senha: PLATAFORMA_SENHA });
+  await exigir2xx(loginP, "login da plataforma");
+  const P = cookieDe(loginP);
+
   // ── Semente na A: um registro de cada tipo, criado pela própria API ────────
   console.log("Semeando a oficina A…");
   const mec = await exigir2xx(await chamar(A, "POST", "/api/mecanicos", { nome: `${MARCA} mecânico` }), "mecânico A");
@@ -221,7 +229,7 @@ async function main() {
   // ── Oficina B: entra por convite ──────────────────────────────────────────
   console.log("Criando a oficina B por convite…");
   const convite = await exigir2xx(
-    await chamar(A, "POST", "/api/plataforma/convites", { nomeOficina: `${MARCA} B` }),
+    await chamar(P, "POST", "/api/plataforma/convites", { nomeOficina: `${MARCA} B` }),
     "convite"
   );
   const token = convite.caminho.split("/convite/")[1];
@@ -399,15 +407,17 @@ async function main() {
     const vazados = [...idsB].filter((id) => res.texto.includes(id));
     checar(vazados.length === 0, `A: GET ${caminho} mostrou ${vazados.length} id(s) da oficina B`);
   }
-  const plataforma = await chamar(A, "GET", "/api/plataforma/oficinas");
-  checar(plataforma.status === 200, "dono da plataforma lista as oficinas");
+  const semPlataforma = await chamar(A, "GET", "/api/plataforma/oficinas");
+  checar(semPlataforma.status === 403, `dono de oficina não lista as oficinas (veio ${semPlataforma.status})`);
+  const plataforma = await chamar(P, "GET", "/api/plataforma/oficinas");
+  checar(plataforma.status === 200, "conta da plataforma lista as oficinas");
   checar(
     !plataforma.texto.includes(`${MARCA} cliente B`),
     "lista de oficinas não traz dados de dentro da oficina"
   );
 
   // Suspender a B derruba a sessão dela.
-  await exigir2xx(await chamar(A, "PATCH", `/api/plataforma/oficinas/${OFICINA_B}`, { ativa: false }), "suspender B");
+  await exigir2xx(await chamar(P, "PATCH", `/api/plataforma/oficinas/${OFICINA_B}`, { ativa: false }), "suspender B");
   const bSuspensa = await chamar(B, "GET", "/api/clientes");
   checar(bSuspensa.status === 401, `oficina suspensa perde o acesso (veio ${bSuspensa.status})`);
   const loginSuspensa = await chamar(null, "POST", "/api/auth/login", { email: emailB, senha: "senhaforte-b-123" });

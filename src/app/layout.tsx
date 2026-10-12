@@ -3,6 +3,7 @@ import { Poppins } from "next/font/google";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { UsuarioProvider } from "@/components/UsuarioProvider";
 import { AvisosProvider } from "@/components/ui/Avisos";
 import { SaidaSeguraProvider } from "@/components/ui/SaidaSegura";
@@ -51,7 +52,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const usuario = await getUsuarioAtual();
   const config = usuario ? await configuracaoDaSessao(usuario) : null;
   return {
-    title: config ? `${nomeDoMenu(config)} · boxOS` : "boxOS",
+    title: usuario?.administraPlataforma ? "Admin · boxOS" : config ? `${nomeDoMenu(config)} · boxOS` : "boxOS",
     applicationName: "boxOS",
     description: "boxOS — gestão para oficinas mecânicas.",
     icons: {
@@ -87,9 +88,17 @@ export default async function RootLayout({
     redirect(`/login?next=${encodeURIComponent(rota)}`);
   }
 
+  // A conta da plataforma não opera oficina: mora no painel admin. Qualquer outra tela
+  // (inclusive o "/" para onde o login manda) leva para lá.
+  if (usuario?.administraPlataforma && rota && !ehRotaDoAdmin(rota)) {
+    redirect("/admin");
+  }
+
   // As telas de login, convite e primeiro acesso caem aqui sem usuário — e não devem
   // ganhar menu lateral nem contagem de pendências.
-  const conteudo = usuario ? (
+  const conteudo = usuario?.administraPlataforma ? (
+    <AdminComMenu usuario={usuario}>{children}</AdminComMenu>
+  ) : usuario ? (
     <AppComMenu usuario={usuario} config={config}>
       {children}
     </AppComMenu>
@@ -173,6 +182,28 @@ async function AppComMenu({
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
       <BloqueioDeAcao />
+    </>
+  );
+}
+
+function ehRotaDoAdmin(rota: string) {
+  return rota === "/admin" || rota.startsWith("/admin/");
+}
+
+/** O mesmo esqueleto do app, com o menu do painel admin e sem nada de plano de oficina. */
+function AdminComMenu({
+  usuario,
+  children,
+}: {
+  usuario: NonNullable<Awaited<ReturnType<typeof getUsuarioAtual>>>;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <AdminSidebar usuario={{ nome: usuario.nome, email: usuario.email, papel: usuario.papel }} />
+      <main className="pt-14 pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-56 md:pt-0">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
     </>
   );
 }

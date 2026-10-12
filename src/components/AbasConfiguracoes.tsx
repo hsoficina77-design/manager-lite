@@ -3,25 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useUsuario } from "@/components/UsuarioProvider";
 
+// A plataforma (convites, oficinas) saiu daqui: tem painel próprio em /admin, na conta
+// do boxOS.
 const ABAS = [
   { href: "/configuracoes", label: "Oficina" },
   { href: "/configuracoes/usuarios", label: "Acessos" },
 ];
 
-// Só para o dono da plataforma: convites e a lista de oficinas.
-const ABA_PLATAFORMA = { href: "/configuracoes/plataforma", label: "Plataforma" };
-
 /** Navegação entre as telas do painel do dono. */
 export default function AbasConfiguracoes() {
   const pathname = usePathname();
-  const usuario = useUsuario();
-  const abas = usuario?.administraPlataforma ? [...ABAS, ABA_PLATAFORMA] : ABAS;
 
   return (
     <div className="mb-6 flex gap-1 border-b border-linha">
-      {abas.map((aba) => {
+      {ABAS.map((aba) => {
         const ativa = pathname === aba.href;
         return (
           <Link

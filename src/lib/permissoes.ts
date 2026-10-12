@@ -36,8 +36,9 @@ export const ROTAS_DE_DONO = [
   "/api/usuarios",
   "/api/exclusoes",
   // Plataforma exige, além de dono, `administraPlataforma` — que só o banco sabe, então
-  // essa segunda checagem fica na rota (guardaApi) e na página.
+  // essa segunda checagem fica na rota (guardaApi) e na página (exigirPlataforma).
   "/api/plataforma",
+  "/admin",
 ];
 
 // Dinheiro: caixa, despesas, contas a receber. Todo dono já enxerga; um operador só

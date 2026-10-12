@@ -30,6 +30,17 @@ const CATEGORIAS_PADRAO = [
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 /**
+ * A conta oficial do boxOS — a que entra no painel admin (`/admin`). Nasce já com
+ * `administraPlataforma` e sem prazo de teste, venha do convite ou do link da bio. A
+ * migração `admin_plataforma` passou a flag para ela; as oficinas, inclusive a HS,
+ * ficam só como oficinas.
+ */
+export const EMAIL_PLATAFORMA = "contato.boxos77@gmail.com";
+
+/** As oficinas de verdade: fica de fora a da própria plataforma, que só existe para o login. */
+const SO_OFICINAS = { usuarios: { none: { administraPlataforma: true } } };
+
+/**
  * Cria a oficina, a configuração dela, as categorias padrão e o dono — tudo ou nada.
  *
  * Roda dentro da transação de quem chama (convite, primeiro acesso), para que a
@@ -49,10 +60,12 @@ export async function criarOficinaComDono(
     teste?: { whatsapp: string; origem: string | null };
   }
 ) {
+  // A conta da plataforma não testa nem paga: o painel dela não pode cair em só leitura.
+  const daPlataforma = dados.email === EMAIL_PLATAFORMA;
   const oficina = await tx.oficina.create({
     data: {
       nome: dados.nomeOficina,
-      ...(dados.teste
+      ...(dados.teste && !daPlataforma
         ? { testeAte: fimDoTeste(), whatsapp: dados.teste.whatsapp, origem: dados.teste.origem }
         : {}),
     },
@@ -70,7 +83,7 @@ export async function criarOficinaComDono(
       email: dados.email,
       senhaHash: dados.senhaHash,
       papel: "ADMIN",
-      administraPlataforma: dados.administraPlataforma ?? false,
+      administraPlataforma: daPlataforma || (dados.administraPlataforma ?? false),
     },
   });
 
@@ -147,12 +160,12 @@ export async function criarOficinaDeTeste(dados: {
     { isolationLevel: "Serializable" }
   );
 
-  if (typeof criada !== "string") {
+  if (typeof criada !== "string" && dados.email !== EMAIL_PLATAFORMA) {
     // Fora da transação: o aviso não pode desfazer um cadastro que deu certo.
     avisarPlataforma({
       titulo: "Nova oficina em teste",
       mensagem: `${dados.nomeOficina} (${dados.nome}) começou o teste grátis${dados.origem ? ` — veio de ${dados.origem}` : ""}.`,
-      link: "/configuracoes/plataforma",
+      link: `/admin/oficinas/${criada.oficina.id}`,
     }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do cadastro:", err));
   }
   return criada;
@@ -319,6 +332,7 @@ export async function cancelarConvite(id: string) {
  */
 export async function listarOficinas() {
   const oficinas = await prisma.oficina.findMany({
+    where: SO_OFICINAS,
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
@@ -341,6 +355,14 @@ export async function listarOficinas() {
   });
   const ultimoPorOficina = new Map(acessos.map((a) => [a.oficinaId, a._max.ultimoAcesso]));
 
+  // Uso recente: o total de OS diz quanto a oficina já usou; este, se ainda usa.
+  const recentes = await prisma.ordemServico.groupBy({
+    by: ["oficinaId"],
+    where: { createdAt: { gte: new Date(Date.now() - 30 * DIA_MS) } },
+    _count: { _all: true },
+  });
+  const recentesPorOficina = new Map(recentes.map((r) => [r.oficinaId, r._count._all]));
+
   return oficinas.map((o) => ({
     id: o.id,
     nome: o.nome,
@@ -354,10 +376,130 @@ export async function listarOficinas() {
     assinaturaAutomatica: Boolean(o.gatewayAssinaturaId),
     usuarios: o._count.usuarios,
     ordens: o._count.ordens,
+    ordens30d: recentesPorOficina.get(o.id) ?? 0,
     clientes: o._count.clientes,
     ultimoAcesso: ultimoPorOficina.get(o.id) ?? null,
   }));
 }
+
+export type OficinaDaLista = Awaited<ReturnType<typeof listarOficinas>>[number];
+
+/**
+ * Ficha de uma oficina para o painel admin. Continua sendo a casca: quem tem acesso,
+ * quanto usa e o que pagou ao boxOS — nada de clientes, OS ou valores de dentro dela.
+ * `null` para id inexistente ou para a oficina da própria plataforma.
+ */
+export async function fichaDaOficina(id: string) {
+  const oficina = await prisma.oficina.findFirst({
+    where: { id, ...SO_OFICINAS },
+    select: {
+      id: true,
+      nome: true,
+      ativa: true,
+      createdAt: true,
+      testeAte: true,
+      pagoAte: true,
+      whatsapp: true,
+      origem: true,
+      gatewayAssinaturaId: true,
+      _count: { select: { ordens: true, clientes: true, orcamentos: true } },
+      usuarios: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          nome: true,
+          email: true,
+          papel: true,
+          ativo: true,
+          ultimoAcesso: true,
+          createdAt: true,
+          // Sessão mais recente ainda aberta: de onde a pessoa está entrando.
+          sessoes: {
+            where: { expiraEm: { gt: new Date() } },
+            orderBy: { criadaEm: "desc" },
+            take: 1,
+            select: { criadaEm: true, userAgent: true },
+          },
+        },
+      },
+      convites: { take: 1, select: { createdAt: true, email: true } },
+      eventosPagamento: {
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, tipo: true, valor: true, createdAt: true },
+      },
+    },
+  });
+  if (!oficina) return null;
+
+  const [ordens30d, ultimaOs] = await Promise.all([
+    prisma.ordemServico.count({
+      where: { oficinaId: id, createdAt: { gte: new Date(Date.now() - 30 * DIA_MS) } },
+    }),
+    prisma.ordemServico.findFirst({
+      where: { oficinaId: id },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+  ]);
+
+  return {
+    id: oficina.id,
+    nome: oficina.nome,
+    ativa: oficina.ativa,
+    criadaEm: oficina.createdAt,
+    situacao: situacaoDaOficina(oficina),
+    testeAte: oficina.testeAte,
+    pagoAte: oficina.pagoAte,
+    whatsapp: oficina.whatsapp,
+    origem: oficina.origem,
+    assinaturaAutomatica: Boolean(oficina.gatewayAssinaturaId),
+    convite: oficina.convites[0] ?? null,
+    ordens: oficina._count.ordens,
+    ordens30d,
+    ultimaOs: ultimaOs?.createdAt ?? null,
+    clientes: oficina._count.clientes,
+    orcamentos: oficina._count.orcamentos,
+    usuarios: oficina.usuarios.map(({ sessoes, ...u }) => ({
+      ...u,
+      sessaoAberta: sessoes[0] ?? null,
+    })),
+    pagamentos: oficina.eventosPagamento,
+  };
+}
+
+export type FichaDaOficina = NonNullable<Awaited<ReturnType<typeof fichaDaOficina>>>;
+
+/**
+ * O que entrou no caixa do boxOS: os eventos de pagamento do gateway nos últimos
+ * meses, com o nome da oficina. É dinheiro da plataforma, não da oficina.
+ */
+export async function eventosDePagamento(desde: Date) {
+  const eventos = await prisma.eventoPagamento.findMany({
+    where: { createdAt: { gte: desde } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      tipo: true,
+      valor: true,
+      createdAt: true,
+      payload: true,
+      oficina: { select: { id: true, nome: true } },
+    },
+  });
+  return eventos.map(({ payload, ...e }) => ({ ...e, forma: formaDoPayload(payload) }));
+}
+
+/** Cartão ou Pix, lido do evento do Asaas (`payment.billingType`). */
+function formaDoPayload(payload: unknown): "cartao" | "pix" | null {
+  const pagamento = (payload as { payment?: { billingType?: unknown } } | null)?.payment;
+  const tipo = pagamento?.billingType;
+  if (tipo === "CREDIT_CARD") return "cartao";
+  if (tipo === "PIX") return "pix";
+  return null;
+}
+
+export type EventoDePagamento = Awaited<ReturnType<typeof eventosDePagamento>>[number];
 
 /**
  * Suspende ou reativa uma oficina. Suspender derruba as sessões de todos dela na hora
@@ -544,7 +686,7 @@ export async function processarEventoPagamento(evento: EventoGateway, payload: u
       avisarPlataforma({
         titulo: "Pagamento recebido",
         mensagem: `${oficina?.nome ?? "Uma oficina"} pagou o boxOS (${evento.assinaturaId ? "assinatura no cartão" : "Pix"}).`,
-        link: "/configuracoes/plataforma",
+        link: "/admin/receita",
       }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do pagamento:", err));
     }
     return resultado;

@@ -56,6 +56,9 @@ export type UsuarioSessao = {
  */
 export const getUsuarioAtual = cache(lerUsuarioDaSessao);
 
+/** De quanto em quanto tempo o uso renova `Usuario.ultimoAcesso`. */
+const INTERVALO_ACESSO_MS = 60 * 60 * 1000;
+
 async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
   const token = (await cookies()).get(COOKIE_SESSAO)?.value;
   const lido = await lerToken(token);
@@ -77,6 +80,7 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
             ativo: true,
             oficinaId: true,
             administraPlataforma: true,
+            ultimoAcesso: true,
             oficina: {
               select: { ativa: true, testeAte: true, pagoAte: true, gatewayAssinaturaId: true },
             },
@@ -98,7 +102,16 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
     }
 
     const { usuario } = sessao;
-    const papel = ehPapelValido(usuario.papel) ? usuario.papel : "OPERADOR";
+
+    // A sessão dura 30 dias, então o login sozinho não diz se a pessoa ainda usa.
+    // Carimba o uso no máximo uma vez por hora, sem segurar a resposta.
+    if (!usuario.ultimoAcesso || Date.now() - usuario.ultimoAcesso.getTime() > INTERVALO_ACESSO_MS) {
+      prisma.usuario
+        .update({ where: { id: usuario.id }, data: { ultimoAcesso: new Date() } })
+        .catch((err: unknown) => console.error("Falha ao registrar o último acesso:", err));
+    }
+
+    const papel =ehPapelValido(usuario.papel) ? usuario.papel : "OPERADOR";
     const ehDono = papel === "ADMIN";
     const { testeAte, pagoAte } = usuario.oficina;
     const situacao = situacaoDaOficina({ testeAte, pagoAte });
@@ -174,6 +187,13 @@ export async function exigirUsuario(destino?: string): Promise<UsuarioSessao> {
 export async function exigirDono(): Promise<UsuarioSessao> {
   const usuario = await exigirUsuario();
   if (usuario.papel !== "ADMIN") redirect("/");
+  return usuario;
+}
+
+/** Página do painel admin (`/admin`): só a conta da plataforma. Os outros voltam ao início. */
+export async function exigirPlataforma(): Promise<UsuarioSessao> {
+  const usuario = await exigirDono();
+  if (!usuario.administraPlataforma) redirect("/");
   return usuario;
 }
 
