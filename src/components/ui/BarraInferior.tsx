@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Despesa, Dinheiro, Mais, Patio, Recibo } from "./Icones";
+import { Casa, Despesa, Dinheiro, Mais, Recibo } from "./Icones";
 
 /**
  * Navegação inferior do celular.
@@ -13,8 +13,9 @@ import { Despesa, Dinheiro, Mais, Patio, Recibo } from "./Icones";
  * texto, tocar. Numa oficina, com o celular numa das mãos, esse é o gesto mais
  * repetido do dia.
  *
- * Cinco posições fixas, sempre as mesmas, nesta ordem: Pátio, OS, Nova OS,
- * A receber, Gastos. Antes os dois últimos trocavam para Clientes/Mecânicos
+ * Cinco posições fixas, sempre as mesmas, nesta ordem: Início, OS, Nova OS,
+ * A receber, Gastos. A primeira era o Pátio (o Dashboard); virou o Início, a tela
+ * de atalhos, que tem o Dashboard a um toque e é onde quem se perdeu volta. Antes os dois últimos trocavam para Clientes/Mecânicos
  * quando quem estava logado era o operador, e havia um botão de menu que nunca
  * chegava a aparecer (a lista de itens tinha sempre 4, então a condição que o
  * mostraria nunca era verdadeira) — o resultado prático eram cinco posições
@@ -28,13 +29,13 @@ import { Despesa, Dinheiro, Mais, Patio, Recibo } from "./Icones";
 type Item = {
   href: string;
   label: string;
-  Icone: typeof Patio;
+  Icone: typeof Casa;
   /** Casa exata; sem isto "/" acenderia em toda tela. */
   exato?: boolean;
 };
 
 const ANTES: Item[] = [
-  { href: "/", label: "Pátio", Icone: Patio, exato: true },
+  { href: "/", label: "Início", Icone: Casa, exato: true },
   { href: "/os", label: "OS", Icone: Recibo },
 ];
 

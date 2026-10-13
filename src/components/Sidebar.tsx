@@ -12,6 +12,7 @@ import { usePedirSaida } from "./ui/SaidaSegura";
 import { SeletorTema } from "./ui/Tema";
 import {
   Caixa,
+  Casa,
   Chave,
   Chevron,
   Cofre,
@@ -82,7 +83,9 @@ export function Sidebar({
   // para o mesmo lugar — quem aprende a nota de dinheiro como "A receber" no
   // celular reencontra a mesma nota no menu do computador.
   const todosOsLinks: LinkDef[] = [
-    { href: "/", label: "Dashboard", exact: true, Icone: Patio },
+    // A tela de atalhos, onde o app abre. Exato: sem isto "/" acenderia em toda tela.
+    { href: "/", label: "Início", exact: true, Icone: Casa },
+    { href: "/painel", label: "Dashboard", Icone: Patio },
     { href: "/clientes", label: "Clientes", Icone: Pessoas },
     {
       href: "/os",

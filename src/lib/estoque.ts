@@ -169,3 +169,12 @@ export function textoDeBusca(p: {
 }): string {
   return normalizarBusca([p.nome, p.codigo, p.fornecedor].filter(Boolean).join(" "));
 }
+
+/**
+ * A peça entra no filtro "Precisa repor": acabou, ou chegou no mínimo cadastrado.
+ * Uma regra só para o filtro da tela do estoque e o aviso da tela inicial — se cada
+ * um contasse do seu jeito, o número do atalho não bateria com a lista ao abrir.
+ */
+export function precisaRepor(p: { quantidade: number; estoqueMinimo: number }): boolean {
+  return p.quantidade <= 0 || (p.estoqueMinimo > 0 && p.quantidade <= p.estoqueMinimo);
+}

@@ -9,7 +9,8 @@ import { AvisosProvider } from "@/components/ui/Avisos";
 import { SaidaSeguraProvider } from "@/components/ui/SaidaSegura";
 import { SCRIPT_TEMA } from "@/components/ui/Tema";
 import { getUsuarioAtual } from "@/lib/auth";
-import { bancoDaOficina, type Db } from "@/lib/db-oficina";
+import { bancoDaOficina } from "@/lib/db-oficina";
+import { contarPendencias } from "@/lib/pendencias";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
 import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
@@ -206,12 +207,4 @@ function AdminComMenu({
       </main>
     </>
   );
-}
-
-async function contarPendencias(db: Db): Promise<number> {
-  const [osPendentes, dividasPendentes] = await Promise.all([
-    db.ordemServico.count({ where: { pago: false, status: "ENTREGUE" } }),
-    db.dividaAvulsa.count({ where: { pago: false } }),
-  ]);
-  return osPendentes + dividasPendentes;
 }

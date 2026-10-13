@@ -3,7 +3,7 @@ import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { produtoCriarSchema } from "@/lib/schemas";
 import { guardaApi } from "@/lib/auth";
 import { semFinanceiro } from "@/lib/permissoes";
-import { textoDeBusca } from "@/lib/estoque";
+import { precisaRepor, textoDeBusca } from "@/lib/estoque";
 import { normalizarBusca } from "@/lib/utils";
 
 /**
@@ -43,9 +43,7 @@ export async function GET(request: Request) {
 
   // "Precisa repor" compara duas colunas, e o Prisma não faz isso no `where` sem SQL
   // cru. São poucas linhas (o próprio `take` limita), então o recorte sai aqui.
-  const lista = baixo
-    ? produtos.filter((p) => p.quantidade <= 0 || (p.estoqueMinimo > 0 && p.quantidade <= p.estoqueMinimo))
-    : produtos;
+  const lista = baixo ? produtos.filter(precisaRepor) : produtos;
 
   return NextResponse.json(semFinanceiro(lista, guarda.usuario.podeFinanceiro));
 }

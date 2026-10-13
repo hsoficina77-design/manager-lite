@@ -256,6 +256,57 @@ export const Cofre = (p: Props) => (
   </Base>
 );
 
+/* --- tela inicial -----------------------------------------------------------
+   Os destinos que não tinham ícone próprio no menu (Orçamentos e Produtividade são
+   subitens), as ações de criar e a ajuda. */
+
+/** Início — a tela de atalhos. */
+export const Casa = (p: Props) => (
+  <Base {...p}>
+    <path d="m3 10 9-7 9 7" />
+    <path d="M5 8.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V8.5" />
+  </Base>
+);
+
+/** Ajuda — o "?" que explica para que serve cada coisa. */
+export const Interrogacao = (p: Props) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </Base>
+);
+
+/** Orçamento — a prancheta com o preço anotado. */
+export const Prancheta = (p: Props) => (
+  <Base {...p}>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M9 12h6" />
+    <path d="M9 16h4" />
+  </Base>
+);
+
+/** Novo cliente. */
+export const PessoaMais = (p: Props) => (
+  <Base {...p}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M19 8v6" />
+    <path d="M22 11h-6" />
+  </Base>
+);
+
+/** Produtividade — barras subindo. */
+export const Grafico = (p: Props) => (
+  <Base {...p}>
+    <path d="M3 3v18h18" />
+    <path d="M8 17v-4" />
+    <path d="M13 17V9" />
+    <path d="M18 17V5" />
+  </Base>
+);
+
 /* --- assinatura ------------------------------------------------------------ */
 
 export const Cartao = (p: Props) => (
