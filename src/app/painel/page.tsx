@@ -76,7 +76,7 @@ export default async function Dashboard({
       {/* As abas já dizem o que a tela mostra; a linha explicativa embaixo do
           título era ruído em toda página para quem abre o sistema todo dia. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-tinta">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-tinta">Resumo da oficina</h1>
         {podeVerFinanceiro && (
           <div className="flex gap-1 rounded-lg bg-superficie-3 p-1">
             <AbaLink href={`/painel?aba=resultado&periodo=${periodo}`} ativa={aba === "resultado"}>

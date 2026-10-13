@@ -17,6 +17,7 @@ import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
 import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
+import { VoltaAoInicio } from "@/components/VoltaAoInicio";
 import "./globals.css";
 
 // Fonte da marca boxOS, só para a logo e os títulos (ver `font-marca` no Tailwind).
@@ -183,6 +184,7 @@ async function AppComMenu({
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
       <BloqueioDeAcao />
+      <VoltaAoInicio />
     </>
   );
 }

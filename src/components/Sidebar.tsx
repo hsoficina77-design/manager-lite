@@ -85,7 +85,8 @@ export function Sidebar({
   const todosOsLinks: LinkDef[] = [
     // A tela de atalhos, onde o app abre. Exato: sem isto "/" acenderia em toda tela.
     { href: "/", label: "Início", exact: true, Icone: Casa },
-    { href: "/painel", label: "Dashboard", Icone: Patio },
+    // Era "Dashboard": palavra de escritório, não de oficina.
+    { href: "/painel", label: "Resumo", Icone: Patio },
     { href: "/clientes", label: "Clientes", Icone: Pessoas },
     {
       href: "/os",

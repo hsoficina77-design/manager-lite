@@ -57,6 +57,8 @@ type Contexto = {
   registrar: (registro: Registro | null) => void;
   /** `true` quando dá para sair: nada pendente, ou o usuário decidiu sair. */
   pedirSaida: () => Promise<boolean>;
+  /** Há edição pendente agora? Só consulta — não pergunta nada a ninguém. */
+  temPendencia: () => boolean;
 };
 
 const SaidaContexto = createContext<Contexto | null>(null);
@@ -71,6 +73,17 @@ export function usePedirSaida() {
 }
 
 const PODE_SAIR = () => Promise.resolve(true);
+
+/**
+ * Consulta silenciosa: a tela atual tem edição não salva? Para quem precisa decidir
+ * sozinho se pode trocar de tela — a volta automática ao Início, por exemplo.
+ */
+export function useTemPendencia() {
+  const ctx = useContext(SaidaContexto);
+  return ctx?.temPendencia ?? NADA_PENDENTE;
+}
+
+const NADA_PENDENTE = () => false;
 
 /**
  * Declara que esta tela tem (ou pode ter) alteração não salva.
@@ -254,7 +267,12 @@ export function SaidaSeguraProvider({ children }: { children: React.ReactNode })
     return () => window.removeEventListener("popstate", aoVoltar);
   }, [sujo, registro?.guardarVoltar, pedirSaida, porSentinela]);
 
-  const valor = useMemo(() => ({ registrar, pedirSaida }), [registrar, pedirSaida]);
+  const temPendencia = useCallback(() => !!registroRef.current?.sujo, []);
+
+  const valor = useMemo(
+    () => ({ registrar, pedirSaida, temPendencia }),
+    [registrar, pedirSaida, temPendencia]
+  );
 
   async function salvarESair() {
     if (!registro?.salvar) return;

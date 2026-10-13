@@ -24,7 +24,7 @@ import {
  * Tela inicial: os atalhos.
  *
  * Mecânico que não lida bem com tecnologia não sabe o que tem atrás de "Caixa" ou de
- * "Dashboard" até entrar. Aqui cada lugar do sistema vira um cartão grande com o nome,
+ * "Contas a receber" até entrar. Aqui cada lugar do sistema vira um cartão grande com o nome,
  * uma frase do que tem lá dentro e um "?" com a explicação inteira.
  *
  * Os nomes e os ícones são os mesmos do menu lateral, de propósito: quem aprende o
@@ -64,9 +64,8 @@ type Acao = {
 
 // A ordem é a do caminho do carro: primeiro o cliente, depois a OS. Quem não conhece o
 // sistema e começa pela OS de um cliente que ainda não existe se perde — com o
-// cadastro na frente, o primeiro passo é o óbvio. A Nova OS continua em destaque por
-// ser o gesto mais repetido do dia, e mesmo começando por ela o cliente novo pode ser
-// cadastrado lá dentro.
+// cadastro na frente e em destaque, o primeiro passo é o óbvio. (Mesmo começando pela
+// OS, o cliente novo pode ser cadastrado lá dentro.)
 const ACOES: Acao[] = [
   {
     href: "/clientes/novo",
@@ -74,6 +73,7 @@ const ACOES: Acao[] = [
     resumo: "Cadastrar o cliente e o carro",
     Icone: PessoaMais,
     irPara: "Cadastrar cliente",
+    destaque: true,
     ajuda: {
       titulo: "Novo cliente",
       texto:
@@ -87,7 +87,6 @@ const ACOES: Acao[] = [
     resumo: "O carro chegou para o serviço",
     Icone: Recibo,
     irPara: "Abrir nova OS",
-    destaque: true,
     ajuda: {
       titulo: "Nova OS",
       texto:
@@ -199,15 +198,16 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 const DESTINOS: Destino[] = [
   {
     href: "/painel",
-    titulo: "Dashboard",
-    resumo: "O resumo da oficina: pátio, entregas e lucro",
-    resumoSemFinanceiro: "O resumo da oficina: carros no pátio e entregas",
+    // Era "Dashboard" — palavra que o mecânico não usa. "Resumo" diz o que tem lá.
+    titulo: "Resumo",
+    resumo: "Carros no pátio, entregas e lucro do mês",
+    resumoSemFinanceiro: "Carros no pátio e entregas do dia",
     Icone: Patio,
     aviso: (c) => (c.patio > 0 ? { texto: plural(c.patio, "carro no pátio", "carros no pátio"), tom: "neutro" } : null),
     ajuda: {
-      titulo: "Dashboard",
+      titulo: "Resumo da oficina",
       texto:
-        "O resumo da oficina numa tela só. Na aba Operação ficam os carros que estão no pátio agora, com o que está parado há mais tempo no topo.",
+        "Como está a oficina, numa tela só. Na aba Operação ficam os carros que estão no pátio agora, com o que está parado há mais tempo no topo.",
       dica: "Quem cuida do dinheiro também vê a aba Resultado: quanto a oficina faturou e lucrou no mês.",
     },
   },
@@ -318,7 +318,7 @@ const DESTINOS: Destino[] = [
     ajuda: {
       titulo: "Controle de gastos",
       texto:
-        "Lance o que a oficina paga: aluguel, luz, água, fornecedor. As contas fixas se repetem todo mês sozinhas, e tudo entra na conta do lucro do Dashboard.",
+        "Lance o que a oficina paga: aluguel, luz, água, fornecedor. As contas fixas se repetem todo mês sozinhas, e tudo entra na conta do lucro, no Resumo.",
     },
   },
   {

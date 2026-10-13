@@ -14,8 +14,8 @@ import { Casa, Despesa, Dinheiro, Mais, Recibo } from "./Icones";
  * repetido do dia.
  *
  * Cinco posições fixas, sempre as mesmas, nesta ordem: Início, OS, Nova OS,
- * A receber, Gastos. A primeira era o Pátio (o Dashboard); virou o Início, a tela
- * de atalhos, que tem o Dashboard a um toque e é onde quem se perdeu volta. Antes os dois últimos trocavam para Clientes/Mecânicos
+ * A receber, Gastos. A primeira era o Pátio (o Resumo, antigo Dashboard); virou o
+ * Início, a tela de atalhos, que tem o Resumo a um toque e é onde quem se perdeu volta. Antes os dois últimos trocavam para Clientes/Mecânicos
  * quando quem estava logado era o operador, e havia um botão de menu que nunca
  * chegava a aparecer (a lista de itens tinha sempre 4, então a condição que o
  * mostraria nunca era verdadeira) — o resultado prático eram cinco posições

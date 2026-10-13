@@ -11,7 +11,7 @@ import {
 
 // Tela inicial: é onde o app abre, no celular e no computador.
 //
-// O Dashboard (agora em /painel) responde "como está a oficina"; esta tela responde a
+// O Resumo (/painel, o antigo Dashboard) responde "como está a oficina"; esta tela responde a
 // pergunta de antes, "o que eu faço agora", e mostra onde fica cada coisa. Ela não tem
 // número de dinheiro nenhum — só os avisos que pedem uma ação (carro esperando peça,
 // orçamento sem resposta, peça para repor, conta em aberto).
