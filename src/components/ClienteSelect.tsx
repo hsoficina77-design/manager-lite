@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PessoaMais } from "./ui/Icones";
 
 type Cliente = { id: string; nome: string; telefone: string | null };
 
@@ -24,6 +25,7 @@ export default function ClienteSelect({
   placeholder = "Selecionar cliente...",
   emptyLabel,
   disabled = false,
+  onCadastrar,
 }: {
   clientes: Cliente[];
   value: string;
@@ -32,6 +34,12 @@ export default function ClienteSelect({
   /** Quando informado, "sem cliente" vira uma opção de verdade na lista. */
   emptyLabel?: string;
   disabled?: boolean;
+  /**
+   * Abre o cadastro rápido com o que foi digitado na busca. Quem procura um nome e não
+   * acha é justamente quem precisa cadastrar — o botão fica no pé da lista, e o Enter
+   * numa busca sem resultado também leva para lá.
+   */
+  onCadastrar?: (busca: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState("");
@@ -77,6 +85,12 @@ export default function ClienteSelect({
     fechar();
   }
 
+  function cadastrar() {
+    const termo = busca.trim();
+    fechar();
+    onCadastrar?.(termo);
+  }
+
   useEffect(() => {
     if (!open) return;
     buscaRef.current?.focus();
@@ -120,6 +134,7 @@ export default function ClienteSelect({
       e.preventDefault();
       const alvo = opcoes[destaque];
       if (alvo) escolher(alvo.id);
+      else if (onCadastrar) cadastrar();
     }
   }
 
@@ -222,10 +237,28 @@ export default function ClienteSelect({
               })}
               {opcoes.length === 0 && (
                 <li className="px-3 py-6 text-center text-sm text-tinta-3">
-                  Nenhum cliente encontrado para “{busca.trim()}”.
+                  {busca.trim()
+                    ? `Nenhum cliente encontrado para “${busca.trim()}”.`
+                    : "Nenhum cliente cadastrado ainda."}
                 </li>
               )}
             </ul>
+
+            {/* Fora da lista que rola: com cem clientes, o botão continua à vista. */}
+            {onCadastrar && (
+              <div className="border-t border-linha p-2">
+                <button
+                  type="button"
+                  onClick={cadastrar}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-brand-texto transition-colors hover:bg-brand-50"
+                >
+                  <PessoaMais tamanho={17} />
+                  <span className="truncate">
+                    {busca.trim() ? `Cadastrar “${busca.trim()}”` : "Cadastrar cliente novo"}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

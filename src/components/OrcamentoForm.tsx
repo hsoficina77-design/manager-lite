@@ -12,11 +12,14 @@ import ProdutoBusca, {
   type ProdutoBuscado,
   type ProdutoResumo,
 } from "./ProdutoBusca";
-import VeiculoCampos, { VEICULO_FORM_VAZIO, veiculoCompleto, veiculoIniciado } from "./VeiculoCampos";
+import {
+  BotaoCadastroRapido,
+  NovoClienteModal,
+  inicialDaBusca,
+  type ClienteCriado,
+} from "./CadastroRapido";
 import { usePodeFinanceiro } from "@/components/UsuarioProvider";
-import { Botao } from "@/components/ui/Botao";
-import { CampoDinheiro, CampoQuantidade, Entrada } from "@/components/ui/Campos";
-import { Modal } from "@/components/ui/Modal";
+import { CampoDinheiro, CampoQuantidade } from "@/components/ui/Campos";
 import { Caixa, Fechar } from "@/components/ui/Icones";
 import { useSaidaSegura } from "@/components/ui/SaidaSegura";
 import { EditorDescricao } from "@/components/EditorDescricao";
@@ -93,14 +96,8 @@ export default function OrcamentoForm({
   const [error, setError] = useState("");
   const itemFormRef = useRef<HTMLDivElement>(null);
 
-  // Cadastro rápido de cliente (sem sair da tela)
-  const [showNovoCliente, setShowNovoCliente] = useState(false);
-  const [savingCliente, setSavingCliente] = useState(false);
-  const [clienteErro, setClienteErro] = useState("");
-  const [novoCliente, setNovoCliente] = useState({
-    nome: "", telefone: "", apelido: "",
-  });
-  const [novoVeiculo, setNovoVeiculo] = useState(VEICULO_FORM_VAZIO);
+  // Cadastro rápido de cliente (sem sair da tela): guarda com o que ele abre preenchido.
+  const [cadastroCliente, setCadastroCliente] = useState<{ nome?: string; telefone?: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then(setClientes);
@@ -163,45 +160,21 @@ export default function OrcamentoForm({
     discardPending();
   }
 
-  function abrirNovoCliente() {
-    // Aproveita o que já foi anotado no rascunho para não redigitar.
-    setNovoCliente({ nome: clienteNome.trim(), telefone: clienteTelefone.trim(), apelido: "" });
-    setNovoVeiculo(VEICULO_FORM_VAZIO);
-    setClienteErro("");
-    setShowNovoCliente(true);
+  function abrirNovoCliente(busca = "") {
+    // Aproveita o que já foi anotado no rascunho para não redigitar; o que foi digitado
+    // na busca de cliente, se houver, vale mais.
+    setCadastroCliente({
+      nome: clienteNome.trim(),
+      telefone: clienteTelefone.trim(),
+      ...inicialDaBusca(busca),
+    });
   }
 
-  async function salvarNovoCliente(e: React.FormEvent) {
-    e.preventDefault();
-    if (!novoCliente.nome.trim()) { setClienteErro("Informe o nome do cliente."); return; }
-    const temVeiculo = veiculoCompleto(novoVeiculo);
-    // Veículo é tudo-ou-nada: se começou a preencher, marca e modelo são obrigatórios.
-    if (veiculoIniciado(novoVeiculo) && !temVeiculo) {
-      setClienteErro("Para cadastrar o veículo, informe ao menos marca e modelo.");
-      return;
-    }
-    setClienteErro("");
-    setSavingCliente(true);
-    try {
-      const res = await fetch("/api/clientes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome: novoCliente.nome,
-          telefone: novoCliente.telefone || undefined,
-          apelido: novoCliente.apelido || undefined,
-          ...(temVeiculo ? { veiculo: novoVeiculo } : {}),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setClienteErro(data.error || "Erro ao criar cliente"); return; }
-      // Adiciona à lista e seleciona; o veículo (se houver) é buscado pelo efeito de clienteId.
-      setClientes((prev) => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
-      setClienteId(data.id);
-      setShowNovoCliente(false);
-    } finally {
-      setSavingCliente(false);
-    }
+  function aoCriarCliente(cliente: ClienteCriado) {
+    // Adiciona à lista e seleciona; o veículo (se houver) é buscado pelo efeito de clienteId.
+    setClientes((prev) => [...prev, cliente].sort((a, b) => a.nome.localeCompare(b.nome)));
+    setClienteId(cliente.id);
+    setCadastroCliente(null);
   }
 
   useEffect(() => {
@@ -410,21 +383,16 @@ export default function OrcamentoForm({
         <div className="bg-superficie rounded-xl border border-linha p-5 space-y-4">
           <h2 className="font-semibold text-tinta">Cliente e Veículo</h2>
           <div>
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between gap-2 mb-1">
               <label className="block text-sm font-medium text-tinta-2">Cliente</label>
-              <button
-                type="button"
-                onClick={abrirNovoCliente}
-                className="text-xs font-medium text-perigo hover:text-perigo"
-              >
-                + Novo cliente
-              </button>
+              <BotaoCadastroRapido onClick={() => abrirNovoCliente()}>Novo cliente</BotaoCadastroRapido>
             </div>
             <ClienteSelect
               clientes={clientes}
               value={clienteId}
               onChange={setClienteId}
               emptyLabel="Sem cadastro — anotar só o nome"
+              onCadastrar={abrirNovoCliente}
             />
           </div>
 
@@ -736,84 +704,14 @@ export default function OrcamentoForm({
       </form>
 
       {/* Cadastro rápido de cliente */}
-      {showNovoCliente && (
-        <Modal
-          titulo="Novo cliente"
+      {cadastroCliente && (
+        <NovoClienteModal
+          inicial={cadastroCliente}
           descricao="O mínimo para o orçamento deixar de ser rascunho."
-          onFechar={() => setShowNovoCliente(false)}
-          rodape={
-            <div className="flex gap-2">
-              <Botao
-                type="submit"
-                form="form-novo-cliente"
-                className="flex-1"
-                disabled={savingCliente}
-              >
-                {savingCliente ? "Salvando..." : "Salvar cliente"}
-              </Botao>
-              <Botao
-                variante="secundario"
-                className="flex-1"
-                onClick={() => setShowNovoCliente(false)}
-              >
-                Cancelar
-              </Botao>
-            </div>
-          }
-        >
-          <form id="form-novo-cliente" onSubmit={salvarNovoCliente} className="space-y-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="nc-nome">
-                Nome <span className="text-perigo">*</span>
-              </label>
-              <Entrada
-                id="nc-nome"
-                data-foco-inicial
-                value={novoCliente.nome}
-                onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })}
-                placeholder="Ex: João Silva"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="nc-tel">
-                  Telefone
-                </label>
-                <Entrada
-                  id="nc-tel"
-                  type="tel"
-                  value={novoCliente.telefone}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
-                  placeholder="(11) 90000-0000"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-tinta-2" htmlFor="nc-apelido">
-                  Apelido
-                </label>
-                <Entrada
-                  id="nc-apelido"
-                  value={novoCliente.apelido}
-                  onChange={(e) => setNovoCliente({ ...novoCliente, apelido: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-lg bg-superficie-2 p-3">
-              <p className="text-xs font-medium text-tinta-2">
-                Veículo (opcional — necessário para converter em OS)
-              </p>
-              {veiculoDesc.trim() && (
-                <p className="text-xs text-tinta-3">Anotado no rascunho: “{veiculoDesc.trim()}”</p>
-              )}
-              <VeiculoCampos value={novoVeiculo} onChange={setNovoVeiculo} />
-            </div>
-
-            {clienteErro && (
-              <p className="rounded-lg bg-perigo-fraco px-3 py-2 text-sm text-perigo">{clienteErro}</p>
-            )}
-          </form>
-        </Modal>
+          notaVeiculo={veiculoDesc.trim() ? `Anotado no rascunho: “${veiculoDesc.trim()}”` : undefined}
+          onCriado={aoCriarCliente}
+          onFechar={() => setCadastroCliente(null)}
+        />
       )}
     </div>
   );

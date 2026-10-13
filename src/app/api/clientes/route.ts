@@ -46,6 +46,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: erroVeiculo(dadosNovoVeiculo) }, { status: 400 });
     }
 
+    // A placa não se repete na oficina, e o cadastro rápido da OS traz cliente e carro
+    // juntos. Confere antes porque, se a trava do banco estourar, o Prisma não diz qual
+    // campo repetiu (`target` vem nulo) — e a única resposta possível seria "CPF/CNPJ já
+    // cadastrado" para quem nem informou CPF.
+    if (dadosNovoVeiculo?.placa) {
+      const mesmaPlaca = await db.veiculo.findFirst({
+        where: { placa: dadosNovoVeiculo.placa },
+        select: { id: true },
+      });
+      if (mesmaPlaca) {
+        return NextResponse.json(
+          { error: "Essa placa já está cadastrada em outro cliente. Procure pela placa em Clientes." },
+          { status: 409 }
+        );
+      }
+    }
+
     const cliente = await db.cliente.create({
       data: {
         nome,

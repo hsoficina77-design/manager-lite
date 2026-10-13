@@ -58,15 +58,36 @@ type Acao = {
   ajuda: TextoDeAjuda;
   /** Rótulo do botão no pé da explicação. */
   irPara: string;
+  /** O cartão em laranja. */
+  destaque?: boolean;
 };
 
+// A ordem é a do caminho do carro: primeiro o cliente, depois a OS. Quem não conhece o
+// sistema e começa pela OS de um cliente que ainda não existe se perde — com o
+// cadastro na frente, o primeiro passo é o óbvio. A Nova OS continua em destaque por
+// ser o gesto mais repetido do dia, e mesmo começando por ela o cliente novo pode ser
+// cadastrado lá dentro.
 const ACOES: Acao[] = [
+  {
+    href: "/clientes/novo",
+    titulo: "Novo cliente",
+    resumo: "Cadastrar o cliente e o carro",
+    Icone: PessoaMais,
+    irPara: "Cadastrar cliente",
+    ajuda: {
+      titulo: "Novo cliente",
+      texto:
+        "Cadastre o cliente e o carro dele uma vez só. Quando ele voltar, é só procurar pelo nome ou pela placa — o histórico inteiro está lá.",
+      dica: "Para começar bastam o nome, o telefone e o carro. O resto dá para completar depois.",
+    },
+  },
   {
     href: "/os/nova",
     titulo: "Nova OS",
     resumo: "O carro chegou para o serviço",
     Icone: Recibo,
     irPara: "Abrir nova OS",
+    destaque: true,
     ajuda: {
       titulo: "Nova OS",
       texto:
@@ -76,7 +97,7 @@ const ACOES: Acao[] = [
         "Lance as peças e os serviços.",
         "Salve. Quando o carro sair, marque como entregue.",
       ],
-      dica: "O cliente e o carro precisam estar cadastrados antes. Se é a primeira vez dele na oficina, comece por Novo cliente.",
+      dica: "Cliente novo? Não precisa sair da OS: toque em Novo cliente, ao lado do campo de cliente, e cadastre ele e o carro ali mesmo.",
     },
   },
   {
@@ -96,27 +117,14 @@ const ACOES: Acao[] = [
       ],
     },
   },
-  {
-    href: "/clientes/novo",
-    titulo: "Novo cliente",
-    resumo: "Cadastrar o cliente e o carro",
-    Icone: PessoaMais,
-    irPara: "Cadastrar cliente",
-    ajuda: {
-      titulo: "Novo cliente",
-      texto:
-        "Cadastre o cliente e o carro dele uma vez só. Quando ele voltar, é só procurar pelo nome ou pela placa — o histórico inteiro está lá.",
-      dica: "Para começar bastam o nome, o telefone e o carro. O resto dá para completar depois.",
-    },
-  },
 ];
 
-/** Os três cartões de criar. Nova OS em destaque: é o gesto mais repetido do dia. */
+/** Os três cartões de criar, na ordem do caminho do carro. */
 export function AcoesDoInicio() {
   return (
     <div className="grid gap-3 lg:grid-cols-3">
-      {ACOES.map((acao, i) => (
-        <CartaoAcao key={acao.href} acao={acao} destaque={i === 0} />
+      {ACOES.map((acao) => (
+        <CartaoAcao key={acao.href} acao={acao} destaque={!!acao.destaque} />
       ))}
     </div>
   );
@@ -426,7 +434,7 @@ const COMO_FUNCIONA: TextoDeAjuda = {
   titulo: "Como funciona o boxOS",
   texto: "O caminho de um carro na oficina, do começo ao fim:",
   passos: [
-    "Cadastre o cliente e o carro — só na primeira vez.",
+    "Cadastre o cliente e o carro — só na primeira vez. Dá para fazer dentro da própria OS.",
     "Se o cliente quiser saber o preço antes, faça um orçamento.",
     "Abra a OS e lance as peças e os serviços.",
     "Quando o carro sair, marque a OS como entregue e registre o pagamento.",

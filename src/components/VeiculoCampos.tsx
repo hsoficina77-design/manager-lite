@@ -8,7 +8,8 @@ import {
 } from "@/lib/constants";
 
 // Formulário único de veículo: os mesmos campos, na mesma ordem, em todo lugar
-// que cadastra ou edita carro (novo cliente, painel do cliente, orçamento).
+// que cadastra ou edita carro (novo cliente, painel do cliente, cadastro rápido da OS
+// e do orçamento).
 // Tudo string porque é estado de <input>; o servidor converte (ver lib/veiculo.ts).
 export type VeiculoForm = {
   marca: string;

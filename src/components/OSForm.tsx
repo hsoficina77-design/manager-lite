@@ -7,6 +7,15 @@ import { formatCurrency } from "@/lib/utils";
 import { anoVeiculo } from "@/lib/constants";
 import { useDraft, formatDraftAge } from "@/lib/useDraft";
 import ClienteSelect from "./ClienteSelect";
+import {
+  BotaoCadastroRapido,
+  NovoClienteModal,
+  NovoVeiculoModal,
+  inicialDaBusca,
+  type ClienteCriado,
+  type VeiculoCriado,
+} from "./CadastroRapido";
+import type { VeiculoForm } from "./VeiculoCampos";
 import ProdutoBusca, {
   VinculoEstoque,
   type ProdutoBuscado,
@@ -101,6 +110,14 @@ export default function OSForm({
   const [error, setError] = useState("");
   const itemFormRef = useRef<HTMLDivElement>(null);
 
+  // Cadastro rápido sem sair da OS. `cadastroCliente` guarda o que estava digitado na
+  // busca (null = fechado), para o cadastro já abrir com o nome preenchido.
+  const [cadastroCliente, setCadastroCliente] = useState<string | null>(null);
+  const [cadastroVeiculo, setCadastroVeiculo] = useState(false);
+  // Sem isto, o "cadastrar o veículo" piscaria na tela durante a busca dos veículos de
+  // um cliente que tem carro, só porque a lista ainda está vazia.
+  const [carregandoVeiculos, setCarregandoVeiculos] = useState(false);
+
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then(setClientes);
     fetch("/api/mecanicos?ativo=true").then((r) => r.json()).then(setMecanicos);
@@ -108,6 +125,7 @@ export default function OSForm({
 
   useEffect(() => {
     if (!clienteId) { setVeiculos([]); setVeiculoId(""); return; }
+    setCarregandoVeiculos(true);
     fetch(`/api/veiculos?clienteId=${clienteId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -119,9 +137,31 @@ export default function OSForm({
         } else {
           setVeiculoId("");
         }
-      });
+      })
+      .finally(() => setCarregandoVeiculos(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId]);
+
+  /** O KM informado no cadastro do carro é o KM de entrada — não precisa digitar duas vezes. */
+  function aproveitarKm(veiculo: VeiculoForm | null) {
+    if (veiculo?.km.trim() && !kmEntrada.trim()) setKmEntrada(veiculo.km.trim());
+  }
+
+  function aoCriarCliente(cliente: ClienteCriado, veiculo: VeiculoForm | null) {
+    setClientes((prev) => [...prev, cliente].sort((a, b) => a.nome.localeCompare(b.nome)));
+    // O carro cadastrado junto chega pelo efeito de `clienteId` e, sendo o único, já
+    // vem escolhido.
+    setClienteId(cliente.id);
+    aproveitarKm(veiculo);
+    setCadastroCliente(null);
+  }
+
+  function aoCriarVeiculo(veiculo: VeiculoCriado, form: VeiculoForm) {
+    setVeiculos((prev) => [...prev, veiculo]);
+    setVeiculoId(veiculo.id);
+    aproveitarKm(form);
+    setCadastroVeiculo(false);
+  }
 
   const selectedVeiculo = veiculos.find((v) => v.id === veiculoId);
   const showCombUso = ["FLEX", "HIBRIDO"].includes(selectedVeiculo?.combustivel || "");
@@ -390,28 +430,42 @@ export default function OSForm({
               <h2 className="font-semibold text-tinta">Cliente e Veículo</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-tinta-2 mb-1">Cliente *</label>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-tinta-2">Cliente *</label>
+                    <BotaoCadastroRapido onClick={() => setCadastroCliente("")}>Novo cliente</BotaoCadastroRapido>
+                  </div>
                   <ClienteSelect
                     clientes={clientes}
                     value={clienteId}
                     onChange={setClienteId}
                     placeholder="Selecionar cliente..."
+                    onCadastrar={setCadastroCliente}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-tinta-2 mb-1">Veículo *</label>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-tinta-2">Veículo *</label>
+                    {clienteId && veiculos.length > 0 && (
+                      <BotaoCadastroRapido onClick={() => setCadastroVeiculo(true)}>Outro veículo</BotaoCadastroRapido>
+                    )}
+                  </div>
                   <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} required disabled={!clienteId || veiculos.length === 0} className={inputCls + " disabled:bg-superficie-2 disabled:text-tinta-3"}>
-                    <option value="">{!clienteId ? "Selecione um cliente primeiro" : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Selecionar veículo..."}</option>
+                    <option value="">{!clienteId ? "Selecione um cliente primeiro" : carregandoVeiculos ? "Carregando..." : veiculos.length === 0 ? "Nenhum veículo cadastrado" : "Selecionar veículo..."}</option>
                     {veiculos.map((v) => (
                       <option key={v.id} value={v.id}>{v.marca} {v.modelo}{v.placa ? ` · ${v.placa}` : ""}{anoVeiculo(v) ? ` (${anoVeiculo(v)})` : ""}</option>
                     ))}
                   </select>
-                  {clienteId && veiculos.length === 0 && (
-                    <p className="text-xs text-perigo mt-1">
-                      Cliente sem veículo.{" "}
-                      <Link href={`/clientes/${clienteId}`} className="underline">Adicionar veículo</Link>
-                    </p>
+                  {/* Cliente sem carro: o cadastro abre aqui mesmo. Antes era um link para a
+                      ficha do cliente, que tirava a pessoa da OS no meio do preenchimento. */}
+                  {clienteId && !carregandoVeiculos && veiculos.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCadastroVeiculo(true)}
+                      className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-brand-500 bg-brand-50 px-3 text-sm font-medium text-brand-texto transition-colors hover:bg-brand-100"
+                    >
+                      + Cadastrar o veículo deste cliente
+                    </button>
                   )}
                 </div>
               </div>
@@ -717,6 +771,27 @@ export default function OSForm({
           </aside>
         </div>
       </form>
+
+      {/* Fora do <form> da OS: os cadastros têm formulário próprio, e form dentro de
+          form não existe em HTML — o Enter num campo do modal enviaria a OS. */}
+      {cadastroCliente !== null && (
+        <NovoClienteModal
+          inicial={inicialDaBusca(cadastroCliente)}
+          descricao="Cliente e veículo, sem sair da OS. O resto do cadastro dá para completar depois."
+          exigirVeiculo
+          exigirTelefone
+          onCriado={aoCriarCliente}
+          onFechar={() => setCadastroCliente(null)}
+        />
+      )}
+      {cadastroVeiculo && clienteId && (
+        <NovoVeiculoModal
+          clienteId={clienteId}
+          clienteNome={clientes.find((c) => c.id === clienteId)?.nome}
+          onCriado={aoCriarVeiculo}
+          onFechar={() => setCadastroVeiculo(false)}
+        />
+      )}
     </div>
   );
 }
