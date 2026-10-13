@@ -8,6 +8,7 @@ import { UsuarioProvider } from "@/components/UsuarioProvider";
 import { AvisosProvider } from "@/components/ui/Avisos";
 import { SaidaSeguraProvider } from "@/components/ui/SaidaSegura";
 import { SCRIPT_TEMA } from "@/components/ui/Tema";
+import { SCRIPT_INSTALAR } from "@/lib/instalar-app";
 import { getUsuarioAtual } from "@/lib/auth";
 import { bancoDaOficina } from "@/lib/db-oficina";
 import { contarPendencias } from "@/lib/pendencias";
@@ -114,6 +115,9 @@ export default async function RootLayout({
         {/* Claro ou escuro antes da primeira pintura — senão a tela nasce
             branca e pisca para escura no primeiro render. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        {/* Guarda o "pode instalar" do navegador, que chega uma vez só e às vezes
+            antes do React — o convite do Início e o menu leem daqui. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_INSTALAR }} />
       </head>
       {/* `100dvh` em vez de `100vh`: no iOS a unidade antiga conta a altura com a
           barra de endereço escondida, e o fim de cada tela ficava cortado. */}

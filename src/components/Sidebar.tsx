@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { labelPapel, type Papel } from "@/lib/permissoes";
 import { LogoBoxOS, SimboloBoxOS } from "./marca/LogoBoxOS";
 import { BarraInferior } from "./ui/BarraInferior";
+import { useInstalarApp } from "./ui/InstalarApp";
 import { NotificacaoSino } from "./ui/Notificacoes";
 import { usePedirSaida } from "./ui/SaidaSegura";
 import { SeletorTema } from "./ui/Tema";
@@ -20,6 +21,7 @@ import {
   Dinheiro,
   Engrenagem,
   Fechar,
+  Instalar,
   Menu as IconeMenu,
   Patio,
   Pessoas,
@@ -57,6 +59,7 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [saindo, setSaindo] = useState(false);
+  const instalacao = useInstalarApp();
 
   const ehDono = usuario.papel === "ADMIN";
 
@@ -236,6 +239,21 @@ export function Sidebar({
     <div className="space-y-2 border-t border-menu-borda p-3 pb-segura">
       <SeletorTema />
 
+      {/* Some quando o boxOS já foi aberto pelo ícone. */}
+      {instalacao.disponivel && (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            instalacao.instalar();
+          }}
+          className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium text-menu-texto transition-colors hover:bg-menu-hover hover:text-menu-fg"
+        >
+          <Instalar tamanho={16} className="shrink-0" />
+          Instalar o boxOS
+        </button>
+      )}
+
       {ehDono && (
         <Link
           href="/configuracoes"
@@ -335,6 +353,9 @@ export function Sidebar({
 
       {/* Navegação inferior — os destinos do dia sem passar pela gaveta */}
       <BarraInferior />
+
+      {/* O passo a passo do iPhone: uma vez só, e não dentro do rodapé, que se repete. */}
+      {instalacao.explicacao}
     </>
   );
 }

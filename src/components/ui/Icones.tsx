@@ -307,6 +307,16 @@ export const Grafico = (p: Props) => (
   </Base>
 );
 
+/** Instalar o app — um ícone de app com o "+", como o "Adicionar à Tela de Início" do
+ *  iPhone. Não a seta para baixo: essa já é a de Gastos (`Despesa`). */
+export const Instalar = (p: Props) => (
+  <Base {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <path d="M12 8v8" />
+    <path d="M8 12h8" />
+  </Base>
+);
+
 /* --- assinatura ------------------------------------------------------------ */
 
 export const Cartao = (p: Props) => (
