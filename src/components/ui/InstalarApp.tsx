@@ -15,9 +15,16 @@ import { Instalar } from "./Icones";
  *
  *   Chrome e Edge (Android, Windows)   o navegador avisa que dá para instalar, e o botão
  *                                      "Instalar" abre a janela oficial dele;
+ *   Android, antes do aviso            o convite aparece do mesmo jeito, e o botão mostra
+ *                                      o caminho pelos três pontinhos (ver abaixo);
  *   iPhone e iPad                      o Safari não deixa o site abrir essa janela: o
  *                                      botão mostra o caminho pelo Compartilhar;
  *   o resto (Firefox, Instagram...)    nada aparece.
+ *
+ * No celular o Chrome só avisa depois de a pessoa tocar na página e ficar nela uns
+ * 30 segundos — o mecânico já saiu do Início antes disso, e o convite nunca aparecia.
+ * Por isso no Android ele não espera o aviso: se ele já chegou, "Instalar" abre a
+ * janela do Chrome; se não, ensina o menu ⋮.
  *
  * O aviso do navegador é guardado pelo `SCRIPT_INSTALAR` (lib/instalar-app), no `<head>`.
  */
@@ -46,15 +53,24 @@ type Situacao =
   | "navegador"
   /** iPhone e iPad: só pelo Compartilhar. */
   | "iphone"
+  /** Android sem o aviso do navegador (ainda): pelo menu ⋮. */
+  | "android"
   | "indisponivel";
+
+// Aberto de dentro do Instagram, do Facebook ou de outro app (`; wv)` é o navegador
+// embutido do Android) não existe "Adicionar à tela inicial".
+const DENTRO_DE_OUTRO_APP = /Instagram|FBAN|FBAV|FB_IAB|; wv\)/;
 
 function ehIphone() {
   const ua = navigator.userAgent;
   // O iPad se apresenta como Mac; o que o entrega é a tela de toque.
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  // Aberto de dentro do Instagram ou do Facebook não existe "Adicionar à Tela de Início".
-  const dentroDeOutroApp = /Instagram|FBAN|FBAV|FB_IAB/.test(ua);
-  return ios && !dentroDeOutroApp;
+  return ios && !DENTRO_DE_OUTRO_APP.test(ua);
+}
+
+function ehAndroid() {
+  const ua = navigator.userAgent;
+  return /Android/.test(ua) && !DENTRO_DE_OUTRO_APP.test(ua);
 }
 
 function situacaoAgora(): Situacao {
@@ -67,6 +83,7 @@ function situacaoAgora(): Situacao {
   }
   if (window.__boxosInstalar) return "navegador";
   if (ehIphone()) return "iphone";
+  if (ehAndroid()) return "android";
   return "indisponivel";
 }
 
@@ -86,21 +103,33 @@ const NO_IPHONE: TextoDeAjuda = {
   dica: "Se o boxOS pedir o login ao abrir pelo ícone, entre de novo uma vez. Depois ele lembra.",
 };
 
+const NO_ANDROID: TextoDeAjuda = {
+  titulo: "Instalar o boxOS",
+  texto: "Pelo menu do Chrome, em três toques:",
+  passos: [
+    "Toque nos três pontinhos ⋮, no canto de cima, à direita.",
+    "Toque em Instalar app. Se não aparecer, toque em Adicionar à tela inicial.",
+    "Toque em Instalar. O ícone do boxOS aparece junto com os outros apps.",
+  ],
+  dica: "Usa outro navegador? Procure no menu dele a opção Adicionar à tela inicial.",
+};
+
 type Resultado = "aceitou" | "recusou" | "explicou";
 
 /**
  * Se dá para oferecer a instalação neste aparelho, e o gesto de instalar.
  *
- * `explicacao` é a janela do passo a passo do iPhone: quem usa o hook a coloca na tela.
+ * `explicacao` é a janela do passo a passo (iPhone, ou Android sem o aviso do Chrome):
+ * quem usa o hook a coloca na tela.
  */
 export function useInstalarApp() {
   const situacao = useSyncExternalStore(assinar, situacaoAgora, () => "indisponivel" as const);
-  const [explicando, setExplicando] = useState(false);
+  const [explicando, setExplicando] = useState<TextoDeAjuda | null>(null);
 
   const instalar = useCallback(async (): Promise<Resultado> => {
     const pedido = window.__boxosInstalar;
     if (!pedido) {
-      setExplicando(true);
+      setExplicando(ehIphone() ? NO_IPHONE : NO_ANDROID);
       return "explicou";
     }
     // O aviso vale uma vez só. Se a pessoa recusar, o navegador avisa de novo outro dia.
@@ -117,10 +146,10 @@ export function useInstalarApp() {
   }, []);
 
   return {
-    disponivel: situacao === "navegador" || situacao === "iphone",
+    disponivel: situacao === "navegador" || situacao === "iphone" || situacao === "android",
     instalar,
     explicacao: explicando ? (
-      <ModalDeAjuda ajuda={NO_IPHONE} onFechar={() => setExplicando(false)} />
+      <ModalDeAjuda ajuda={explicando} onFechar={() => setExplicando(null)} />
     ) : null,
   };
 }
@@ -175,7 +204,7 @@ export function ConviteInstalar() {
 
   async function aoInstalar() {
     const resultado = await instalar();
-    // Recusou a janela do navegador ou já leu o passo a passo do iPhone: o convite
+    // Recusou a janela do navegador ou já leu o passo a passo do menu: o convite
     // cumpriu o papel. Quem aceitou não precisa: a instalação já o esconde.
     if (resultado !== "aceitou") agoraNao();
   }
