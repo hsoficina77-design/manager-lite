@@ -24,6 +24,7 @@ import {
   Instalar,
   Menu as IconeMenu,
   Patio,
+  PecaPeca,
   Pessoas,
   Recibo,
   Sair,
@@ -48,10 +49,13 @@ export function Sidebar({
   pendingCount = 0,
   nome = "Minha Oficina",
   usuario,
+  pecaPeca = false,
 }: {
   pendingCount?: number;
   nome?: string;
   usuario: { nome: string; papel: Papel; podeFinanceiro: boolean };
+  /** Prévia do Peça Peça, aberta só para algumas contas (lib/peca-peca). */
+  pecaPeca?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -106,6 +110,8 @@ export function Sidebar({
     // Aberto ao operador: é ele que precisa saber se tem a peça na prateleira ao
     // montar a OS. Custo e lucro da tela somem sozinhos — a API os apaga na resposta.
     { href: "/estoque", label: "Estoque", Icone: Caixa },
+    // Cotação nas autopeças da região. Quem não está na prévia nem vê o item.
+    ...(pecaPeca ? [{ href: "/peca-peca", label: "Peça Peça", Icone: PecaPeca }] : []),
     {
       href: "/contas-receber",
       label: "Contas a receber",

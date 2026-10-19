@@ -19,6 +19,7 @@ import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
 import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
 import { VoltaAoInicio } from "@/components/VoltaAoInicio";
+import { vePecaPeca } from "@/lib/peca-peca";
 import "./globals.css";
 
 // Fonte da marca boxOS, só para a logo e os títulos (ver `font-marca` no Tailwind).
@@ -182,6 +183,7 @@ async function AppComMenu({
         pendingCount={pendingCount}
         nome={nomeDoMenu(config)}
         usuario={{ nome: usuario.nome, papel: usuario.papel, podeFinanceiro: usuario.podeFinanceiro }}
+        pecaPeca={vePecaPeca(usuario)}
       />
       <main className="pt-14 pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:pb-0 md:pl-56 md:pt-0">
         <AvisoDePlano usuario={usuario} />
