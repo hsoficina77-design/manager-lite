@@ -21,10 +21,11 @@ import {
   lojasSemAPeca,
   nomeDaLoja,
   ofertasDa,
-  precoDeVenda,
+  precoDaPeca,
   responder,
   respostaSimulada,
   totaisDa,
+  vendasQueFicam,
   type Cotacao,
   type EtapaEntrega,
   type LojaId,
@@ -145,6 +146,9 @@ function Conteudo({ c }: { c: Cotacao }) {
               texto="Quando o balconista responder, os preços aparecem aqui, lado a lado. Na prévia, você pode responder no lugar dele ou simular."
             />
           )}
+
+          {/* Depois do orçamento, o preço muda no próprio orçamento — não aqui. */}
+          {!travado && <PainelPrecos c={c} />}
         </div>
 
         <aside className="space-y-3 lg:sticky lg:top-6">
@@ -222,11 +226,17 @@ function PainelLojas({ c, pendentes, travado }: { c: Cotacao; pendentes: LojaId[
 
 function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean; pendentes: LojaId[] }) {
   function escolher(pecaId: string, lojaId: LojaId, ofertaId: string) {
-    atualizarCotacao(c.id, (x) => ({ ...x, escolhas: { ...x.escolhas, [pecaId]: { lojaId, ofertaId } } }));
+    atualizarCotacao(c.id, (x) => {
+      const escolhas = { ...x.escolhas, [pecaId]: { lojaId, ofertaId } };
+      return { ...x, escolhas, vendas: vendasQueFicam(x, escolhas) };
+    });
   }
 
   function maisBaratas() {
-    atualizarCotacao(c.id, (x) => ({ ...x, escolhas: escolhasMaisBaratas(x) }));
+    atualizarCotacao(c.id, (x) => {
+      const escolhas = escolhasMaisBaratas(x);
+      return { ...x, escolhas, vendas: vendasQueFicam(x, escolhas) };
+    });
   }
 
   return (
@@ -332,10 +342,110 @@ function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean
   );
 }
 
+// ─── Preço para o cliente ───────────────────────────────────────────────────
+
+function PainelPrecos({ c }: { c: Cotacao }) {
+  const linhas = c.pecas.flatMap((p) => {
+    const o = escolhaDa(c, p.id);
+    return o ? [{ peca: p, oferta: o, venda: precoDaPeca(c, p.id, o.preco), editado: p.id in (c.vendas ?? {}) }] : [];
+  });
+  if (linhas.length === 0) return null;
+  const editadas = linhas.filter((l) => l.editado).length;
+
+  /** Campo vazio desfaz a edição: a peça volta para o preço da margem. */
+  function mudarVenda(pecaId: string, valor: string) {
+    atualizarCotacao(c.id, (x) => {
+      const vendas = { ...x.vendas };
+      delete vendas[pecaId];
+      if (Number(valor) > 0) vendas[pecaId] = Number(valor);
+      return { ...x, vendas };
+    });
+  }
+
+  return (
+    <Painel
+      titulo="Preço para o cliente"
+      ajuda={`Já vem com a sua margem de ${c.margem}%. Mude o preço de qualquer peça antes de gerar o orçamento.`}
+      acao={
+        editadas > 0 && (
+          <Botao
+            variante="secundario"
+            tamanho="denso"
+            onClick={() => atualizarCotacao(c.id, (x) => ({ ...x, vendas: {} }))}
+          >
+            Tudo em {c.margem}%
+          </Botao>
+        )
+      }
+    >
+      <ul className="divide-y divide-linha">
+        {linhas.map(({ peca, oferta, venda, editado }) => {
+          // Mesma conta da margem do resumo: quanto o preço está acima do custo.
+          const sobreCusto = ((venda - oferta.preco) / oferta.preco) * 100;
+          return (
+            <li key={peca.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="min-w-0 text-sm font-semibold text-tinta">
+                  <span className="text-tinta-3">{peca.quantidade}×</span> {peca.descricao}
+                </p>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-tinta">
+                  {formatCurrency(venda * peca.quantidade)}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <p className="min-w-0 text-xs text-tinta-3">
+                  {oferta.marca} · {nomeDaLoja(oferta.lojaId)}
+                  <br />
+                  custo {formatCurrency(oferta.preco)}
+                  {peca.quantidade > 1 && " cada"}
+                  {editado && (
+                    <button
+                      type="button"
+                      onClick={() => mudarVenda(peca.id, "")}
+                      className="block font-medium text-brand-texto underline-offset-2 hover:underline"
+                    >
+                      voltar para {c.margem}%
+                    </button>
+                  )}
+                </p>
+                {/* `ml-auto`: se quebrar a linha, o campo continua alinhado à direita. */}
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="w-32">
+                    <CampoDinheiro
+                      valor={String(venda)}
+                      onChange={(v) => mudarVenda(peca.id, v)}
+                      aria-label={`Preço de venda de ${peca.descricao}${peca.quantidade > 1 ? ", cada" : ""}`}
+                    />
+                  </div>
+                  <span
+                    className={cn(
+                      "w-12 text-right text-xs font-semibold tabular-nums",
+                      sobreCusto >= 0 ? "text-ok" : "text-perigo"
+                    )}
+                    title="Acima do custo da loja"
+                  >
+                    {sobreCusto >= 0 ? "+" : ""}
+                    {Math.round(sobreCusto)}%
+                  </span>
+                </div>
+              </div>
+              {venda < oferta.preco && (
+                <p className="text-xs text-perigo">Abaixo do que você paga na loja.</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Painel>
+  );
+}
+
 // ─── Resumo e orçamento ─────────────────────────────────────────────────────
 
 function Resumo({ c, travado, onGerar }: { c: Cotacao; travado: boolean; onGerar: () => void }) {
   const t = totaisDa(c);
+  // Só conta preço digitado de peça que ainda está escolhida.
+  const comPrecoProprio = c.pecas.filter((p) => escolhaDa(c, p.id) && p.id in (c.vendas ?? {})).length;
 
   function mudarMargem(texto: string) {
     const margem = Math.min(300, Number(texto.replace(/\D/g, "")) || 0);
@@ -357,7 +467,14 @@ function Resumo({ c, travado, onGerar }: { c: Cotacao; travado: boolean; onGerar
           <span className="tabular-nums">{formatCurrency(t.custo)}</span>
         </div>
         <div className="flex items-center justify-between gap-3 text-tinta-3">
-          <label htmlFor="margem-cotacao">Sua margem</label>
+          <label htmlFor="margem-cotacao">
+            Sua margem
+            {comPrecoProprio > 0 && (
+              <span className="block text-xs">
+                {comPrecoProprio === 1 ? "1 peça com preço seu" : `${comPrecoProprio} peças com preço seu`}
+              </span>
+            )}
+          </label>
           <span className="flex items-center gap-1">
             <Entrada
               id="margem-cotacao"
@@ -398,7 +515,7 @@ function Resumo({ c, travado, onGerar }: { c: Cotacao; travado: boolean; onGerar
           <p className="text-xs text-tinta-3">
             {t.escolhidas === 0
               ? "Escolha ao menos uma peça para montar o orçamento."
-              : "Sai pronto no boxOS, com o preço já com a sua margem. Só falta o nome do cliente."}
+              : "Sai pronto no boxOS, com os preços acima. Só falta o nome do cliente."}
           </p>
         </>
       )}
@@ -417,7 +534,7 @@ function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
   const linhas = c.pecas.flatMap((p) => {
     const o = escolhaDa(c, p.id);
     if (!o) return [];
-    const venda = precoDeVenda(o.preco, c.margem);
+    const venda = precoDaPeca(c, p.id, o.preco);
     return [{ peca: p, oferta: o, venda }];
   });
   const deFora = c.pecas.length - linhas.length;

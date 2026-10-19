@@ -79,6 +79,8 @@ export type Cotacao = {
   escolhas: Record<string, { lojaId: LojaId; ofertaId: string }>;
   /** Margem da oficina sobre o preço da loja, em %. */
   margem: number;
+  /** Preço de venda unitário que a oficina digitou, por peça. Sem ele vale a margem. */
+  vendas?: Record<string, number>;
   orcamento?: { id: string; numero: number };
   pedido?: { feitoEm: string; entregas: Partial<Record<LojaId, EtapaEntrega>> };
 };
@@ -188,6 +190,7 @@ export function responder(id: string, lojaId: LojaId, itens: Record<string, Ofer
     return {
       ...c,
       escolhas,
+      vendas: vendasQueFicam(c, escolhas),
       respostas: { ...c.respostas, [lojaId]: { respondidaEm: new Date().toISOString(), itens } },
     };
   });
@@ -253,6 +256,26 @@ export function precoDeVenda(custo: number, margem: number): number {
   return Math.ceil(custo * (1 + margem / 100));
 }
 
+/** Preço unitário que o cliente paga pela peça: o digitado, ou o da margem. */
+export function precoDaPeca(c: Cotacao, pecaId: string, custo: number): number {
+  return c.vendas?.[pecaId] ?? precoDeVenda(custo, c.margem);
+}
+
+/**
+ * Preços digitados que continuam valendo com as novas escolhas. Trocar a oferta de
+ * uma peça muda o custo, então o preço pensado para a oferta antiga sai junto.
+ */
+export function vendasQueFicam(
+  c: Cotacao,
+  escolhas: Cotacao["escolhas"]
+): Cotacao["vendas"] {
+  return Object.fromEntries(
+    Object.entries(c.vendas ?? {}).filter(
+      ([pecaId]) => escolhas[pecaId]?.ofertaId === c.escolhas[pecaId]?.ofertaId
+    )
+  );
+}
+
 export function totaisDa(c: Cotacao) {
   let custo = 0;
   let venda = 0;
@@ -262,7 +285,7 @@ export function totaisDa(c: Cotacao) {
     if (!o) continue;
     escolhidas += 1;
     custo += o.preco * p.quantidade;
-    venda += precoDeVenda(o.preco, c.margem) * p.quantidade;
+    venda += precoDaPeca(c, p.id, o.preco) * p.quantidade;
   }
   return { custo, venda, ganho: venda - custo, escolhidas };
 }
