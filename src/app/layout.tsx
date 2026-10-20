@@ -14,7 +14,7 @@ import { bancoDaOficina } from "@/lib/db-oficina";
 import { contarPendencias } from "@/lib/pendencias";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
-import { HEADER_ROTA, ehRotaPublica } from "@/lib/permissoes";
+import { HEADER_ROTA, ehRotaDoBalcao, ehRotaPublica } from "@/lib/permissoes";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
 import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
@@ -93,14 +93,18 @@ export default async function RootLayout({
   }
 
   // A conta da plataforma não opera oficina: mora no painel admin. Qualquer outra tela
-  // (inclusive o "/" para onde o login manda) leva para lá.
-  if (usuario?.administraPlataforma && rota && !ehRotaDoAdmin(rota)) {
+  // (inclusive o "/" para onde o login manda) leva para lá. As públicas ficam de fora:
+  // não são da oficina, e o balcão da loja precisa abrir para quem estiver logado.
+  if (usuario?.administraPlataforma && rota && !ehRotaDoAdmin(rota) && !ehRotaPublica(rota)) {
     redirect("/admin");
   }
 
   // As telas de login, convite e primeiro acesso caem aqui sem usuário — e não devem
-  // ganhar menu lateral nem contagem de pendências.
-  const conteudo = usuario?.administraPlataforma ? (
+  // ganhar menu lateral nem contagem de pendências. O balcão da loja também não: é a
+  // tela de outra empresa, mesmo quando o dono da oficina a abre noutra aba para testar.
+  const conteudo = ehRotaDoBalcao(rota) ? (
+    children
+  ) : usuario?.administraPlataforma ? (
     <AdminComMenu usuario={usuario}>{children}</AdminComMenu>
   ) : usuario ? (
     <AppComMenu usuario={usuario} config={config}>

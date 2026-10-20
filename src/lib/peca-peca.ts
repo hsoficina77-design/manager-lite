@@ -1,15 +1,14 @@
 // Peça Peça: cotação de peças nas autopeças da região, de dentro do boxOS.
 //
-// Por enquanto é uma prévia navegável, aberta só para as contas abaixo. As lojas são
-// simuladas e as cotações ficam no navegador (ver components/peca-peca/dados.ts) —
-// nenhuma tabela nova no banco. O que é de verdade é a ponta final: o orçamento sai
-// pela API de orçamentos de sempre, e a OS nasce dele pela conversão que já existe.
+// Por enquanto é uma prévia, aberta só para as contas abaixo. As cotações moram no
+// banco (Cotacao e companhia, ver o fim do schema) e cada loja responde do próprio
+// balcão — um link secreto em /balcao, sem conta (ver lib/balcao.ts). O orçamento
+// que sai no fim é um orçamento comum do boxOS, e a OS nasce dele pela conversão
+// de sempre.
 
 import { redirect } from "next/navigation";
-import { exigirUsuario, type UsuarioSessao } from "@/lib/auth";
-import { bancoDaOficina } from "@/lib/db-oficina";
-import { getConfiguracao } from "@/lib/configuracao-db";
-import { nomeDoMenu } from "@/lib/configuracao";
+import { NextResponse } from "next/server";
+import { exigirUsuario, guardaApi, type UsuarioSessao } from "@/lib/auth";
 
 /** Contas que enxergam a prévia. Outras oficinas não veem nem o item no menu. */
 const CONTAS_PECA_PECA = ["bushidomatsui8@gmail.com"];
@@ -25,7 +24,12 @@ export async function exigirPecaPeca(): Promise<UsuarioSessao> {
   return usuario;
 }
 
-/** Como a loja enxerga quem pediu: só o nome da oficina, o mesmo do menu. */
-export async function nomeDaOficina(usuario: UsuarioSessao): Promise<string> {
-  return nomeDoMenu(await getConfiguracao(bancoDaOficina(usuario.oficinaId)));
+/** Rota de API do Peça Peça: a `guardaApi` de sempre, mais a lista da prévia. */
+export async function guardaPecaPeca(): ReturnType<typeof guardaApi> {
+  const guarda = await guardaApi();
+  if (guarda.resposta) return guarda;
+  if (!vePecaPeca(guarda.usuario)) {
+    return { resposta: NextResponse.json({ error: "Não encontrado" }, { status: 404 }) };
+  }
+  return guarda;
 }

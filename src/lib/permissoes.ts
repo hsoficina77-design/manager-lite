@@ -104,7 +104,16 @@ export const ROTAS_PUBLICAS = [
   // Avisos do gateway de pagamento. Sem cookie, mas com segredo e assinatura próprios,
   // conferidos na rota antes de qualquer coisa.
   "/api/webhooks",
+  // Balcão do Peça Peça: a autopeça não tem conta no boxOS. O segredo é o link
+  // (`/balcao/<token>`), conferido em toda rota por `lojaPeloToken`.
+  "/balcao",
+  "/api/balcao",
 ];
+
+/** Telas do balcão da loja: abrem sem o menu do boxOS, mesmo com alguém logado. */
+export function ehRotaDoBalcao(pathname: string): boolean {
+  return pathname === "/balcao" || pathname.startsWith("/balcao/");
+}
 
 /** Cabeçalho com a rota atual, escrito pelo proxy e lido pelo layout raiz. */
 export const HEADER_ROTA = "x-rota-atual";

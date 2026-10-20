@@ -40,7 +40,9 @@ export default async function proxy(request: NextRequest) {
   const esperaIp = consumir(`ip:${ip}`, REGRAS.porIp);
   if (esperaIp > 0) return respostaDeLimite(esperaIp, { json: ehApi });
 
-  if (ehRotaPublica(pathname)) return NextResponse.next();
+  // Rota pública também leva a rota ao layout — é por ela que o balcão da loja abre sem
+  // o menu do boxOS.
+  if (ehRotaPublica(pathname)) return NextResponse.next({ request: { headers: comRota(request) } });
 
   const sessao = await lerToken(request.cookies.get(COOKIE_SESSAO)?.value);
 
@@ -100,10 +102,14 @@ export default async function proxy(request: NextRequest) {
   // ou derrubado, que só o banco revela e aqui no Edge não dá para consultar.
   // O método vai junto para o modo só leitura (`guardaApi`). `set` sobrescreve o que o
   // navegador tiver mandado com o mesmo nome — o valor que chega ao servidor é este.
+  return NextResponse.next({ request: { headers: comRota(request) } });
+}
+
+function comRota(request: NextRequest) {
   const headers = new Headers(request.headers);
-  headers.set(HEADER_ROTA, pathname);
+  headers.set(HEADER_ROTA, request.nextUrl.pathname);
   headers.set(HEADER_METODO, request.method);
-  return NextResponse.next({ request: { headers } });
+  return headers;
 }
 
 export const config = {

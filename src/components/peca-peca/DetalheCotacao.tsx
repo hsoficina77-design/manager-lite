@@ -1,44 +1,52 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { Botao, BotaoLink } from "@/components/ui/Botao";
-import { Aviso, Campo, Entrada, CampoDinheiro } from "@/components/ui/Campos";
+import { Botao, BotaoLink, classesBotao } from "@/components/ui/Botao";
+import { Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Confere } from "@/components/ui/Icones";
 import {
   ETAPAS_ENTREGA,
-  atualizarCotacao,
   descricaoDoVeiculo,
   escolhaDa,
-  escolhasMaisBaratas,
   etapaDa,
-  excluirCotacao,
   lojasSemAPeca,
-  nomeDaLoja,
   ofertasDa,
   precoDaPeca,
-  responder,
-  respostaSimulada,
+  rotuloDaEntrega,
   totaisDa,
-  vendasQueFicam,
-  type Cotacao,
-  type EtapaEntrega,
-  type LojaId,
-} from "./dados";
-import { useCotacoes, useHidratado } from "./hooks";
-import { Cabecalho, PilulaEtapa, horaCurta } from "./ui";
+  type CotacaoVista,
+  type LojaVista,
+} from "./regras";
+import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
+import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
+
+type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 
 export function DetalheCotacao({ id }: { id: string }) {
-  const cotacoes = useCotacoes();
-  const hidratado = useHidratado();
-  const cotacao = cotacoes.find((c) => c.id === id);
+  const url = `/api/peca-peca/cotacoes/${id}`;
+  const { dados: cotacao, naoEncontrado, semConexao, carregar, gravar } = useAoVivo<CotacaoVista>(url, 4000);
+  const { dados: lojas } = useAoVivo<LojaVista[]>("/api/peca-peca/lojas", 60_000);
+  useAvisosDasLojas(cotacao);
 
-  if (!hidratado) {
+  if (naoEncontrado) {
+    return (
+      <div className="space-y-5 p-4 sm:p-6">
+        <Cabecalho titulo="Cotação não encontrada" voltar="/peca-peca" />
+        <Vazio
+          titulo="Essa cotação não existe mais"
+          texto="Ela pode ter sido excluída."
+          acao={<BotaoLink href="/peca-peca">Ver cotações</BotaoLink>}
+        />
+      </div>
+    );
+  }
+
+  if (!cotacao) {
     return (
       <div className="p-4 sm:p-6">
         <EsqueletoLista linhas={4} />
@@ -46,48 +54,130 @@ export function DetalheCotacao({ id }: { id: string }) {
     );
   }
 
-  if (!cotacao) {
-    return (
-      <div className="space-y-5 p-4 sm:p-6">
-        <Cabecalho titulo="Cotação não encontrada" voltar="/peca-peca" />
-        <Vazio
-          titulo="Essa cotação não está neste aparelho"
-          texto="Na prévia, cada cotação fica guardada só no aparelho em que foi criada."
-          acao={<BotaoLink href="/peca-peca">Ver cotações</BotaoLink>}
-        />
-      </div>
-    );
-  }
+  return (
+    <Conteudo c={cotacao} url={url} lojas={lojas} gravar={gravar} recarregar={carregar} semConexao={semConexao} />
+  );
+}
 
-  return <Conteudo c={cotacao} />;
+/**
+ * Avisa quando uma loja responde ou anda com a entrega — com som, porque quem cota
+ * costuma estar com a tela de lado. A primeira leitura não conta: é o estado de partida.
+ */
+function useAvisosDasLojas(c: CotacaoVista | null) {
+  const avisar = useAvisar();
+  const anterior = useRef<Map<string, { respondidaEm: string | null; entrega: string | null }> | null>(null);
+
+  useEffect(() => {
+    if (!c) return;
+    const agora = new Map(c.envios.map((e) => [e.id, { respondidaEm: e.respondidaEm, entrega: e.entrega }]));
+    const antes = anterior.current;
+    anterior.current = agora;
+    if (!antes) return;
+
+    const novidades: string[] = [];
+    for (const e of c.envios) {
+      const era = antes.get(e.id);
+      if (!era) continue;
+      if (e.respondidaEm && e.respondidaEm !== era.respondidaEm) {
+        novidades.push(era.respondidaEm ? `${e.lojaNome} corrigiu a resposta` : `${e.lojaNome} respondeu`);
+      }
+      if (e.entrega && e.entrega !== era.entrega && era.entrega) {
+        novidades.push(`${e.lojaNome}: ${rotuloDaEntrega(e.entrega).toLowerCase()}`);
+      }
+    }
+    if (novidades.length > 0) {
+      novidades.forEach((n) => avisar(n));
+      tocarAviso();
+    }
+  }, [c, avisar]);
 }
 
 const LINHA_DO_TEMPO = ["Enviada", "Lojas responderam", "Orçamento", "Pedido", "Entregue"];
 const POSICAO = { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, ENTREGUE: 4 } as const;
 
-function Conteudo({ c }: { c: Cotacao }) {
+function Conteudo({
+  c: doServidor,
+  url,
+  lojas,
+  gravar,
+  recarregar,
+  semConexao,
+}: {
+  c: CotacaoVista;
+  url: string;
+  lojas: LojaVista[] | null;
+  gravar: Gravar;
+  recarregar: () => Promise<void>;
+  semConexao: boolean;
+}) {
   const router = useRouter();
   const confirmar = useConfirmar();
+  const avisar = useAvisar();
   const [gerando, setGerando] = useState(false);
 
+  // O que a pessoa está digitando (margem, preço de venda) entra na conta da tela na
+  // hora, e só vai para o servidor quando ela sai do campo.
+  const [rascunhoMargem, setRascunhoMargem] = useState<string | null>(null);
+  const [rascunhoVenda, setRascunhoVenda] = useState<Record<string, string>>({});
+  const c: CotacaoVista = {
+    ...doServidor,
+    margem: rascunhoMargem !== null ? Math.min(300, Number(rascunhoMargem) || 0) : doServidor.margem,
+    pecas: doServidor.pecas.map((p) =>
+      p.id in rascunhoVenda ? { ...p, vendaUnit: Number(rascunhoVenda[p.id]) > 0 ? Number(rascunhoVenda[p.id]) : null } : p
+    ),
+  };
+
   const posicao = POSICAO[etapaDa(c)];
-  const pendentes = c.lojas.filter((l) => !c.respostas[l]);
-  const respondeu = c.lojas.length > pendentes.length;
+  const pendentes = c.envios.filter((e) => !e.respondidaEm);
+  const respondeu = pendentes.length < c.envios.length;
   // Depois do orçamento, mudar a escolha faria a cotação contar uma história e o
   // orçamento outra.
   const travado = Boolean(c.orcamento);
+  const linkDaLoja = new Map((lojas ?? []).map((l) => [l.id, l.link]));
+
+  async function alterar(corpo: object, otimista?: (d: CotacaoVista) => CotacaoVista) {
+    const r = await gravar(enviarJson(url, "PATCH", corpo), { otimista, devolveDado: true });
+    if (!r.ok) avisar(r.erro, "erro");
+  }
+
+  function salvarMargem() {
+    if (rascunhoMargem === null) return;
+    const margem = Math.min(300, Number(rascunhoMargem) || 0);
+    setRascunhoMargem(null);
+    if (margem !== doServidor.margem) void alterar({ margem }, (d) => ({ ...d, margem }));
+  }
+
+  /** Grava o preço de venda da peça. Nulo (ou campo vazio) volta para o preço da margem. */
+  function gravarVenda(pecaId: string, valor: number | null) {
+    setRascunhoVenda((r) => {
+      const resto = { ...r };
+      delete resto[pecaId];
+      return resto;
+    });
+    void alterar({ venda: { pecaId, valor } }, (d) => ({
+      ...d,
+      pecas: d.pecas.map((p) => (p.id === pecaId ? { ...p, vendaUnit: valor } : p)),
+    }));
+  }
+
+  function salvarVenda(pecaId: string) {
+    if (!(pecaId in rascunhoVenda)) return;
+    const n = Number(rascunhoVenda[pecaId]);
+    gravarVenda(pecaId, n > 0 ? n : null);
+  }
 
   async function excluir() {
     const ok = await confirmar({
       titulo: `Excluir a cotação #${c.numero}?`,
       texto: c.orcamento
-        ? `Sai só daqui. O orçamento #${c.orcamento.numero} continua no boxOS.`
-        : "Sai só deste aparelho.",
+        ? `As respostas das lojas somem junto. O orçamento #${c.orcamento.numero} continua no boxOS.`
+        : "As respostas das lojas somem junto, e a cotação sai do balcão delas.",
       acao: "Excluir cotação",
       perigo: true,
     });
     if (!ok) return;
-    excluirCotacao(c.id);
+    const r = await gravar(enviarJson(url, "DELETE"));
+    if (!r.ok) return avisar(r.erro, "erro");
     router.push("/peca-peca");
   }
 
@@ -107,7 +197,7 @@ function Conteudo({ c }: { c: Cotacao }) {
                 {c.veiculo.placa}
               </span>
             )}
-            {c.veiculo.clienteNome && <span>· {c.veiculo.clienteNome}</span>}
+            {c.clienteNome && <span>· {c.clienteNome}</span>}
           </span>
         }
         acao={<PilulaEtapa cotacao={c} />}
@@ -130,89 +220,158 @@ function Conteudo({ c }: { c: Cotacao }) {
         ))}
       </ol>
 
+      <AvisoSemConexao ativo={semConexao} />
+
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           {/* Com o orçamento feito, o que importa agora é o pedido: ele sobe. */}
-          {c.orcamento && <PainelPedido c={c} />}
+          {c.orcamento && <PainelPedido c={c} url={url} gravar={gravar} linkDaLoja={linkDaLoja} />}
 
-          <PainelLojas c={c} pendentes={pendentes} travado={travado} />
+          <PainelLojas
+            c={c}
+            travado={travado}
+            linkDaLoja={linkDaLoja}
+            onSimular={async () => {
+              const r = await gravar(enviarJson(`${url}/simular`, "POST"), { devolveDado: true });
+              if (!r.ok) avisar(r.erro, "erro");
+            }}
+          />
 
           {respondeu ? (
-            <PainelEscolha c={c} travado={travado} pendentes={pendentes} />
+            <PainelEscolha
+              c={c}
+              travado={travado}
+              aguardando={pendentes.length > 0}
+              onEscolher={(pecaId, ofertaId) =>
+                alterar({ escolha: { pecaId, ofertaId } }, (d) => ({
+                  ...d,
+                  pecas: d.pecas.map((p) =>
+                    p.id === pecaId ? { ...p, ofertaId, vendaUnit: p.ofertaId === ofertaId ? p.vendaUnit : null } : p
+                  ),
+                }))
+              }
+              onMenorPreco={() => alterar({ menorPreco: true })}
+            />
           ) : (
             <Vazio
               compacto
               titulo="Esperando as lojas"
-              texto="Quando o balconista responder, os preços aparecem aqui, lado a lado. Na prévia, você pode responder no lugar dele ou simular."
+              texto="Quando o balconista responder, os preços aparecem aqui sozinhos, lado a lado. Para testar, abra o balcão da loja em outra aba, ou simule as respostas."
             />
           )}
 
-          {/* Depois do orçamento, o preço muda no próprio orçamento — não aqui. */}
-          {!travado && <PainelPrecos c={c} />}
+          {!travado && (
+            <PainelPrecos
+              c={c}
+              rascunho={rascunhoVenda}
+              onDigitar={(pecaId, valor) => setRascunhoVenda((r) => ({ ...r, [pecaId]: valor }))}
+              onSalvar={salvarVenda}
+              onDesfazer={(pecaId) => gravarVenda(pecaId, null)}
+              onTudoNaMargem={async () => {
+                for (const p of c.pecas.filter((p) => p.vendaUnit !== null)) {
+                  await alterar({ venda: { pecaId: p.id, valor: null } });
+                }
+              }}
+            />
+          )}
         </div>
 
         <aside className="space-y-3 lg:sticky lg:top-6">
-          <Resumo c={c} travado={travado} onGerar={() => setGerando(true)} />
+          <Resumo
+            c={c}
+            travado={travado}
+            margemDigitada={rascunhoMargem}
+            onDigitarMargem={setRascunhoMargem}
+            onSalvarMargem={salvarMargem}
+            onGerar={() => setGerando(true)}
+          />
           <Botao variante="fantasma" tamanho="denso" onClick={excluir} className="w-full text-perigo">
             Excluir cotação
           </Botao>
         </aside>
       </div>
 
-      {gerando && <ModalOrcamento c={c} onFechar={() => setGerando(false)} />}
+      {gerando && (
+        <ModalOrcamento
+          c={c}
+          url={url}
+          onFechar={() => setGerando(false)}
+          onCriado={async (numero) => {
+            setGerando(false);
+            avisar(`Orçamento #${numero} criado no boxOS`);
+            await recarregar();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Lojas ──────────────────────────────────────────────────────────────────
 
-function PainelLojas({ c, pendentes, travado }: { c: Cotacao; pendentes: LojaId[]; travado: boolean }) {
-  function simular() {
-    for (const l of pendentes) responder(c.id, l, respostaSimulada(c, l));
-  }
+function PainelLojas({
+  c,
+  travado,
+  linkDaLoja,
+  onSimular,
+}: {
+  c: CotacaoVista;
+  travado: boolean;
+  linkDaLoja: Map<string, string | undefined>;
+  onSimular: () => Promise<void>;
+}) {
+  const [simulando, setSimulando] = useState(false);
+  const faltam = c.envios.some((e) => !e.respondidaEm);
 
   return (
     <Painel
       titulo="Lojas"
-      ajuda="O balconista confere a aplicação de cada peça antes de responder."
+      ajuda="Atualiza sozinho. O balconista confere a aplicação de cada peça antes de responder."
       acao={
-        pendentes.length > 0 && (
-          <Botao variante="secundario" tamanho="denso" onClick={simular}>
-            Simular respostas
+        faltam &&
+        !travado && (
+          <Botao
+            variante="secundario"
+            tamanho="denso"
+            disabled={simulando}
+            onClick={async () => {
+              setSimulando(true);
+              await onSimular();
+              setSimulando(false);
+            }}
+          >
+            {simulando ? "Simulando..." : "Simular as que faltam"}
           </Botao>
         )
       }
     >
       <ul className="divide-y divide-linha">
-        {c.lojas.map((l) => {
-          const resposta = c.respostas[l];
-          const temQuantas = resposta
-            ? c.pecas.filter((p) => (resposta.itens[p.id] ?? []).length > 0).length
-            : 0;
+        {c.envios.map((e) => {
+          const temQuantas = c.pecas.filter((p) => e.ofertas.some((o) => o.pecaId === p.id)).length;
+          const link = linkDaLoja.get(e.lojaId);
           return (
-            <li key={l} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+            <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
               <span
-                className={cn(
-                  "h-2.5 w-2.5 shrink-0 rounded-full",
-                  resposta ? "bg-ok" : "animate-pulse bg-atencao"
-                )}
+                className={cn("h-2.5 w-2.5 shrink-0 rounded-full", e.respondidaEm ? "bg-ok" : "animate-pulse bg-atencao")}
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-tinta">{nomeDaLoja(l)}</p>
+                <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
                 <p className="text-xs text-tinta-3">
-                  {resposta
-                    ? `Respondeu às ${horaCurta(resposta.respondidaEm)} · tem ${temQuantas} de ${c.pecas.length} peças`
+                  {e.respondidaEm
+                    ? `Respondeu às ${horaCurta(e.respondidaEm)} · tem ${temQuantas} de ${c.pecas.length} peças`
                     : "Esperando o balconista responder"}
                 </p>
               </div>
-              {!travado && (
-                <Link
-                  href={`/peca-peca/loja/${c.id}?l=${l}`}
+              {link && (
+                <a
+                  href={`${link}/${e.id}`}
+                  target="_blank"
+                  rel="noopener"
                   className="text-xs font-medium text-brand-texto underline-offset-2 hover:underline"
                 >
-                  {resposta ? `Mudar resposta da ${nomeDaLoja(l)}` : `Responder como ${nomeDaLoja(l)}`}
-                </Link>
+                  Abrir no balcão
+                </a>
               )}
             </li>
           );
@@ -224,28 +383,30 @@ function PainelLojas({ c, pendentes, travado }: { c: Cotacao; pendentes: LojaId[
 
 // ─── Escolha das peças ──────────────────────────────────────────────────────
 
-function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean; pendentes: LojaId[] }) {
-  function escolher(pecaId: string, lojaId: LojaId, ofertaId: string) {
-    atualizarCotacao(c.id, (x) => {
-      const escolhas = { ...x.escolhas, [pecaId]: { lojaId, ofertaId } };
-      return { ...x, escolhas, vendas: vendasQueFicam(x, escolhas) };
-    });
-  }
-
-  function maisBaratas() {
-    atualizarCotacao(c.id, (x) => {
-      const escolhas = escolhasMaisBaratas(x);
-      return { ...x, escolhas, vendas: vendasQueFicam(x, escolhas) };
-    });
-  }
-
+function PainelEscolha({
+  c,
+  travado,
+  aguardando,
+  onEscolher,
+  onMenorPreco,
+}: {
+  c: CotacaoVista;
+  travado: boolean;
+  aguardando: boolean;
+  onEscolher: (pecaId: string, ofertaId: string) => void;
+  onMenorPreco: () => void;
+}) {
   return (
     <Painel
       titulo={travado ? "Peças escolhidas" : "Escolha as peças"}
-      ajuda={travado ? "O orçamento já saiu com estas escolhas." : "Pode misturar: cada peça da loja que for melhor."}
+      ajuda={
+        travado
+          ? "O orçamento já saiu com estas escolhas."
+          : "Pode misturar: cada peça da loja que for melhor. A marca é só para você; o cliente não vê."
+      }
       acao={
         !travado && (
-          <Botao variante="secundario" tamanho="denso" onClick={maisBaratas}>
+          <Botao variante="secundario" tamanho="denso" onClick={onMenorPreco}>
             Menor preço em tudo
           </Botao>
         )
@@ -253,7 +414,7 @@ function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean
     >
       <div className="space-y-4">
         {c.pecas.map((p) => {
-          const escolhida = escolhaDa(c, p.id);
+          const escolhida = escolhaDa(c, p);
           // Depois do orçamento, as ofertas não escolhidas só alongariam a tela.
           const ofertas = travado ? (escolhida ? [escolhida] : []) : ofertasDa(c, p.id);
           const semAPeca = travado ? [] : lojasSemAPeca(c, p.id);
@@ -275,9 +436,9 @@ function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean
                 <p className="rounded-lg border border-dashed border-linha-forte px-3 py-2 text-xs text-tinta-3">
                   {travado
                     ? "Ficou fora do orçamento."
-                    : pendentes.length > 0
-                    ? "Ainda sem preço. Falta loja responder."
-                    : "Nenhuma loja tem. Na versão final, dá para mandar só esta peça para outras lojas."}
+                    : aguardando
+                      ? "Ainda sem preço. Falta loja responder."
+                      : "Nenhuma loja tem. Na versão final, dá para mandar só esta peça para outras lojas."}
                 </p>
               ) : (
                 <div className="space-y-1.5">
@@ -297,15 +458,15 @@ function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean
                           name={`peca-${p.id}`}
                           checked={marcada}
                           disabled={travado}
-                          onChange={() => escolher(p.id, o.lojaId, o.id)}
+                          onChange={() => onEscolher(p.id, o.id)}
                           className="h-5 w-5 shrink-0 accent-brand-600"
                         />
                         <span className="min-w-0 flex-1">
                           <span className="text-sm font-semibold text-tinta">{o.marca}</span>
-                          <span className="text-sm text-tinta-3"> · {nomeDaLoja(o.lojaId)}</span>
+                          <span className="text-sm text-tinta-3"> · {o.lojaNome}</span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-tinta-3">
                             chega em ~{o.prazoMin} min
-                            {i === 0 && ofertas.length > 1 && (
+                            {!travado && i === 0 && ofertas.length > 1 && (
                               <span className="rounded-full bg-ok-fraco px-1.5 font-medium text-ok">menor preço</span>
                             )}
                             {maisRapido !== null &&
@@ -330,9 +491,7 @@ function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean
               )}
 
               {semAPeca.length > 0 && ofertas.length > 0 && (
-                <p className="mt-1 text-xs text-tinta-3">
-                  {semAPeca.map(nomeDaLoja).join(" e ")} não tem.
-                </p>
+                <p className="mt-1 text-xs text-tinta-3">{semAPeca.join(" e ")} não tem.</p>
               )}
             </div>
           );
@@ -344,23 +503,27 @@ function PainelEscolha({ c, travado, pendentes }: { c: Cotacao; travado: boolean
 
 // ─── Preço para o cliente ───────────────────────────────────────────────────
 
-function PainelPrecos({ c }: { c: Cotacao }) {
+function PainelPrecos({
+  c,
+  rascunho,
+  onDigitar,
+  onSalvar,
+  onDesfazer,
+  onTudoNaMargem,
+}: {
+  c: CotacaoVista;
+  rascunho: Record<string, string>;
+  onDigitar: (pecaId: string, valor: string) => void;
+  onSalvar: (pecaId: string) => void;
+  onDesfazer: (pecaId: string) => void;
+  onTudoNaMargem: () => Promise<void>;
+}) {
   const linhas = c.pecas.flatMap((p) => {
-    const o = escolhaDa(c, p.id);
-    return o ? [{ peca: p, oferta: o, venda: precoDaPeca(c, p.id, o.preco), editado: p.id in (c.vendas ?? {}) }] : [];
+    const o = escolhaDa(c, p);
+    return o ? [{ peca: p, oferta: o, venda: precoDaPeca(p, o.preco, c.margem), editado: p.vendaUnit !== null }] : [];
   });
   if (linhas.length === 0) return null;
   const editadas = linhas.filter((l) => l.editado).length;
-
-  /** Campo vazio desfaz a edição: a peça volta para o preço da margem. */
-  function mudarVenda(pecaId: string, valor: string) {
-    atualizarCotacao(c.id, (x) => {
-      const vendas = { ...x.vendas };
-      delete vendas[pecaId];
-      if (Number(valor) > 0) vendas[pecaId] = Number(valor);
-      return { ...x, vendas };
-    });
-  }
 
   return (
     <Painel
@@ -368,11 +531,7 @@ function PainelPrecos({ c }: { c: Cotacao }) {
       ajuda={`Já vem com a sua margem de ${c.margem}%. Mude o preço de qualquer peça antes de gerar o orçamento.`}
       acao={
         editadas > 0 && (
-          <Botao
-            variante="secundario"
-            tamanho="denso"
-            onClick={() => atualizarCotacao(c.id, (x) => ({ ...x, vendas: {} }))}
-          >
+          <Botao variante="secundario" tamanho="denso" onClick={onTudoNaMargem}>
             Tudo em {c.margem}%
           </Botao>
         )
@@ -394,14 +553,14 @@ function PainelPrecos({ c }: { c: Cotacao }) {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <p className="min-w-0 text-xs text-tinta-3">
-                  {oferta.marca} · {nomeDaLoja(oferta.lojaId)}
+                  {oferta.marca} · {oferta.lojaNome}
                   <br />
                   custo {formatCurrency(oferta.preco)}
                   {peca.quantidade > 1 && " cada"}
                   {editado && (
                     <button
                       type="button"
-                      onClick={() => mudarVenda(peca.id, "")}
+                      onClick={() => onDesfazer(peca.id)}
                       className="block font-medium text-brand-texto underline-offset-2 hover:underline"
                     >
                       voltar para {c.margem}%
@@ -412,8 +571,10 @@ function PainelPrecos({ c }: { c: Cotacao }) {
                 <div className="ml-auto flex items-center gap-2">
                   <div className="w-32">
                     <CampoDinheiro
-                      valor={String(venda)}
-                      onChange={(v) => mudarVenda(peca.id, v)}
+                      valor={rascunho[peca.id] ?? String(venda)}
+                      onChange={(v) => onDigitar(peca.id, v)}
+                      onBlur={() => onSalvar(peca.id)}
+                      onEnter={() => onSalvar(peca.id)}
                       aria-label={`Preço de venda de ${peca.descricao}${peca.quantidade > 1 ? ", cada" : ""}`}
                     />
                   </div>
@@ -429,9 +590,7 @@ function PainelPrecos({ c }: { c: Cotacao }) {
                   </span>
                 </div>
               </div>
-              {venda < oferta.preco && (
-                <p className="text-xs text-perigo">Abaixo do que você paga na loja.</p>
-              )}
+              {venda < oferta.preco && <p className="text-xs text-perigo">Abaixo do que você paga na loja.</p>}
             </li>
           );
         })}
@@ -442,15 +601,24 @@ function PainelPrecos({ c }: { c: Cotacao }) {
 
 // ─── Resumo e orçamento ─────────────────────────────────────────────────────
 
-function Resumo({ c, travado, onGerar }: { c: Cotacao; travado: boolean; onGerar: () => void }) {
+function Resumo({
+  c,
+  travado,
+  margemDigitada,
+  onDigitarMargem,
+  onSalvarMargem,
+  onGerar,
+}: {
+  c: CotacaoVista;
+  travado: boolean;
+  margemDigitada: string | null;
+  onDigitarMargem: (v: string) => void;
+  onSalvarMargem: () => void;
+  onGerar: () => void;
+}) {
   const t = totaisDa(c);
-  // Só conta preço digitado de peça que ainda está escolhida.
-  const comPrecoProprio = c.pecas.filter((p) => escolhaDa(c, p.id) && p.id in (c.vendas ?? {})).length;
-
-  function mudarMargem(texto: string) {
-    const margem = Math.min(300, Number(texto.replace(/\D/g, "")) || 0);
-    atualizarCotacao(c.id, (x) => ({ ...x, margem }));
-  }
+  // Só conta preço digitado de peça que está escolhida.
+  const comPrecoProprio = c.pecas.filter((p) => p.ofertaId && p.vendaUnit !== null).length;
 
   return (
     <div className="space-y-4 rounded-xl border border-linha bg-superficie p-4 sm:p-5">
@@ -478,8 +646,10 @@ function Resumo({ c, travado, onGerar }: { c: Cotacao; travado: boolean; onGerar
           <span className="flex items-center gap-1">
             <Entrada
               id="margem-cotacao"
-              value={String(c.margem)}
-              onChange={(e) => mudarMargem(e.target.value)}
+              value={margemDigitada ?? String(c.margem)}
+              onChange={(e) => onDigitarMargem(e.target.value.replace(/\D/g, ""))}
+              onBlur={onSalvarMargem}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), onSalvarMargem())}
               disabled={travado}
               inputMode="numeric"
               className="w-16 text-right tabular-nums"
@@ -523,19 +693,26 @@ function Resumo({ c, travado, onGerar }: { c: Cotacao; travado: boolean; onGerar
   );
 }
 
-function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
-  const avisar = useAvisar();
-  const cadastrado = Boolean(c.veiculo.clienteId);
-  const [nome, setNome] = useState(c.veiculo.clienteNome ?? "");
+function ModalOrcamento({
+  c,
+  url,
+  onFechar,
+  onCriado,
+}: {
+  c: CotacaoVista;
+  url: string;
+  onFechar: () => void;
+  onCriado: (numero: number) => void;
+}) {
+  const cadastrado = Boolean(c.clienteId);
+  const [nome, setNome] = useState("");
   const [maoDeObra, setMaoDeObra] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
   const linhas = c.pecas.flatMap((p) => {
-    const o = escolhaDa(c, p.id);
-    if (!o) return [];
-    const venda = precoDaPeca(c, p.id, o.preco);
-    return [{ peca: p, oferta: o, venda }];
+    const o = escolhaDa(c, p);
+    return o ? [{ peca: p, venda: precoDaPeca(p, o.preco, c.margem) }] : [];
   });
   const deFora = c.pecas.length - linhas.length;
   const mo = Number(maoDeObra) || 0;
@@ -549,40 +726,16 @@ function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
     setErro("");
     setSalvando(true);
     try {
-      const itens: object[] = linhas.map(({ peca, oferta, venda }) => ({
-        tipo: "PECA",
-        descricao: `${peca.descricao} (${oferta.marca})`,
-        quantidade: peca.quantidade,
-        valorUnit: venda,
-        valorTotal: venda * peca.quantidade,
-        // O preço da loja vira o custo do item: é o que faz o lucro da OS sair certo.
-        custoUnit: oferta.preco,
-        fornecedor: nomeDaLoja(oferta.lojaId),
-      }));
-      if (mo > 0) {
-        itens.push({ tipo: "MAO_DE_OBRA", descricao: "Mão de obra", quantidade: 1, valorUnit: mo, valorTotal: mo });
-      }
-      const v = c.veiculo;
-      const veiculoDesc = [descricaoDoVeiculo(v), v.motor, v.placa && `placa ${v.placa}`].filter(Boolean).join(" · ");
-      const res = await fetch("/api/orcamentos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clienteId: v.clienteId,
-          veiculoId: v.veiculoId,
-          clienteNome: cadastrado ? undefined : nome.trim(),
-          veiculoDesc: v.veiculoId ? undefined : veiculoDesc,
-          itens,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErro(data.error || "Não consegui criar o orçamento.");
+      const r = await enviarJson(`${url}/orcamento`, "POST", {
+        clienteNome: cadastrado ? null : nome.trim(),
+        maoDeObra: mo,
+      })();
+      const corpo = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setErro(corpo.error ?? "Não consegui criar o orçamento.");
         return;
       }
-      atualizarCotacao(c.id, (x) => ({ ...x, orcamento: { id: data.id, numero: data.numero } }));
-      avisar(`Orçamento #${data.numero} criado no boxOS`);
-      onFechar();
+      onCriado(corpo.numero);
     } catch {
       setErro("Sem conexão. Tente de novo.");
     } finally {
@@ -610,8 +763,8 @@ function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
       <div className="space-y-4">
         {cadastrado ? (
           <p className="rounded-lg bg-superficie-2 px-3 py-2 text-sm text-tinta-2">
-            Cliente: <strong className="text-tinta">{c.veiculo.clienteNome ?? "cadastrado"}</strong>, já ligado ao
-            carro pela placa.
+            Cliente: <strong className="text-tinta">{c.clienteNome ?? "cadastrado"}</strong>, já ligado ao carro
+            pela placa.
           </p>
         ) : (
           <Campo
@@ -630,10 +783,10 @@ function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
         <div>
           <p className="mb-1.5 text-xs font-medium text-tinta-2">O que o cliente vai ver</p>
           <ul className="divide-y divide-linha rounded-lg border border-linha text-sm">
-            {linhas.map(({ peca, oferta, venda }) => (
+            {linhas.map(({ peca, venda }) => (
               <li key={peca.id} className="flex items-start justify-between gap-3 px-3 py-2">
                 <span className="min-w-0 text-tinta">
-                  {peca.quantidade}× {peca.descricao} <span className="text-tinta-3">({oferta.marca})</span>
+                  {peca.quantidade}× {peca.descricao}
                 </span>
                 <span className="shrink-0 tabular-nums text-tinta">{formatCurrency(venda * peca.quantidade)}</span>
               </li>
@@ -650,7 +803,7 @@ function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
             </li>
           </ul>
           <p className="mt-1.5 text-xs text-tinta-3">
-            O cliente não vê a loja nem o preço de custo. Isso fica só para você, no lucro da OS.
+            O cliente não vê a marca, a loja nem o custo. Isso fica guardado só para você, no orçamento.
           </p>
         </div>
 
@@ -667,61 +820,40 @@ function ModalOrcamento({ c, onFechar }: { c: Cotacao; onFechar: () => void }) {
 
 // ─── Pedido e entrega ───────────────────────────────────────────────────────
 
-function PainelPedido({ c }: { c: Cotacao }) {
+function PainelPedido({
+  c,
+  url,
+  gravar,
+  linkDaLoja,
+}: {
+  c: CotacaoVista;
+  url: string;
+  gravar: Gravar;
+  linkDaLoja: Map<string, string | undefined>;
+}) {
   const avisar = useAvisar();
   const [pedindo, setPedindo] = useState(false);
   const [erro, setErro] = useState("");
   const orcamento = c.orcamento!;
 
   // Só entra no pedido a loja de quem se escolheu alguma peça.
-  const lojasDoPedido = c.lojas.filter((l) => c.pecas.some((p) => escolhaDa(c, p.id)?.lojaId === l));
+  const doPedido = c.envios.filter((e) => c.pecas.some((p) => e.ofertas.some((o) => o.id === p.ofertaId)));
 
   async function pedir() {
     setErro("");
     setPedindo(true);
-    try {
-      // O orçamento é de verdade: aprovar aqui marca o mesmo orçamento como aprovado
-      // no boxOS — mas só se ele ainda estiver pendente, para não desfazer uma conversão.
-      const r = await fetch(`/api/orcamentos/${orcamento.id}`);
-      if (r.status === 404) throw new Error(`O orçamento #${orcamento.numero} não existe mais no boxOS.`);
-      if (!r.ok) throw new Error("Não consegui consultar o orçamento agora.");
-      const atual = await r.json();
-      if (atual.status === "PENDENTE") {
-        const p = await fetch(`/api/orcamentos/${orcamento.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "APROVADO" }),
-        });
-        if (!p.ok) {
-          const d = await p.json().catch(() => ({}));
-          throw new Error(d.error || "Não consegui marcar o orçamento como aprovado.");
-        }
-      }
-      const entregas = Object.fromEntries(lojasDoPedido.map((l) => [l, "ENVIADO" as EtapaEntrega]));
-      atualizarCotacao(c.id, (x) => ({ ...x, pedido: { feitoEm: new Date().toISOString(), entregas } }));
-      avisar(lojasDoPedido.length === 1 ? "Pedido enviado à loja" : "Pedido enviado às lojas");
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não consegui fazer o pedido.");
-    } finally {
-      setPedindo(false);
-    }
+    const r = await gravar(enviarJson(`${url}/pedido`, "POST"), { devolveDado: true });
+    setPedindo(false);
+    if (!r.ok) return setErro(r.erro);
+    avisar(doPedido.length === 1 ? "Pedido enviado à loja" : "Pedido enviado às lojas");
   }
 
-  function avancar(l: LojaId) {
-    atualizarCotacao(c.id, (x) => {
-      const atual = x.pedido?.entregas[l] ?? "ENVIADO";
-      const i = ETAPAS_ENTREGA.findIndex((e) => e.value === atual);
-      const proxima = ETAPAS_ENTREGA[Math.min(i + 1, ETAPAS_ENTREGA.length - 1)].value;
-      return { ...x, pedido: { ...x.pedido!, entregas: { ...x.pedido!.entregas, [l]: proxima } } };
-    });
-  }
-
-  if (!c.pedido) {
+  if (!c.pedidoEm) {
     return (
       <Painel titulo="Pedido das peças">
         <p className="text-sm text-tinta-2">
-          Mandou o orçamento #{orcamento.numero} para o cliente? Quando ele aprovar, o pedido sai daqui direto para{" "}
-          {lojasDoPedido.map(nomeDaLoja).join(" e ")}.
+          Mandou o orçamento #{orcamento.numero} para o cliente? Quando ele aprovar, o pedido sai daqui direto para o
+          balcão de {doPedido.map((e) => e.lojaNome).join(" e ")}.
         </p>
         {erro && (
           <div className="mt-3">
@@ -738,32 +870,41 @@ function PainelPedido({ c }: { c: Cotacao }) {
   const tudoEntregue = etapaDa(c) === "ENTREGUE";
 
   return (
-    <Painel titulo="Pedido das peças" ajuda={`Pedido feito às ${horaCurta(c.pedido.feitoEm)}.`}>
+    <Painel
+      titulo="Pedido das peças"
+      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. Quem avança a entrega é o balconista, do balcão dele; aqui atualiza sozinho.`}
+    >
       <div className="space-y-4">
-        {lojasDoPedido.map((l) => {
-          const etapa = c.pedido!.entregas[l] ?? "ENVIADO";
-          const posicao = ETAPAS_ENTREGA.findIndex((e) => e.value === etapa);
-          const pecas = c.pecas.filter((p) => escolhaDa(c, p.id)?.lojaId === l);
+        {doPedido.map((e) => {
+          const etapa = e.entrega ?? "ENVIADO";
+          const posicao = ETAPAS_ENTREGA.findIndex((x) => x.value === etapa);
+          const pecas = c.pecas.filter((p) => e.ofertas.some((o) => o.id === p.ofertaId));
+          const link = linkDaLoja.get(e.lojaId);
           return (
-            <div key={l} className="rounded-lg border border-linha p-3">
+            <div key={e.id} className="rounded-lg border border-linha p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-tinta">{nomeDaLoja(l)}</p>
-                {etapa !== "ENTREGUE" && (
-                  <Botao variante="secundario" tamanho="denso" onClick={() => avancar(l)}>
-                    Simular próximo passo
-                  </Botao>
+                <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
+                {link && etapa !== "ENTREGUE" && (
+                  <a
+                    href={`${link}/${e.id}`}
+                    target="_blank"
+                    rel="noopener"
+                    className={classesBotao("secundario", "denso")}
+                  >
+                    Abrir no balcão
+                  </a>
                 )}
               </div>
               <ul className="mt-1 text-xs text-tinta-3">
                 {pecas.map((p) => (
                   <li key={p.id}>
-                    {p.quantidade}× {p.descricao} ({escolhaDa(c, p.id)?.marca})
+                    {p.quantidade}× {p.descricao} ({escolhaDa(c, p)?.marca})
                   </li>
                 ))}
               </ul>
               <ol className="mt-3 grid grid-cols-4 gap-1">
-                {ETAPAS_ENTREGA.map((e, i) => (
-                  <li key={e.value} className="min-w-0">
+                {ETAPAS_ENTREGA.map((x, i) => (
+                  <li key={x.value} className="min-w-0">
                     <div className={cn("h-1.5 rounded-full", i <= posicao ? "bg-ok" : "bg-superficie-3")} />
                     <p
                       className={cn(
@@ -771,7 +912,7 @@ function PainelPedido({ c }: { c: Cotacao }) {
                         i === posicao ? "font-semibold text-tinta" : "text-tinta-3"
                       )}
                     >
-                      {e.rotulo}
+                      {x.rotulo}
                     </p>
                   </li>
                 ))}
@@ -783,9 +924,7 @@ function PainelPedido({ c }: { c: Cotacao }) {
         {tudoEntregue && (
           <div className="space-y-2 rounded-lg border border-ok-linha bg-ok-fraco p-3">
             <p className="text-sm font-semibold text-ok">Peças na oficina.</p>
-            <p className="text-sm text-tinta-2">
-              Agora é converter o orçamento em OS. Só falta o telefone do cliente.
-            </p>
+            <p className="text-sm text-tinta-2">Agora é converter o orçamento em OS. Só falta o telefone do cliente.</p>
             <BotaoLink href={`/orcamentos/${orcamento.id}`} variante="sucesso" tamanho="denso">
               Abrir o orçamento #{orcamento.numero} e converter em OS
             </BotaoLink>

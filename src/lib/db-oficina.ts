@@ -22,7 +22,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /** Tabelas do sistema: não pertencem a oficina nenhuma e não passam por aqui. */
-const MODELOS_DO_SISTEMA = new Set(["Oficina", "Convite", "Sessao", "EventoPagamento"]);
+const MODELOS_DO_SISTEMA = new Set(["Oficina", "Convite", "Sessao", "EventoPagamento", "Loja"]);
 
 /** Operações cujo `where` recebe a oficina. */
 const COM_WHERE = new Set([
@@ -159,6 +159,7 @@ export type Db = Omit<
   | "convite"
   | "sessao"
   | "eventoPagamento"
+  | "loja"
 >;
 
 export type OpcoesTransacao = { maxWait?: number; timeout?: number };

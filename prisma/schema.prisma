@@ -71,6 +71,10 @@ model Oficina {
   despesas           Despesa[]
   convites           Convite[]
   eventosPagamento   EventoPagamento[]
+  cotacoes           Cotacao[]
+  cotacaoPecas       CotacaoPeca[]
+  cotacaoLojas       CotacaoLoja[]
+  ofertas            Oferta[]
 }
 
 // Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
@@ -138,6 +142,7 @@ model Cliente {
   ordens         OrdemServico[]
   orcamentos     Orcamento[]
   dividasAvulsas DividaAvulsa[]
+  cotacoes       Cotacao[]
 
   // CPF/CNPJ não se repete dentro da oficina — duas oficinas podem atender o mesmo cliente.
   @@unique([oficinaId, cpfCnpj])
@@ -167,6 +172,7 @@ model Veiculo {
   cliente    Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   ordens     OrdemServico[]
   orcamentos Orcamento[]
+  cotacoes   Cotacao[]
 
   @@unique([oficinaId, placa])
   @@index([oficinaId])
@@ -297,6 +303,7 @@ model Orcamento {
   ordem   OrdemServico?   @relation(fields: [ordemId], references: [id])
   itens   ItemOrcamento[]
   fotos   FotoOS[]
+  cotacao Cotacao?
 
   @@unique([oficinaId, numero])
   @@index([oficinaId, status])
@@ -788,4 +795,128 @@ model Despesa {
   @@index([oficinaId, vencimento])
   @@index([categoriaId])
   @@index([parcelamentoId])
+}
+
+// ─── Peça Peça ────────────────────────────────────────────────────────────────
+//
+// Cotação de peças nas autopeças da região: a oficina pede, cada loja responde do
+// próprio balcão, a oficina escolhe e o orçamento sai pronto.
+//
+// `Loja` é do sistema: uma autopeça atende várias oficinas, então não é de nenhuma —
+// fica de fora do banco da oficina, como `Oficina` e `Sessao`. O resto pertence à
+// oficina que pediu e segue as três travas. A loja só chega a uma cotação pelo
+// `lib/balcao.ts`, que filtra pelos envios para ela e devolve o que o balconista
+// precisa — nunca cliente, margem, preço de venda nem oferta de outra loja.
+
+model Loja {
+  id          String   @id @default(cuid())
+  nome        String
+  cidade      String?
+  /// Segredo do link do balcão (`/balcao/<token>`). Diferente do convite, fica inteiro:
+  /// o link precisa poder ser mostrado de novo. Vazou? Gera-se outro.
+  tokenBalcao String   @unique
+  /// Faixa de entrega do motoboy, em minutos — sugestão de prazo no balcão.
+  entregaMin  Int      @default(30)
+  entregaMax  Int      @default(50)
+  ativa       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  envios CotacaoLoja[]
+}
+
+model Cotacao {
+  id          String    @id @default(cuid())
+  oficinaId   String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina     Oficina   @relation(fields: [oficinaId], references: [id])
+  numero      Int
+  // O carro, como a loja vê: é o que o balconista confere para acertar a aplicação.
+  placa       String?
+  marca       String?
+  modelo      String
+  ano         String?
+  motor       String?
+  // Só da oficina — a loja nunca recebe.
+  clienteId   String?
+  veiculoId   String?
+  /// Margem sobre o preço da loja, em %. Vale para a peça sem preço de venda digitado.
+  margem      Int       @default(30)
+  orcamentoId String?   @unique
+  /// O cliente aprovou e o pedido foi para as lojas.
+  pedidoEm    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  cliente   Cliente?      @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  veiculo   Veiculo?      @relation(fields: [veiculoId], references: [id], onDelete: SetNull)
+  orcamento Orcamento?    @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
+  pecas     CotacaoPeca[]
+  envios    CotacaoLoja[]
+
+  @@unique([oficinaId, numero])
+  @@index([oficinaId, createdAt])
+}
+
+model CotacaoPeca {
+  id         String  @id @default(cuid())
+  oficinaId  String  @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina    Oficina @relation(fields: [oficinaId], references: [id])
+  cotacaoId  String
+  ordem      Int
+  descricao  String
+  quantidade Int     @default(1)
+  /// Oferta que a oficina escolheu para esta peça.
+  ofertaId   String?
+  /// Preço de venda unitário digitado pela oficina. Sem ele, vale a margem da cotação.
+  vendaUnit  Float?
+
+  cotacao Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  oferta  Oferta?  @relation("OfertaEscolhida", fields: [ofertaId], references: [id], onDelete: SetNull)
+  ofertas Oferta[] @relation("OfertasDaPeca")
+
+  @@index([oficinaId])
+  @@index([cotacaoId])
+  @@index([ofertaId])
+}
+
+// O envio da cotação para uma loja — e, depois do pedido, a entrega dela.
+// entrega: ENVIADO | SEPARANDO | A_CAMINHO | ENTREGUE (nula = esta loja não tem pedido)
+model CotacaoLoja {
+  id           String    @id @default(cuid())
+  oficinaId    String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina      Oficina   @relation(fields: [oficinaId], references: [id])
+  cotacaoId    String
+  lojaId       String
+  respondidaEm DateTime?
+  entrega      String?
+  createdAt    DateTime  @default(now())
+
+  cotacao Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  loja    Loja     @relation(fields: [lojaId], references: [id])
+  ofertas Oferta[]
+
+  @@unique([cotacaoId, lojaId])
+  @@index([oficinaId])
+  @@index([lojaId, createdAt])
+}
+
+// Uma marca que a loja tem para uma peça. Loja que respondeu sem oferta para a peça
+// é "não tenho".
+model Oferta {
+  id        String   @id @default(cuid())
+  oficinaId String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina   Oficina  @relation(fields: [oficinaId], references: [id])
+  envioId   String
+  pecaId    String
+  marca     String
+  preco     Float
+  prazoMin  Int
+  createdAt DateTime @default(now())
+
+  envio       CotacaoLoja   @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  peca        CotacaoPeca   @relation("OfertasDaPeca", fields: [pecaId], references: [id], onDelete: Cascade)
+  escolhidaEm CotacaoPeca[] @relation("OfertaEscolhida")
+
+  @@index([oficinaId])
+  @@index([envioId])
+  @@index([pecaId])
 }

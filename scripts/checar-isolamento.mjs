@@ -17,6 +17,9 @@ const PERMITIDOS = new Set([
   "src/lib/db-oficina.ts",
   "src/lib/auth.ts",
   "src/lib/sistema.ts",
+  // Balcão do Peça Peça: a loja não é de oficina nenhuma e atende várias. Só chega às
+  // cotações pelos envios para ela, e só com os campos de balcão.
+  "src/lib/balcao.ts",
 ]);
 
 const RAIZ = process.cwd();

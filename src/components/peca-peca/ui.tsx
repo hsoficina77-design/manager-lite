@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { PecaPeca, Voltar } from "@/components/ui/Icones";
-import { ETAPAS, etapaDa, type Cotacao } from "./dados";
+import { ETAPAS, etapaDa, type CotacaoVista } from "./regras";
 
 /** Nome do produto. Fica dentro do boxOS, então usa as cores dele. */
 export function MarcaPecaPeca({ className }: { className?: string }) {
@@ -54,47 +54,32 @@ export function Cabecalho({
   );
 }
 
-/** Lembra, em toda tela, o que é de mentira e o que é de verdade. */
+/** Lembra, em toda tela, o que ainda é de teste. */
 export function AvisoDaPrevia({ children }: { children?: React.ReactNode }) {
   return (
     <p className="rounded-lg border border-dashed border-linha-forte bg-superficie-2 px-3 py-2 text-xs text-tinta-3">
       {children ?? (
         <>
-          <span className="font-semibold text-tinta-2">Prévia.</span> As lojas ainda são simuladas e as
-          cotações ficam guardadas só neste aparelho. O orçamento que sai no final é de verdade, no boxOS.
+          <span className="font-semibold text-tinta-2">Prévia.</span> As cotações já são de verdade e as lojas
+          respondem pelo balcão delas, em tempo real. Para testar, abra os balcões em outras abas e faça o papel
+          do balconista.
         </>
       )}
     </p>
   );
 }
 
-/** Troca entre o que a oficina vê e o que o balconista da loja vê. */
-export function AlternarVisao({ atual }: { atual: "oficina" | "loja" }) {
-  const opcoes = [
-    { valor: "oficina", rotulo: "Visão da oficina", href: "/peca-peca" },
-    { valor: "loja", rotulo: "Visão da loja", href: "/peca-peca/loja" },
-  ] as const;
+/** Aparece quando a conexão cai: os dados na tela podem estar velhos. */
+export function AvisoSemConexao({ ativo }: { ativo: boolean }) {
+  if (!ativo) return null;
   return (
-    <div role="tablist" className="inline-flex rounded-lg border border-linha bg-superficie p-1">
-      {opcoes.map((o) => (
-        <Link
-          key={o.valor}
-          href={o.href}
-          role="tab"
-          aria-selected={atual === o.valor}
-          className={cn(
-            "flex min-h-9 items-center rounded-md px-3 text-sm font-medium transition-colors",
-            atual === o.valor ? "bg-contraste text-contraste-fg" : "text-tinta-2 hover:bg-superficie-2"
-          )}
-        >
-          {o.rotulo}
-        </Link>
-      ))}
-    </div>
+    <p role="status" className="rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-xs text-atencao">
+      Sem conexão agora. A tela volta a se atualizar sozinha quando a internet voltar.
+    </p>
   );
 }
 
-export function PilulaEtapa({ cotacao }: { cotacao: Cotacao }) {
+export function PilulaEtapa({ cotacao }: { cotacao: CotacaoVista }) {
   const etapa = ETAPAS[etapaDa(cotacao)];
   return <span className={cn(etapa.cor, "shrink-0")}>{etapa.rotulo}</span>;
 }

@@ -8,14 +8,9 @@ import { Botao } from "@/components/ui/Botao";
 import { Aviso, Campo, CampoQuantidade, Entrada } from "@/components/ui/Campos";
 import { Painel } from "@/components/ui/Dados";
 import { Busca, Confere, Lixeira, Mais } from "@/components/ui/Icones";
-import {
-  LOJAS,
-  criarCotacao,
-  normalizarPlaca,
-  type LojaId,
-  type PecaPedida,
-  type VeiculoCotado,
-} from "./dados";
+import { EsqueletoLista } from "@/components/ui/Dados";
+import { normalizarPlaca, type LojaVista, type VeiculoCotado } from "./regras";
+import { enviarJson, useAoVivo } from "./aoVivo";
 import { AvisoDaPrevia, Cabecalho } from "./ui";
 
 // As peças que mais se pedem no balcão: um toque e entram na lista.
@@ -51,17 +46,25 @@ type EstadoBusca =
   | { tipo: "nao-achou" }
   | { tipo: "erro" };
 
-const VEICULO_VAZIO: VeiculoCotado = { placa: "", marca: "", modelo: "", ano: "", motor: "" };
+/** O carro na tela: os dados digitados e, se a placa já estava no boxOS, o vínculo. */
+type VeiculoNaTela = VeiculoCotado & { clienteId?: string; veiculoId?: string; clienteNome?: string };
+
+const VEICULO_VAZIO: VeiculoNaTela = { placa: "", marca: "", modelo: "", ano: "", motor: "" };
 
 export function NovaCotacao() {
   const router = useRouter();
-  const [veiculo, setVeiculo] = useState<VeiculoCotado>(VEICULO_VAZIO);
+  const { dados: lojasDisponiveis } = useAoVivo<LojaVista[]>("/api/peca-peca/lojas", 60_000);
+  const [veiculo, setVeiculo] = useState<VeiculoNaTela>(VEICULO_VAZIO);
   const [busca, setBusca] = useState<EstadoBusca>({ tipo: "nada" });
-  const [pecas, setPecas] = useState<Omit<PecaPedida, "id">[]>([]);
+  const [pecas, setPecas] = useState<{ descricao: string; quantidade: number }[]>([]);
   const [novaPeca, setNovaPeca] = useState("");
   const [quantidade, setQuantidade] = useState("1");
-  const [lojas, setLojas] = useState<LojaId[]>(LOJAS.map((l) => l.id));
+  // Nulo até a pessoa mexer: aí vale "todas as lojas".
+  const [marcadas, setMarcadas] = useState<string[] | null>(null);
+  const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+
+  const lojas = marcadas ?? (lojasDisponiveis ?? []).map((l) => l.id);
 
   const mudar = (campo: keyof VeiculoCotado, valor: string) => setVeiculo((v) => ({ ...v, [campo]: valor }));
 
@@ -109,21 +112,41 @@ export function NovaCotacao() {
   function adicionar(descricao = novaPeca) {
     const texto = descricao.trim();
     if (!texto) return;
-    setPecas((lista) => [...lista, { descricao: texto, quantidade: Math.max(1, Number(quantidade) || 1) }]);
+    // Peça se pede por unidade (o óleo, por litro): a quantidade é inteira.
+    setPecas((lista) => [...lista, { descricao: texto, quantidade: Math.max(1, Math.round(Number(quantidade) || 1)) }]);
     setNovaPeca("");
     setQuantidade("1");
   }
 
-  function alternarLoja(id: LojaId) {
-    setLojas((atual) => (atual.includes(id) ? atual.filter((l) => l !== id) : [...atual, id]));
+  function alternarLoja(id: string) {
+    setMarcadas(lojas.includes(id) ? lojas.filter((l) => l !== id) : [...lojas, id]);
   }
 
-  function enviar() {
+  async function enviar() {
     if (!veiculo.modelo.trim()) return setErro("Informe ao menos o modelo do veículo.");
     if (pecas.length === 0) return setErro("Adicione ao menos uma peça.");
     if (lojas.length === 0) return setErro("Escolha ao menos uma loja.");
-    const c = criarCotacao({ veiculo: { ...veiculo, placa: normalizarPlaca(veiculo.placa) }, pecas, lojas });
-    router.push(`/peca-peca/${c.id}`);
+    setErro("");
+    setEnviando(true);
+    try {
+      const { placa, marca, modelo, ano, motor, veiculoId } = veiculo;
+      const r = await enviarJson("/api/peca-peca/cotacoes", "POST", {
+        veiculo: { placa: normalizarPlaca(placa), marca, modelo, ano, motor },
+        veiculoId: veiculoId ?? null,
+        pecas,
+        lojas,
+      })();
+      const corpo = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setErro(corpo.error ?? "Não consegui enviar a cotação.");
+        return;
+      }
+      router.push(`/peca-peca/${corpo.id}`);
+    } catch {
+      setErro("Sem conexão. Tente de novo.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   // O veículo veio do cadastro: editar à mão desligaria o vínculo sem a pessoa perceber.
@@ -247,8 +270,9 @@ export function NovaCotacao() {
       </Painel>
 
       <Painel titulo="3. Para quais lojas?" ajuda="Cada loja vê só o seu pedido, nunca o preço da outra.">
+        {!lojasDisponiveis && <EsqueletoLista linhas={2} />}
         <div className="grid gap-2 sm:grid-cols-2">
-          {LOJAS.map((l) => {
+          {(lojasDisponiveis ?? []).map((l) => {
             const marcada = lojas.includes(l.id);
             return (
               <label
@@ -267,7 +291,7 @@ export function NovaCotacao() {
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-tinta">{l.nome}</span>
                   <span className="block text-xs text-tinta-3">
-                    Suzano · entrega em {l.entrega[0]}–{l.entrega[1]} min
+                    {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
                   </span>
                 </span>
               </label>
@@ -279,8 +303,8 @@ export function NovaCotacao() {
       {erro && <Aviso>{erro}</Aviso>}
 
       <div className="flex justify-end">
-        <Botao onClick={enviar} className="w-full sm:w-auto">
-          Enviar para {lojas.length === 1 ? "a loja" : `${lojas.length} lojas`}
+        <Botao onClick={enviar} disabled={enviando} className="w-full sm:w-auto">
+          {enviando ? "Enviando..." : `Enviar para ${lojas.length === 1 ? "a loja" : `${lojas.length} lojas`}`}
         </Botao>
       </div>
     </div>
