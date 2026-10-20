@@ -10,7 +10,7 @@ import { useAvisar } from "@/components/ui/Avisos";
 import { Mais } from "@/components/ui/Icones";
 import { EXEMPLO, descricaoDoVeiculo, type CotacaoVista, type LojaVista, type LojasDaOficina } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
-import { AvisoDaPrevia, AvisoSemConexao, Cabecalho, PilulaEtapa, haQuanto } from "./ui";
+import { AvisoDaPrevia, AvisoSemConexao, Cabecalho, InformarCidade, PilulaEtapa, haQuanto } from "./ui";
 
 const PASSOS = [
   { titulo: "Placa e peças", texto: "Digite a placa e o que precisa, do jeito que fala no balcão." },
@@ -23,7 +23,7 @@ const PASSOS = [
 export function ListaCotacoes() {
   const router = useRouter();
   const { dados: cotacoes, semConexao } = useAoVivo<CotacaoVista[]>("/api/peca-peca/cotacoes", 5000);
-  const { dados: daOficina } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
+  const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojas = daOficina?.lojas ?? null;
   const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState("");
@@ -62,6 +62,7 @@ export function ListaCotacoes() {
 
       <AvisoDaPrevia />
       <AvisoSemConexao ativo={semConexao} />
+      {daOficina && !daOficina.cidade && <InformarCidade onSalva={recarregarLojas} />}
 
       <section className="space-y-3">
         <h2 className="font-semibold text-tinta">Cotações</h2>
@@ -159,12 +160,6 @@ function PainelBalcoes({ lojas, cidade }: { lojas: LojaVista[] | null; cidade: s
       titulo={cidade ? `Lojas que atendem ${cidade}` : "Balcões das lojas"}
       ajuda="Abra cada balcão numa aba nova, ou mande o link para outro aparelho, e faça o papel do balconista. Cada loja só vê o que foi mandado para ela."
     >
-      {!cidade && (
-        <p className="mb-3 rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-xs text-atencao">
-          A oficina está sem cidade em Configurações, então aparecem todas as lojas. Com a cidade preenchida,
-          aparecem só as que atendem a região.
-        </p>
-      )}
       {!lojas ? (
         <EsqueletoLista linhas={2} />
       ) : lojas.length === 0 ? (

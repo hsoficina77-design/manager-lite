@@ -11,7 +11,7 @@ import { Busca, Confere, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { normalizarPlaca, type LojasDaOficina, type VeiculoCotado } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
-import { AvisoDaPrevia, Cabecalho } from "./ui";
+import { AvisoDaPrevia, Cabecalho, InformarCidade } from "./ui";
 
 // As peças que mais se pedem no balcão: um toque e entram na lista.
 const SUGESTOES = [
@@ -53,7 +53,7 @@ const VEICULO_VAZIO: VeiculoNaTela = { placa: "", marca: "", modelo: "", ano: ""
 
 export function NovaCotacao() {
   const router = useRouter();
-  const { dados: daOficina } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
+  const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojasDisponiveis = daOficina?.lojas ?? null;
   const [veiculo, setVeiculo] = useState<VeiculoNaTela>(VEICULO_VAZIO);
   const [busca, setBusca] = useState<EstadoBusca>({ tipo: "nada" });
@@ -274,6 +274,11 @@ export function NovaCotacao() {
         titulo="3. Para quais lojas?"
         ajuda={`${daOficina?.cidade ? `As que atendem ${daOficina.cidade}. ` : ""}Cada loja vê só o seu pedido, nunca o preço da outra.`}
       >
+        {daOficina && !daOficina.cidade && (
+          <div className="mb-3">
+            <InformarCidade onSalva={recarregarLojas} />
+          </div>
+        )}
         {!lojasDisponiveis && <EsqueletoLista linhas={2} />}
         {lojasDisponiveis?.length === 0 && (
           <p className="text-sm text-tinta-3">

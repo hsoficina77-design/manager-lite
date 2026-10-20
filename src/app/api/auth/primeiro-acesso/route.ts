@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
   try {
     const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
-    const { nome, email, senha, token: codigo, nomeOficina } = corpo ?? {};
+    const { nome, email, senha, token: codigo, nomeOficina, cidade } = corpo ?? {};
 
     const esperado = tokenExigido();
     if (esperado && codigo !== esperado) {
@@ -86,6 +86,8 @@ export async function POST(request: Request) {
       if ((await tx.usuario.count()) > 0) return null;
       const criada = await criarOficinaComDono(tx, {
         nomeOficina: oficina,
+        // Instalação do sistema: a cidade vem do mesmo formulário, mas não trava a instalação.
+        cidade: typeof cidade === "string" && cidade.trim() ? cidade.trim().slice(0, 100) : null,
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
         senhaHash,

@@ -18,14 +18,18 @@ const inputCls =
 export default function CadastroOficinaForm({
   convite,
   teste,
+  cidades = [],
 }: {
   /** Sem convite nem teste, é a instalação. */
   convite?: { token: string; nomeOficina: string | null };
   teste?: { origem: string | null };
+  /** Sugestões para o campo de cidade: as que as lojas do Peça Peça atendem. */
+  cidades?: string[];
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
     nomeOficina: convite?.nomeOficina ?? "",
+    cidade: "",
     nome: "",
     email: "",
     senha: "",
@@ -75,6 +79,7 @@ export default function CadastroOficinaForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nomeOficina: form.nomeOficina,
+          cidade: form.cidade,
           nome: form.nome,
           email: form.email,
           senha: form.senha,
@@ -136,6 +141,30 @@ export default function CadastroOficinaForm({
           className={inputCls}
         />
         <p className="mt-1 text-xs text-tinta-3">Sai no menu e nos documentos. Dá para mudar depois.</p>
+      </div>
+
+      {/* Obrigatória: é por ela que a oficina recebe as autopeças da região no Peça Peça. */}
+      <div>
+        <label htmlFor="cidade" className="mb-1 block text-sm font-medium text-tinta-2">
+          Cidade da oficina
+        </label>
+        <input
+          id="cidade"
+          required
+          maxLength={100}
+          autoComplete="address-level2"
+          list="cidades-sugeridas"
+          placeholder="Ex.: Suzano"
+          value={form.cidade}
+          onChange={(e) => setCampo("cidade", e.target.value)}
+          className={inputCls}
+        />
+        <datalist id="cidades-sugeridas">
+          {cidades.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+        <p className="mt-1 text-xs text-tinta-3">Para mostrar as autopeças que atendem a sua região.</p>
       </div>
 
       <div>

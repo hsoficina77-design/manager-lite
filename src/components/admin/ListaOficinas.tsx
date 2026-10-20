@@ -8,7 +8,7 @@ import { Entrada, Selecao } from "@/components/ui/Campos";
 import { Vazio } from "@/components/ui/Dados";
 import { AcoesDaOficina, LinkWhatsapp, Selos, dia, haQuanto } from "./comum";
 
-export type OficinaDaLista = OficinaResumo & { usuarios: number; clientes: number };
+export type OficinaDaLista = OficinaResumo & { usuarios: number; clientes: number; cidade?: string | null };
 
 function passaNoFiltro(o: OficinaDaLista, filtro: Filtro) {
   if (filtro === "suspensas") return !o.ativa;
@@ -33,11 +33,30 @@ export function ListaOficinas({ oficinas, filtroInicial = "todas" }: { oficinas:
   const [filtro, setFiltro] = useState<Filtro>(filtroInicial);
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<Ordem>("recentes");
+  const [cidade, setCidade] = useState("");
+
+  // As cidades das oficinas, para ver onde elas estão — e onde vale buscar autopeça.
+  const cidades = new Map<string, { nome: string; total: number }>();
+  for (const o of oficinas) {
+    if (!o.cidade) continue;
+    const k = normalizarBusca(o.cidade);
+    cidades.set(k, { nome: cidades.get(k)?.nome ?? o.cidade, total: (cidades.get(k)?.total ?? 0) + 1 });
+  }
+  const semCidade = oficinas.filter((o) => !o.cidade).length;
 
   const termo = normalizarBusca(busca);
   const visiveis = oficinas
     .filter((o) => passaNoFiltro(o, filtro))
-    .filter((o) => !termo || normalizarBusca(o.nome).includes(termo) || (o.whatsapp ?? "").includes(termo))
+    .filter((o) =>
+      !cidade ? true : cidade === "-" ? !o.cidade : !!o.cidade && normalizarBusca(o.cidade) === cidade
+    )
+    .filter(
+      (o) =>
+        !termo ||
+        normalizarBusca(o.nome).includes(termo) ||
+        (o.whatsapp ?? "").includes(termo) ||
+        normalizarBusca(o.cidade ?? "").includes(termo)
+    )
     .sort((a, b) =>
       ordem === "acesso"
         ? tempo(b.ultimoAcesso) - tempo(a.ultimoAcesso)
@@ -52,7 +71,7 @@ export function ListaOficinas({ oficinas, filtroInicial = "todas" }: { oficinas:
         <Entrada
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por nome ou WhatsApp"
+          placeholder="Buscar por nome, cidade ou WhatsApp"
           className="sm:max-w-xs"
           aria-label="Buscar oficina"
         />
@@ -67,6 +86,22 @@ export function ListaOficinas({ oficinas, filtroInicial = "todas" }: { oficinas:
               {o.rotulo}
             </option>
           ))}
+        </Selecao>
+        <Selecao
+          value={cidade}
+          onChange={(e) => setCidade(e.target.value)}
+          aria-label="Filtrar por cidade"
+          className="sm:max-w-xs"
+        >
+          <option value="">Todas as cidades</option>
+          {[...cidades.entries()]
+            .sort((a, b) => a[1].nome.localeCompare(b[1].nome, "pt-BR"))
+            .map(([k, c]) => (
+              <option key={k} value={k}>
+                {c.nome} ({c.total})
+              </option>
+            ))}
+          {semCidade > 0 && <option value="-">Sem cidade ({semCidade})</option>}
         </Selecao>
       </div>
 
@@ -106,7 +141,7 @@ export function ListaOficinas({ oficinas, filtroInicial = "todas" }: { oficinas:
                 </Link>
                 <Selos oficina={o} origem={origemDa(o)} />
                 <p className="text-xs text-tinta-3">
-                  Desde {dia(o.criadaEm)} · {o.usuarios} acesso{o.usuarios === 1 ? "" : "s"} · {o.clientes} cliente
+                  {o.cidade ?? "Sem cidade"} · Desde {dia(o.criadaEm)} · {o.usuarios} acesso{o.usuarios === 1 ? "" : "s"} · {o.clientes} cliente
                   {o.clientes === 1 ? "" : "s"} · {o.ordens} OS ({o.ordens30d} em 30 dias)
                 </p>
                 <p className="text-xs text-tinta-3">

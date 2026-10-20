@@ -68,6 +68,34 @@ export async function lojasQueAtendem(cidade: string | null, comLink = false): P
     .map(({ tokenBalcao, ...l }) => (comLink ? { ...l, link: `/balcao/${tokenBalcao}` } : l));
 }
 
+/** As cidades atendidas pelas lojas ativas, cada uma escrita de um jeito só. */
+export async function cidadesConhecidas(): Promise<string[]> {
+  const lojas = await prisma.loja.findMany({ where: { ativa: true }, select: { atende: true } });
+  const lista: string[] = [];
+  for (const c of lojas.flatMap((l) => l.atende)) {
+    if (!lista.some((x) => mesmaCidade(x, c))) lista.push(c);
+  }
+  return lista.sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+const PARTICULAS = new Set(["de", "da", "do", "das", "dos", "e"]);
+
+/**
+ * A cidade como vai ficar gravada. Se já é uma cidade das lojas, fica com a grafia de
+ * lá ("poa" vira "Poá"); senão, só arruma as maiúsculas ("ferraz de vasconcelos" vira
+ * "Ferraz de Vasconcelos"). Assim a oficina e a loja escrevem a cidade igual.
+ */
+export async function grafiaDaCidade(cidade: string): Promise<string> {
+  const limpa = cidade.trim().replace(/\s+/g, " ");
+  const conhecida = (await cidadesConhecidas()).find((c) => mesmaCidade(c, limpa));
+  if (conhecida) return conhecida;
+  return limpa
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((p, i) => (i > 0 && PARTICULAS.has(p) ? p : p.charAt(0).toLocaleUpperCase("pt-BR") + p.slice(1)))
+    .join(" ");
+}
+
 /** Todas as lojas, inclusive as desativadas — a cotação antiga continua com o nome dela. */
 export async function todasAsLojas(): Promise<Map<string, LojaVista>> {
   const lojas = await prisma.loja.findMany({ select: CAMPOS_DA_LOJA });

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUsuarioAtual } from "@/lib/auth";
 import { cadastroTesteAberto } from "@/lib/sistema";
+import { cidadesConhecidas } from "@/lib/balcao";
 import { DIAS_TESTE } from "@/lib/plano";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import CadastroOficinaForm from "@/components/CadastroOficinaForm";
@@ -89,7 +90,7 @@ export default async function TestePage({
       <p className="mb-5 rounded-lg bg-superficie-2 px-3 py-2 text-xs text-tinta-3">
         Depois dos {DIAS_TESTE} dias, nada é apagado: você continua vendo tudo o que registrou e decide se quer assinar.
       </p>
-      <CadastroOficinaForm teste={{ origem: origem?.slice(0, 40) ?? null }} />
+      <CadastroOficinaForm teste={{ origem: origem?.slice(0, 40) ?? null }} cidades={await cidadesConhecidas()} />
     </TelaDeEntrada>
   );
 }

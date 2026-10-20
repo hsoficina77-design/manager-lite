@@ -55,6 +55,8 @@ export async function criarOficinaComDono(
     nome: string;
     email: string;
     senhaHash: string;
+    /** Onde a oficina fica — é por ela que o Peça Peça mostra as lojas da região. */
+    cidade?: string | null;
     administraPlataforma?: boolean;
     /** Só no cadastro público: a oficina nasce em teste grátis. */
     teste?: { whatsapp: string; origem: string | null };
@@ -71,7 +73,9 @@ export async function criarOficinaComDono(
     },
   });
 
-  await tx.configuracao.create({ data: { oficinaId: oficina.id, nome: dados.nomeOficina } });
+  await tx.configuracao.create({
+    data: { oficinaId: oficina.id, nome: dados.nomeOficina, cidade: dados.cidade ?? null },
+  });
   await tx.categoriaDespesa.createMany({
     data: CATEGORIAS_PADRAO.map((c) => ({ ...c, oficinaId: oficina.id })),
   });
@@ -92,7 +96,7 @@ export async function criarOficinaComDono(
 
 // ─── Cadastro ────────────────────────────────────────────────────────────────
 
-export type DadosCadastro = { nomeOficina: string; nome: string; email: string; senha: string };
+export type DadosCadastro = { nomeOficina: string; cidade: string; nome: string; email: string; senha: string };
 
 /**
  * Confere o formulário de oficina nova — o mesmo no convite e no teste grátis. Devolve
@@ -101,9 +105,11 @@ export type DadosCadastro = { nomeOficina: string; nome: string; email: string; 
 export function validarCadastroOficina(
   corpo: Record<string, unknown> | null
 ): { erro: string; dados: null } | { erro: null; dados: DadosCadastro } {
-  const { nomeOficina, nome, email, senha } = corpo ?? {};
+  const { nomeOficina, cidade, nome, email, senha } = corpo ?? {};
 
   if (typeof nomeOficina !== "string" || !nomeOficina.trim()) return { erro: "Informe o nome da oficina", dados: null };
+  // Obrigatória desde o Peça Peça: é a cidade que diz quais autopeças atendem a oficina.
+  if (typeof cidade !== "string" || !cidade.trim()) return { erro: "Informe a cidade da oficina", dados: null };
   if (typeof nome !== "string" || !nome.trim()) return { erro: "Informe seu nome", dados: null };
   if (typeof email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
     return { erro: "Informe um e-mail válido", dados: null };
@@ -116,6 +122,7 @@ export function validarCadastroOficina(
     erro: null,
     dados: {
       nomeOficina: nomeOficina.trim().slice(0, 120),
+      cidade: cidade.trim().replace(/\s+/g, " ").slice(0, 100),
       nome: nome.trim().slice(0, 120),
       email: email.trim().toLowerCase(),
       senha,
@@ -139,6 +146,7 @@ export function cadastroTesteAberto() {
  */
 export async function criarOficinaDeTeste(dados: {
   nomeOficina: string;
+  cidade: string;
   nome: string;
   email: string;
   senhaHash: string;
@@ -151,6 +159,7 @@ export async function criarOficinaDeTeste(dados: {
       if ((await tx.oficina.count({ where: { whatsapp: dados.whatsapp } })) > 0) return "whatsapp" as const;
       return criarOficinaComDono(tx, {
         nomeOficina: dados.nomeOficina,
+        cidade: dados.cidade,
         nome: dados.nome,
         email: dados.email,
         senhaHash: dados.senhaHash,
@@ -164,7 +173,7 @@ export async function criarOficinaDeTeste(dados: {
     // Fora da transação: o aviso não pode desfazer um cadastro que deu certo.
     avisarPlataforma({
       titulo: "Nova oficina em teste",
-      mensagem: `${dados.nomeOficina} (${dados.nome}) começou o teste grátis${dados.origem ? ` — veio de ${dados.origem}` : ""}.`,
+      mensagem: `${dados.nomeOficina}, de ${dados.cidade} (${dados.nome}), começou o teste grátis${dados.origem ? ` — veio de ${dados.origem}` : ""}.`,
       link: `/admin/oficinas/${criada.oficina.id}`,
     }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do cadastro:", err));
   }
@@ -280,7 +289,7 @@ export async function lerConvite(token: string | null | undefined) {
  */
 export async function usarConvite(
   token: string,
-  dados: { nomeOficina: string; nome: string; email: string; senhaHash: string }
+  dados: { nomeOficina: string; cidade: string; nome: string; email: string; senhaHash: string }
 ) {
   const tokenHash = hashDoToken(token);
   return prisma.$transaction(
@@ -344,6 +353,7 @@ export async function listarOficinas() {
       whatsapp: true,
       origem: true,
       gatewayAssinaturaId: true,
+      configuracao: { select: { cidade: true } },
       _count: { select: { usuarios: true, ordens: true, clientes: true } },
     },
   });
@@ -373,6 +383,8 @@ export async function listarOficinas() {
     pagoAte: o.pagoAte,
     whatsapp: o.whatsapp,
     origem: o.origem,
+    // Só a cidade: é casca (onde a oficina fica), como o nome — ajuda a ver as regiões.
+    cidade: o.configuracao?.cidade?.trim() || null,
     assinaturaAutomatica: Boolean(o.gatewayAssinaturaId),
     usuarios: o._count.usuarios,
     ordens: o._count.ordens,

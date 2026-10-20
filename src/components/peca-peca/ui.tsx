@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Botao } from "@/components/ui/Botao";
+import { Entrada } from "@/components/ui/Campos";
+import { useAvisar } from "@/components/ui/Avisos";
 import { PecaPeca, Voltar } from "@/components/ui/Icones";
 import { ETAPAS, etapaDa, type CotacaoVista } from "./regras";
 
@@ -76,6 +80,63 @@ export function AvisoSemConexao({ ativo }: { ativo: boolean }) {
     <p role="status" className="rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-xs text-atencao">
       Sem conexão agora. A tela volta a se atualizar sozinha quando a internet voltar.
     </p>
+  );
+}
+
+/**
+ * Para a oficina que se cadastrou antes de a cidade ser pedida: sem ela, aparecem as
+ * lojas de todas as regiões. Grava só a cidade (a mesma de Configurações).
+ */
+export function InformarCidade({ onSalva }: { onSalva: () => void }) {
+  const avisar = useAvisar();
+  const [cidade, setCidade] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cidade.trim()) return setErro("Escreva a cidade da oficina.");
+    setErro("");
+    setSalvando(true);
+    try {
+      const r = await fetch("/api/peca-peca/cidade", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cidade }),
+      });
+      const corpo = await r.json().catch(() => ({}));
+      if (!r.ok) return setErro(corpo.error ?? "Não consegui salvar a cidade.");
+      avisar(`Cidade salva: ${corpo.cidade}`);
+      onSalva();
+    } catch {
+      setErro("Sem conexão. Tente de novo.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={salvar} className="space-y-2 rounded-xl border border-atencao-linha bg-atencao-fraco p-4">
+      <p className="text-sm font-semibold text-atencao">Em que cidade fica a oficina?</p>
+      <p className="text-sm text-tinta-2">
+        É por ela que aparecem as autopeças que atendem a sua região. Sem a cidade, aparecem as lojas de todas as
+        regiões.
+      </p>
+      <div className="flex gap-2">
+        <Entrada
+          value={cidade}
+          onChange={(e) => setCidade(e.target.value)}
+          placeholder="Ex.: Suzano"
+          aria-label="Cidade da oficina"
+          autoComplete="address-level2"
+          className="max-w-xs"
+        />
+        <Botao type="submit" disabled={salvando}>
+          {salvando ? "Salvando..." : "Salvar"}
+        </Botao>
+      </div>
+      {erro && <p className="text-xs text-perigo">{erro}</p>}
+    </form>
   );
 }
 
