@@ -10,6 +10,10 @@ import { getConfiguracao } from "@/lib/configuracao-db";
 export async function GET() {
   const guarda = await guardaPecaPeca();
   if (guarda.resposta) return guarda.resposta;
-  const { cidade } = await getConfiguracao(guarda);
-  return NextResponse.json({ cidade: cidade?.trim() || null, lojas: await lojasQueAtendem(cidade, true) });
+  const { cidade, estado } = await getConfiguracao(guarda);
+  return NextResponse.json({
+    cidade: cidade?.trim() || null,
+    estado: estado?.trim() || null,
+    lojas: await lojasQueAtendem(cidade, estado, true),
+  });
 }

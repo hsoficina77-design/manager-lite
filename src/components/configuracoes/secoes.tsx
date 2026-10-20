@@ -11,6 +11,7 @@
 // tela curta é tela que não cansa.
 
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { CampoCidade } from "@/components/ui/CampoCidade";
 import { cn } from "@/lib/utils";
 import { rodapeDoDocumento, type Configuracao } from "@/lib/configuracao";
 import { COR_DOCUMENTO_PADRAO, PALETA_DOCUMENTO } from "@/lib/cor-documento";
@@ -169,19 +170,13 @@ function Endereco({ form, setCampo, setForm }: SecaoProps) {
             className={inputCls}
           />
         </Campo>
-        <Campo label="Cidade" colunas={4}>
-          <input
-            value={form.cidade}
-            onChange={(e) => setCampo("cidade", e.target.value)}
-            className={inputCls}
-          />
-        </Campo>
-        <Campo label="UF" colunas={2}>
-          <input
-            maxLength={2}
-            value={form.estado}
-            onChange={(e) => setCampo("estado", e.target.value.toUpperCase())}
-            placeholder="SP"
+        {/* Cidade e UF num campo só, escolhido da lista do IBGE: é a mesma cidade que diz
+            quais autopeças atendem a oficina no Peça Peça. */}
+        <Campo label="Cidade" colunas={6} ajuda="Digite e escolha na lista.">
+          <CampoCidade
+            valor={form.cidade && form.estado ? { nome: form.cidade, uf: form.estado } : null}
+            textoInicial={form.cidade && !form.estado ? form.cidade : undefined}
+            onChange={(m) => setForm((f) => ({ ...f, cidade: m?.nome ?? "", estado: m?.uf ?? "" }))}
             className={inputCls}
           />
         </Campo>

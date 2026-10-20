@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashSenha } from "@/lib/senha";
 import { abrirSessao, cadastroTesteAberto, criarOficinaDeTeste, validarCadastroOficina } from "@/lib/sistema";
-import { grafiaDaCidade } from "@/lib/balcao";
 import { normalizarWhatsapp } from "@/lib/plano";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
@@ -48,7 +47,8 @@ export async function POST(request: Request) {
 
     const criada = await criarOficinaDeTeste({
       nomeOficina: dados.nomeOficina,
-      cidade: await grafiaDaCidade(dados.cidade),
+      cidade: dados.cidade,
+      estado: dados.estado,
       nome: dados.nome,
       email: dados.email,
       senhaHash: await hashSenha(dados.senha),

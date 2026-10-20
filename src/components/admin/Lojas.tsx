@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn, normalizarBusca } from "@/lib/utils";
+import { mesmaCidade, rotuloDoMunicipio, type Municipio } from "@/lib/municipios";
+import { CampoCidade } from "@/components/ui/CampoCidade";
 import type { LojaDoPainel } from "@/lib/balcao";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Botao, classesBotao } from "@/components/ui/Botao";
@@ -21,14 +23,16 @@ const chave = (cidade: string) => normalizarBusca(cidade);
 
 type Formulario = {
   nome: string;
-  cidade: string;
+  /** Onde a loja fica — município escolhido da lista do IBGE. */
+  sede: Municipio | null;
+  /** As outras cidades da região, como "Suzano - SP". */
   atende: string[];
   telefone: string;
   entregaMin: string;
   entregaMax: string;
 };
 
-const FORM_VAZIO: Formulario = { nome: "", cidade: "", atende: [], telefone: "", entregaMin: "20", entregaMax: "40" };
+const FORM_VAZIO: Formulario = { nome: "", sede: null, atende: [], telefone: "", entregaMin: "20", entregaMax: "40" };
 
 export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
   const router = useRouter();
@@ -146,7 +150,7 @@ export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
                 <div className="min-w-0">
                   <h2 className="font-semibold text-tinta">{l.nome}</h2>
                   <p className="text-xs text-tinta-3">
-                    Fica em {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
+                    Fica em {l.cidade ? (l.uf ? `${l.cidade} - ${l.uf}` : l.cidade) : "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
                     {l.telefone && ` · ${l.telefone}`}
                   </p>
                 </div>
@@ -240,6 +244,7 @@ function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => voi
 type CorpoDaLoja = {
   nome: string;
   cidade: string;
+  uf: string;
   atende: string[];
   telefone: string | null;
   entregaMin: number;
@@ -257,37 +262,37 @@ function FormLoja({
   onFechar: () => void;
   onSalvar: (corpo: CorpoDaLoja) => Promise<void>;
 }) {
+  const sedeDaLoja = loja?.cidade && loja.uf ? { nome: loja.cidade, uf: loja.uf } : null;
+  const rotuloDaSede = sedeDaLoja ? rotuloDoMunicipio(sedeDaLoja) : (loja?.cidade ?? "");
   const [f, setF] = useState<Formulario>(
     loja
       ? {
           nome: loja.nome,
-          cidade: loja.cidade ?? "",
+          sede: sedeDaLoja,
           // A cidade da própria loja aparece fixa; aqui ficam as outras.
-          atende: loja.atende.filter((c) => !loja.cidade || chave(c) !== chave(loja.cidade)),
+          atende: loja.atende.filter((c) => !rotuloDaSede || !mesmaCidade(c, rotuloDaSede)),
           telefone: loja.telefone ?? "",
           entregaMin: String(loja.entregaMin),
           entregaMax: String(loja.entregaMax),
         }
       : FORM_VAZIO
   );
-  const [novaCidade, setNovaCidade] = useState("");
+  // Troca a chave para limpar o campo de busca depois de cada cidade adicionada.
+  const [campoNovo, setCampoNovo] = useState(0);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
-  const jaTem = (c: string) => chave(c) === chave(f.cidade) || f.atende.some((x) => chave(x) === chave(c));
-  // "poa" digitado vira a "Poá" que já existe: a mesma cidade, escrita de um jeito só.
-  const grafia = (c: string) => sugestoes.find((s) => chave(s) === chave(c)) ?? c.trim();
+  const jaTem = (rotulo: string) =>
+    Boolean(f.sede && mesmaCidade(rotulo, rotuloDoMunicipio(f.sede))) || f.atende.some((x) => mesmaCidade(x, rotulo));
 
-  function adicionarCidade(c = novaCidade) {
-    const texto = c.trim();
-    if (!texto || jaTem(texto)) return setNovaCidade("");
-    setF((x) => ({ ...x, atende: [...x.atende, grafia(texto)] }));
-    setNovaCidade("");
+  function adicionarCidade(rotulo: string) {
+    if (!jaTem(rotulo)) setF((x) => ({ ...x, atende: [...x.atende, rotulo] }));
+    setCampoNovo((n) => n + 1);
   }
 
   async function salvar() {
     if (!f.nome.trim()) return setErro("Escreva o nome da loja.");
-    if (!f.cidade.trim()) return setErro("Escreva a cidade onde a loja fica.");
+    if (!f.sede) return setErro("Escolha na lista a cidade onde a loja fica.");
     const min = Number(f.entregaMin);
     const max = Number(f.entregaMax);
     if (!(max >= min)) return setErro("O prazo mais demorado não pode ser menor que o mais rápido.");
@@ -295,9 +300,9 @@ function FormLoja({
     setSalvando(true);
     await onSalvar({
       nome: f.nome.trim(),
-      cidade: grafia(f.cidade),
-      // O que estiver digitado e não adicionado entra também — é o que a pessoa quis.
-      atende: [...f.atende, ...(novaCidade.trim() && !jaTem(novaCidade) ? [grafia(novaCidade)] : [])],
+      cidade: f.sede.nome,
+      uf: f.sede.uf,
+      atende: f.atende,
       telefone: f.telefone.trim() || null,
       entregaMin: min,
       entregaMax: max,
@@ -329,21 +334,25 @@ function FormLoja({
           <Entrada value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} placeholder="Ex.: Bom Preço Ferraz" />
         </Campo>
 
-        <Campo rotulo="Cidade onde fica" obrigatorio>
-          <Entrada
-            value={f.cidade}
-            onChange={(e) => setF({ ...f, cidade: e.target.value })}
-            placeholder="Ex.: Ferraz de Vasconcelos"
-            list="cidades-conhecidas"
+        <div>
+          <p className="mb-1 block text-xs font-medium text-tinta-2">
+            Cidade onde fica<span className="ml-0.5 text-perigo">*</span>
+          </p>
+          <CampoCidade
+            valor={f.sede}
+            onChange={(sede) => setF((x) => ({ ...x, sede }))}
+            textoInicial={!sedeDaLoja ? (loja?.cidade ?? undefined) : undefined}
+            placeholder="Comece a digitar: Ferraz"
+            aria-label="Cidade onde a loja fica"
           />
-        </Campo>
+        </div>
 
         <div>
           <p className="mb-1 block text-xs font-medium text-tinta-2">Cidades que atende</p>
           <div className="mb-2 flex flex-wrap gap-1.5">
-            {f.cidade.trim() && (
+            {f.sede && (
               <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-tinta" title="A cidade da loja entra sempre">
-                {f.cidade.trim()}
+                {rotuloDoMunicipio(f.sede)}
               </span>
             )}
             {f.atende.map((c) => (
@@ -360,19 +369,13 @@ function FormLoja({
               </span>
             ))}
           </div>
-          <div className="flex gap-2">
-            <Entrada
-              value={novaCidade}
-              onChange={(e) => setNovaCidade(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), adicionarCidade())}
-              placeholder="Outra cidade, ex.: Suzano"
-              list="cidades-conhecidas"
-              aria-label="Cidade atendida"
-            />
-            <Botao variante="contraste" onClick={() => adicionarCidade()}>
-              Adicionar
-            </Botao>
-          </div>
+          <CampoCidade
+            key={campoNovo}
+            valor={null}
+            onChange={(m) => m && adicionarCidade(rotuloDoMunicipio(m))}
+            placeholder="Mais uma cidade: comece a digitar"
+            aria-label="Cidade atendida"
+          />
           {outrasSugestoes.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {outrasSugestoes.map((c) => (
@@ -387,11 +390,6 @@ function FormLoja({
               ))}
             </div>
           )}
-          <datalist id="cidades-conhecidas">
-            {sugestoes.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
         </div>
 
         <Campo rotulo="Telefone ou WhatsApp do balcão" ajuda="Opcional. Só para você falar com a loja.">

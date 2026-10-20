@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Botao } from "@/components/ui/Botao";
-import { Entrada } from "@/components/ui/Campos";
+import { CampoCidade } from "@/components/ui/CampoCidade";
+import type { Municipio } from "@/lib/municipios";
 import { useAvisar } from "@/components/ui/Avisos";
 import { PecaPeca, Voltar } from "@/components/ui/Icones";
 import { ETAPAS, etapaDa, type CotacaoVista } from "./regras";
@@ -87,26 +88,26 @@ export function AvisoSemConexao({ ativo }: { ativo: boolean }) {
  * Para a oficina que se cadastrou antes de a cidade ser pedida: sem ela, aparecem as
  * lojas de todas as regiões. Grava só a cidade (a mesma de Configurações).
  */
-export function InformarCidade({ onSalva }: { onSalva: () => void }) {
+export function InformarCidade({ cidadeAtual, onSalva }: { cidadeAtual?: string | null; onSalva: () => void }) {
   const avisar = useAvisar();
-  const [cidade, setCidade] = useState("");
+  const [municipio, setMunicipio] = useState<Municipio | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    if (!cidade.trim()) return setErro("Escreva a cidade da oficina.");
+    if (!municipio) return setErro("Escolha a cidade na lista.");
     setErro("");
     setSalvando(true);
     try {
       const r = await fetch("/api/peca-peca/cidade", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cidade }),
+        body: JSON.stringify({ cidade: municipio.nome, estado: municipio.uf }),
       });
       const corpo = await r.json().catch(() => ({}));
       if (!r.ok) return setErro(corpo.error ?? "Não consegui salvar a cidade.");
-      avisar(`Cidade salva: ${corpo.cidade}`);
+      avisar(`Cidade salva: ${corpo.cidade} - ${corpo.estado}`);
       onSalva();
     } catch {
       setErro("Sem conexão. Tente de novo.");
@@ -117,20 +118,22 @@ export function InformarCidade({ onSalva }: { onSalva: () => void }) {
 
   return (
     <form onSubmit={salvar} className="space-y-2 rounded-xl border border-atencao-linha bg-atencao-fraco p-4">
-      <p className="text-sm font-semibold text-atencao">Em que cidade fica a oficina?</p>
+      <p className="text-sm font-semibold text-atencao">
+        {cidadeAtual ? "Confirme a cidade da oficina" : "Em que cidade fica a oficina?"}
+      </p>
       <p className="text-sm text-tinta-2">
-        É por ela que aparecem as autopeças que atendem a sua região. Sem a cidade, aparecem as lojas de todas as
-        regiões.
+        É por ela que aparecem as autopeças que atendem a sua região.
+        {cidadeAtual ? " Escolha na lista para ela ficar com o nome oficial e o estado." : " Sem a cidade, aparecem as lojas de todas as regiões."}
       </p>
       <div className="flex gap-2">
-        <Entrada
-          value={cidade}
-          onChange={(e) => setCidade(e.target.value)}
-          placeholder="Ex.: Suzano"
-          aria-label="Cidade da oficina"
-          autoComplete="address-level2"
-          className="max-w-xs"
-        />
+        <div className="min-w-0 max-w-xs flex-1">
+          <CampoCidade
+            valor={municipio}
+            onChange={setMunicipio}
+            textoInicial={cidadeAtual ?? undefined}
+            aria-label="Cidade da oficina"
+          />
+        </div>
         <Botao type="submit" disabled={salvando}>
           {salvando ? "Salvando..." : "Salvar"}
         </Botao>

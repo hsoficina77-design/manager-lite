@@ -274,9 +274,9 @@ export function NovaCotacao() {
         titulo="3. Para quais lojas?"
         ajuda={`${daOficina?.cidade ? `As que atendem ${daOficina.cidade}. ` : ""}Cada loja vê só o seu pedido, nunca o preço da outra.`}
       >
-        {daOficina && !daOficina.cidade && (
+        {daOficina && (!daOficina.cidade || !daOficina.estado) && (
           <div className="mb-3">
-            <InformarCidade onSalva={recarregarLojas} />
+            <InformarCidade cidadeAtual={daOficina.cidade} onSalva={recarregarLojas} />
           </div>
         )}
         {!lojasDisponiveis && <EsqueletoLista linhas={2} />}

@@ -22,8 +22,8 @@ export async function POST(request: Request) {
     const dados = await lerJson(request, cotacaoCriarSchema);
 
     // Só vai para loja ativa que atende a cidade da oficina — a mesma lista da tela.
-    const { cidade } = await getConfiguracao(guarda);
-    const daRegiao = new Set((await lojasQueAtendem(cidade)).map((l) => l.id));
+    const { cidade, estado } = await getConfiguracao(guarda);
+    const daRegiao = new Set((await lojasQueAtendem(cidade, estado)).map((l) => l.id));
     const lojas = [...new Set(dados.lojas)].filter((l) => daRegiao.has(l));
     if (lojas.length === 0) {
       return NextResponse.json({ error: "Escolha ao menos uma loja que atenda a sua cidade" }, { status: 400 });

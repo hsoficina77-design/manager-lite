@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SENHA_MIN } from "@/lib/senha-regras";
+import type { Municipio } from "@/lib/municipios";
+import { CampoCidade } from "@/components/ui/CampoCidade";
 
 // 16px no celular: abaixo disso o iPhone dá zoom ao focar o campo.
 const inputCls =
@@ -18,18 +20,14 @@ const inputCls =
 export default function CadastroOficinaForm({
   convite,
   teste,
-  cidades = [],
 }: {
   /** Sem convite nem teste, é a instalação. */
   convite?: { token: string; nomeOficina: string | null };
   teste?: { origem: string | null };
-  /** Sugestões para o campo de cidade: as que as lojas do Peça Peça atendem. */
-  cidades?: string[];
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
     nomeOficina: convite?.nomeOficina ?? "",
-    cidade: "",
     nome: "",
     email: "",
     senha: "",
@@ -40,6 +38,8 @@ export default function CadastroOficinaForm({
     site: "",
   });
   const [aceite, setAceite] = useState(false);
+  // Só vale cidade escolhida da lista do IBGE: é o que deixa todas escritas igual.
+  const [municipio, setMunicipio] = useState<Municipio | null>(null);
   // Instalação protegida por código (SETUP_TOKEN no servidor) pede mais um campo.
   const [exigeToken, setExigeToken] = useState(false);
   const endpoint = teste
@@ -72,6 +72,10 @@ export default function CadastroOficinaForm({
       setErro("As duas senhas não são iguais");
       return;
     }
+    if (!municipio) {
+      setErro("Escolha a cidade da oficina na lista");
+      return;
+    }
     setSalvando(true);
     try {
       const res = await fetch(endpoint, {
@@ -79,7 +83,8 @@ export default function CadastroOficinaForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nomeOficina: form.nomeOficina,
-          cidade: form.cidade,
+          cidade: municipio.nome,
+          estado: municipio.uf,
           nome: form.nome,
           email: form.email,
           senha: form.senha,
@@ -148,23 +153,8 @@ export default function CadastroOficinaForm({
         <label htmlFor="cidade" className="mb-1 block text-sm font-medium text-tinta-2">
           Cidade da oficina
         </label>
-        <input
-          id="cidade"
-          required
-          maxLength={100}
-          autoComplete="address-level2"
-          list="cidades-sugeridas"
-          placeholder="Ex.: Suzano"
-          value={form.cidade}
-          onChange={(e) => setCampo("cidade", e.target.value)}
-          className={inputCls}
-        />
-        <datalist id="cidades-sugeridas">
-          {cidades.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-        <p className="mt-1 text-xs text-tinta-3">Para mostrar as autopeças que atendem a sua região.</p>
+        <CampoCidade id="cidade" valor={municipio} onChange={setMunicipio} className="py-2.5 text-base sm:text-sm" />
+        <p className="mt-1 text-xs text-tinta-3">Digite e escolha na lista. Serve para mostrar as autopeças da sua região.</p>
       </div>
 
       <div>

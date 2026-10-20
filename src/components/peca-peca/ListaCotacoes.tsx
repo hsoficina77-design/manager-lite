@@ -62,7 +62,9 @@ export function ListaCotacoes() {
 
       <AvisoDaPrevia />
       <AvisoSemConexao ativo={semConexao} />
-      {daOficina && !daOficina.cidade && <InformarCidade onSalva={recarregarLojas} />}
+      {daOficina && (!daOficina.cidade || !daOficina.estado) && (
+        <InformarCidade cidadeAtual={daOficina.cidade} onSalva={recarregarLojas} />
+      )}
 
       <section className="space-y-3">
         <h2 className="font-semibold text-tinta">Cotações</h2>

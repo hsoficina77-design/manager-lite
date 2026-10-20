@@ -16,7 +16,9 @@ import { prisma } from "@/lib/prisma";
 import { bancoDaOficina } from "@/lib/db-oficina";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
-import { normalizarBusca } from "@/lib/utils";
+import { ErroDeEntrada } from "@/lib/validacao";
+import { mesmaCidade, rotuloDoMunicipio } from "@/lib/municipios";
+import { municipioOficial } from "@/lib/municipios-servidor";
 import {
   ehEtapaEntrega,
   proximaEtapa,
@@ -41,15 +43,11 @@ const CAMPOS_DA_LOJA = {
   id: true,
   nome: true,
   cidade: true,
+  uf: true,
   atende: true,
   entregaMin: true,
   entregaMax: true,
 } as const;
-
-/** A mesma cidade, escrita de qualquer jeito: "Poá", "poa", " POÁ ". */
-export function mesmaCidade(a: string, b: string): boolean {
-  return normalizarBusca(a) === normalizarBusca(b);
-}
 
 /**
  * Lojas ativas que atendem a cidade da oficina. Oficina sem cidade na configuração
@@ -57,43 +55,21 @@ export function mesmaCidade(a: string, b: string): boolean {
  *
  * `comLink` só na prévia: a tela da oficina abre o balcão em outra aba para testar.
  */
-export async function lojasQueAtendem(cidade: string | null, comLink = false): Promise<LojaVista[]> {
+export async function lojasQueAtendem(
+  cidade: string | null,
+  estado: string | null,
+  comLink = false
+): Promise<LojaVista[]> {
   const lojas = await prisma.loja.findMany({
     where: { ativa: true },
     orderBy: { nome: "asc" },
     select: { ...CAMPOS_DA_LOJA, tokenBalcao: true },
   });
+  // Com a UF, "Suzano - SP"; sem ela (cadastro antigo), o nome sozinho — ver mesmaCidade.
+  const daOficina = cidade?.trim() ? (estado?.trim() ? `${cidade.trim()} - ${estado.trim()}` : cidade.trim()) : null;
   return lojas
-    .filter((l) => !cidade?.trim() || l.atende.some((c) => mesmaCidade(c, cidade)))
+    .filter((l) => !daOficina || l.atende.some((c) => mesmaCidade(c, daOficina)))
     .map(({ tokenBalcao, ...l }) => (comLink ? { ...l, link: `/balcao/${tokenBalcao}` } : l));
-}
-
-/** As cidades atendidas pelas lojas ativas, cada uma escrita de um jeito só. */
-export async function cidadesConhecidas(): Promise<string[]> {
-  const lojas = await prisma.loja.findMany({ where: { ativa: true }, select: { atende: true } });
-  const lista: string[] = [];
-  for (const c of lojas.flatMap((l) => l.atende)) {
-    if (!lista.some((x) => mesmaCidade(x, c))) lista.push(c);
-  }
-  return lista.sort((a, b) => a.localeCompare(b, "pt-BR"));
-}
-
-const PARTICULAS = new Set(["de", "da", "do", "das", "dos", "e"]);
-
-/**
- * A cidade como vai ficar gravada. Se já é uma cidade das lojas, fica com a grafia de
- * lá ("poa" vira "Poá"); senão, só arruma as maiúsculas ("ferraz de vasconcelos" vira
- * "Ferraz de Vasconcelos"). Assim a oficina e a loja escrevem a cidade igual.
- */
-export async function grafiaDaCidade(cidade: string): Promise<string> {
-  const limpa = cidade.trim().replace(/\s+/g, " ");
-  const conhecida = (await cidadesConhecidas()).find((c) => mesmaCidade(c, limpa));
-  if (conhecida) return conhecida;
-  return limpa
-    .toLocaleLowerCase("pt-BR")
-    .split(" ")
-    .map((p, i) => (i > 0 && PARTICULAS.has(p) ? p : p.charAt(0).toLocaleUpperCase("pt-BR") + p.slice(1)))
-    .join(" ");
 }
 
 /** Todas as lojas, inclusive as desativadas — a cotação antiga continua com o nome dela. */
@@ -107,6 +83,8 @@ export async function todasAsLojas(): Promise<Map<string, LojaVista>> {
 export type DadosDaLoja = {
   nome: string;
   cidade: string;
+  uf: string;
+  /** Rótulos "Nome - UF" escolhidos da lista do IBGE. */
   atende: string[];
   telefone: string | null;
   entregaMin: number;
@@ -123,13 +101,22 @@ export type LojaDoPainel = LojaVista & {
   pedidos: number;
 };
 
-/** Cidades sem repetição (do jeito que vierem escritas), com a da própria loja junto. */
-function regiao(cidade: string, atende: string[]): string[] {
-  const lista: string[] = [];
-  for (const c of [cidade, ...atende].map((x) => x.trim()).filter(Boolean)) {
-    if (!lista.some((x) => mesmaCidade(x, c))) lista.push(c);
+/**
+ * A sede e a região da loja conferidas na lista do IBGE: nome oficial, UF, e a
+ * região como rótulos "Nome - UF" sem repetição, com a cidade da própria loja junto.
+ * Cidade que não é município responde 400 — a tela só deixa escolher da lista.
+ */
+function conferirCidades(cidade: string, uf: string, atende: string[]) {
+  const sede = municipioOficial(cidade, uf);
+  if (!sede) throw new ErroDeEntrada(400, "Cidade da loja não encontrada: escolha na lista");
+  const regiao: string[] = [rotuloDoMunicipio(sede)];
+  for (const c of atende) {
+    const m = municipioOficial(c);
+    if (!m) throw new ErroDeEntrada(400, `Cidade não encontrada: ${c}`);
+    const rotulo = rotuloDoMunicipio(m);
+    if (!regiao.includes(rotulo)) regiao.push(rotulo);
   }
-  return lista;
+  return { cidade: sede.nome, uf: sede.uf, atende: regiao };
 }
 
 export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
@@ -163,22 +150,25 @@ export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
 
 export async function criarLoja(dados: DadosDaLoja) {
   return prisma.loja.create({
-    data: { ...dados, atende: regiao(dados.cidade, dados.atende), tokenBalcao: novoToken() },
+    data: { ...dados, ...conferirCidades(dados.cidade, dados.uf, dados.atende), tokenBalcao: novoToken() },
     select: { id: true },
   });
 }
 
-/** Edita o cadastro e/ou liga e desliga a loja. Loja inexistente devolve `null`. */
+/**
+ * Edita o cadastro (a tela manda ele inteiro) ou só liga e desliga a loja. Loja
+ * inexistente devolve `null`.
+ */
 export async function atualizarLoja(id: string, dados: Partial<DadosDaLoja> & { ativa?: boolean }) {
-  const atual = await prisma.loja.findUnique({ where: { id }, select: { cidade: true, atende: true } });
+  const atual = await prisma.loja.findUnique({ where: { id }, select: { cidade: true, uf: true, atende: true } });
   if (!atual) return null;
-  const cidade = dados.cidade ?? atual.cidade ?? "";
+  const mexeNaCidade = dados.cidade !== undefined || dados.uf !== undefined || dados.atende !== undefined;
   return prisma.loja.update({
     where: { id },
     data: {
       ...dados,
-      ...(dados.cidade !== undefined || dados.atende !== undefined
-        ? { atende: regiao(cidade, dados.atende ?? atual.atende) }
+      ...(mexeNaCidade
+        ? conferirCidades(dados.cidade ?? atual.cidade ?? "", dados.uf ?? atual.uf ?? "", dados.atende ?? atual.atende)
         : {}),
     },
     select: { id: true },

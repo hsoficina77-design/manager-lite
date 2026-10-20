@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashSenha } from "@/lib/senha";
 import { abrirSessao, emailEmUso, lerConvite, usarConvite, validarCadastroOficina } from "@/lib/sistema";
-import { grafiaDaCidade } from "@/lib/balcao";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
 
@@ -43,7 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
     const { erro, dados } = validarCadastroOficina(corpo);
     if (!dados) return NextResponse.json({ error: erro }, { status: 400 });
-    const { nomeOficina, cidade, nome, email: emailLimpo, senha } = dados;
+    const { nomeOficina, cidade, estado, nome, email: emailLimpo, senha } = dados;
 
     // O e-mail é a chave do login no sistema inteiro — não pode repetir entre oficinas.
     if (await emailEmUso(emailLimpo)) {
@@ -55,7 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
     const criada = await usarConvite(token, {
       nomeOficina,
-      cidade: await grafiaDaCidade(cidade),
+      cidade,
+      estado,
       nome,
       email: emailLimpo,
       senhaHash: await hashSenha(senha),

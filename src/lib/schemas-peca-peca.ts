@@ -68,8 +68,10 @@ export const cotacaoOrcamentoSchema = z.object({
 const camposDaLoja = {
   nome: obrigatorio("Nome da loja", LIMITES.nome),
   cidade: obrigatorio("Cidade onde a loja fica", LIMITES.cidade),
+  uf: obrigatorio("Estado da loja", LIMITES.estado),
+  // Rótulos "Nome - UF"; o servidor confere cada um na lista do IBGE.
   atende: z
-    .array(obrigatorio("Cidade atendida", LIMITES.cidade))
+    .array(obrigatorio("Cidade atendida", LIMITES.cidade + 5))
     .max(30, "No máximo 30 cidades por loja"),
   telefone: nulavel("Telefone", LIMITES.telefone),
   entregaMin: inteiro("Entrega mais rápida", 0, 600),

@@ -5,6 +5,7 @@ import { CAMPOS_TEXTO } from "@/lib/configuracao";
 import { COR_DOCUMENTO_PADRAO } from "@/lib/cor-documento";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { configuracaoSchema } from "@/lib/schemas";
+import { municipioOficial } from "@/lib/municipios-servidor";
 
 export async function GET() {
   const guarda = await guardaApi();
@@ -18,6 +19,17 @@ export async function PUT(request: Request) {
 
   try {
     const body = await lerJson(request, configuracaoSchema);
+
+    // A cidade é sempre um município do IBGE, com o nome oficial e a UF — é por ela que o
+    // Peça Peça escolhe as autopeças da oficina. Sem cidade também vale.
+    if (body.cidade) {
+      const municipio = municipioOficial(body.cidade, body.estado);
+      if (!municipio) {
+        return NextResponse.json({ error: "Cidade não encontrada: escolha na lista" }, { status: 400 });
+      }
+      body.cidade = municipio.nome;
+      body.estado = municipio.uf;
+    }
 
     const dados = {
       // O painel manda o formulário inteiro: campo ausente é campo apagado.

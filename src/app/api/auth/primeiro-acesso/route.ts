@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { abrirSessao, criarOficinaComDono, sistemaVazio, transacaoDoSistema } from "@/lib/sistema";
+import { municipioOficial } from "@/lib/municipios-servidor";
 import { hashSenha, validarSenha } from "@/lib/senha";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
 
   try {
     const corpo = (await lerJsonCru(request)) as Record<string, unknown> | null;
-    const { nome, email, senha, token: codigo, nomeOficina, cidade } = corpo ?? {};
+    const { nome, email, senha, token: codigo, nomeOficina, cidade, estado } = corpo ?? {};
 
     const esperado = tokenExigido();
     if (esperado && codigo !== esperado) {
@@ -77,6 +78,11 @@ export async function POST(request: Request) {
     if (problema) return NextResponse.json({ error: problema }, { status: 400 });
 
     const senhaHash = await hashSenha(senha);
+    // Instalação do sistema: a cidade vem do mesmo formulário, mas não trava a instalação.
+    const municipio =
+      typeof cidade === "string" && cidade.trim()
+        ? municipioOficial(cidade, typeof estado === "string" ? estado : null)
+        : null;
     const oficina =
       typeof nomeOficina === "string" && nomeOficina.trim() ? nomeOficina.trim().slice(0, 120) : "Minha Oficina";
 
@@ -86,8 +92,8 @@ export async function POST(request: Request) {
       if ((await tx.usuario.count()) > 0) return null;
       const criada = await criarOficinaComDono(tx, {
         nomeOficina: oficina,
-        // Instalação do sistema: a cidade vem do mesmo formulário, mas não trava a instalação.
-        cidade: typeof cidade === "string" && cidade.trim() ? cidade.trim().slice(0, 100) : null,
+        cidade: municipio?.nome ?? null,
+        estado: municipio?.uf ?? null,
         nome: nome.trim(),
         email: email.trim().toLowerCase(),
         senhaHash,

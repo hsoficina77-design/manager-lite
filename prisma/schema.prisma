@@ -811,10 +811,11 @@ model Despesa {
 model Loja {
   id          String   @id @default(cuid())
   nome        String
-  /// Onde a loja fica.
+  /// Onde a loja fica: município do IBGE (nome oficial e UF).
   cidade      String?
-  /// Cidades que ela atende (a região). A oficina vê a loja quando a cidade dela —
-  /// a da configuração — está aqui. Comparação sem acento nem maiúscula.
+  uf          String?
+  /// Cidades que ela atende (a região), como "Suzano - SP". A oficina vê a loja quando
+  /// a cidade dela — a da configuração — está aqui. Ver lib/municipios.ts.
   atende      String[] @default([])
   /// Contato do balcão, para o cadastro manual.
   telefone    String?

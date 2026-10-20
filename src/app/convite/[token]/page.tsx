@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { lerConvite } from "@/lib/sistema";
-import { cidadesConhecidas } from "@/lib/balcao";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import CadastroOficinaForm from "@/components/CadastroOficinaForm";
 
@@ -45,10 +44,7 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
       descricao="Você foi convidado. Crie a oficina e o seu acesso de dono — depois você cadastra a equipe por dentro do sistema."
       rodape="Guarde bem esta senha: enquanto você for o único dono da oficina, não há como redefini-la pela tela."
     >
-      <CadastroOficinaForm
-        convite={{ token, nomeOficina: convite?.nomeOficina ?? null }}
-        cidades={await cidadesConhecidas()}
-      />
+      <CadastroOficinaForm convite={{ token, nomeOficina: convite?.nomeOficina ?? null }} />
     </TelaDeEntrada>
   );
 }
