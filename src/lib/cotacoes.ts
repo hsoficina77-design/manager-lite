@@ -6,7 +6,7 @@
 
 import type { Prisma } from "@prisma/client";
 import type { Db } from "@/lib/db-oficina";
-import { listarLojas } from "@/lib/balcao";
+import { todasAsLojas } from "@/lib/balcao";
 import {
   ehEtapaEntrega,
   precoDaPeca,
@@ -60,7 +60,7 @@ function vista(c: CotacaoDoBanco, nomesDasLojas: Map<string, string>): CotacaoVi
 }
 
 async function nomesDasLojas() {
-  return new Map((await listarLojas()).map((l) => [l.id, l.nome]));
+  return new Map([...(await todasAsLojas()).values()].map((l) => [l.id, l.nome]));
 }
 
 export async function lerCotacao(db: Db, id: string): Promise<CotacaoVista | null> {

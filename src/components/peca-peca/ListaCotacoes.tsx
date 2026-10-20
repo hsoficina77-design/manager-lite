@@ -8,7 +8,7 @@ import { Aviso } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { useAvisar } from "@/components/ui/Avisos";
 import { Mais } from "@/components/ui/Icones";
-import { EXEMPLO, descricaoDoVeiculo, type CotacaoVista, type LojaVista } from "./regras";
+import { EXEMPLO, descricaoDoVeiculo, type CotacaoVista, type LojaVista, type LojasDaOficina } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
 import { AvisoDaPrevia, AvisoSemConexao, Cabecalho, PilulaEtapa, haQuanto } from "./ui";
 
@@ -23,7 +23,8 @@ const PASSOS = [
 export function ListaCotacoes() {
   const router = useRouter();
   const { dados: cotacoes, semConexao } = useAoVivo<CotacaoVista[]>("/api/peca-peca/cotacoes", 5000);
-  const { dados: lojas } = useAoVivo<LojaVista[]>("/api/peca-peca/lojas", 60_000);
+  const { dados: daOficina } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
+  const lojas = daOficina?.lojas ?? null;
   const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -117,7 +118,7 @@ export function ListaCotacoes() {
         {erro && <Aviso>{erro}</Aviso>}
       </section>
 
-      <PainelBalcoes lojas={lojas} />
+      <PainelBalcoes lojas={lojas} cidade={daOficina?.cidade ?? null} />
 
       <section className="space-y-3">
         <h2 className="font-semibold text-tinta">Como funciona</h2>
@@ -141,7 +142,7 @@ export function ListaCotacoes() {
 }
 
 /** Os links dos balcões, para abrir em outra aba (ou mandar para o celular) e testar. */
-function PainelBalcoes({ lojas }: { lojas: LojaVista[] | null }) {
+function PainelBalcoes({ lojas, cidade }: { lojas: LojaVista[] | null; cidade: string | null }) {
   const avisar = useAvisar();
 
   async function copiar(loja: LojaVista) {
@@ -155,11 +156,21 @@ function PainelBalcoes({ lojas }: { lojas: LojaVista[] | null }) {
 
   return (
     <Painel
-      titulo="Balcões das lojas"
+      titulo={cidade ? `Lojas que atendem ${cidade}` : "Balcões das lojas"}
       ajuda="Abra cada balcão numa aba nova, ou mande o link para outro aparelho, e faça o papel do balconista. Cada loja só vê o que foi mandado para ela."
     >
+      {!cidade && (
+        <p className="mb-3 rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-xs text-atencao">
+          A oficina está sem cidade em Configurações, então aparecem todas as lojas. Com a cidade preenchida,
+          aparecem só as que atendem a região.
+        </p>
+      )}
       {!lojas ? (
         <EsqueletoLista linhas={2} />
+      ) : lojas.length === 0 ? (
+        <p className="text-sm text-tinta-3">
+          Nenhuma loja atende {cidade ?? "a oficina"} ainda. As lojas são cadastradas no painel admin do boxOS.
+        </p>
       ) : (
         <ul className="divide-y divide-linha">
           {lojas.map((l) => (
@@ -169,6 +180,7 @@ function PainelBalcoes({ lojas }: { lojas: LojaVista[] | null }) {
                 <p className="text-xs text-tinta-3">
                   {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
                 </p>
+                <p className="text-xs text-tinta-3">Atende: {l.atende.join(", ") || "—"}</p>
               </div>
               <div className="flex gap-2">
                 <Botao variante="fantasma" tamanho="denso" onClick={() => copiar(l)}>

@@ -9,7 +9,7 @@ import { Aviso, Campo, CampoQuantidade, Entrada } from "@/components/ui/Campos";
 import { Painel } from "@/components/ui/Dados";
 import { Busca, Confere, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
-import { normalizarPlaca, type LojaVista, type VeiculoCotado } from "./regras";
+import { normalizarPlaca, type LojasDaOficina, type VeiculoCotado } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
 import { AvisoDaPrevia, Cabecalho } from "./ui";
 
@@ -53,7 +53,8 @@ const VEICULO_VAZIO: VeiculoNaTela = { placa: "", marca: "", modelo: "", ano: ""
 
 export function NovaCotacao() {
   const router = useRouter();
-  const { dados: lojasDisponiveis } = useAoVivo<LojaVista[]>("/api/peca-peca/lojas", 60_000);
+  const { dados: daOficina } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
+  const lojasDisponiveis = daOficina?.lojas ?? null;
   const [veiculo, setVeiculo] = useState<VeiculoNaTela>(VEICULO_VAZIO);
   const [busca, setBusca] = useState<EstadoBusca>({ tipo: "nada" });
   const [pecas, setPecas] = useState<{ descricao: string; quantidade: number }[]>([]);
@@ -269,8 +270,16 @@ export function NovaCotacao() {
         )}
       </Painel>
 
-      <Painel titulo="3. Para quais lojas?" ajuda="Cada loja vê só o seu pedido, nunca o preço da outra.">
+      <Painel
+        titulo="3. Para quais lojas?"
+        ajuda={`${daOficina?.cidade ? `As que atendem ${daOficina.cidade}. ` : ""}Cada loja vê só o seu pedido, nunca o preço da outra.`}
+      >
         {!lojasDisponiveis && <EsqueletoLista linhas={2} />}
+        {lojasDisponiveis?.length === 0 && (
+          <p className="text-sm text-tinta-3">
+            Nenhuma loja atende {daOficina?.cidade ?? "a oficina"} ainda. As lojas são cadastradas no painel admin do boxOS.
+          </p>
+        )}
         <div className="grid gap-2 sm:grid-cols-2">
           {(lojasDisponiveis ?? []).map((l) => {
             const marcada = lojas.includes(l.id);

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
-import { garantirLojasDaPrevia, lojasComLink } from "@/lib/balcao";
+import { lojasQueAtendem } from "@/lib/balcao";
+import { getConfiguracao } from "@/lib/configuracao-db";
 
-/** Lojas para mandar cotação — com o link do balcão, para testar em outra aba. */
+/**
+ * Lojas que atendem a cidade da oficina (a da configuração), com o link do balcão
+ * para testar em outra aba — o link só vai para a tela por ser prévia.
+ */
 export async function GET() {
   const guarda = await guardaPecaPeca();
   if (guarda.resposta) return guarda.resposta;
-  await garantirLojasDaPrevia();
-  return NextResponse.json(await lojasComLink());
+  const { cidade } = await getConfiguracao(guarda);
+  return NextResponse.json({ cidade: cidade?.trim() || null, lojas: await lojasQueAtendem(cidade, true) });
 }

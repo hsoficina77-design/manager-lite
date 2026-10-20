@@ -63,6 +63,36 @@ export const cotacaoOrcamentoSchema = z.object({
   maoDeObra: dinheiro("Mão de obra").optional(),
 });
 
+// ─── Cadastro de loja (painel admin) ────────────────────────────────────────
+
+const camposDaLoja = {
+  nome: obrigatorio("Nome da loja", LIMITES.nome),
+  cidade: obrigatorio("Cidade onde a loja fica", LIMITES.cidade),
+  atende: z
+    .array(obrigatorio("Cidade atendida", LIMITES.cidade))
+    .max(30, "No máximo 30 cidades por loja"),
+  telefone: nulavel("Telefone", LIMITES.telefone),
+  entregaMin: inteiro("Entrega mais rápida", 0, 600),
+  entregaMax: inteiro("Entrega mais demorada", 0, 600),
+};
+
+const entregaEmOrdem = (d: { entregaMin?: number; entregaMax?: number }) =>
+  d.entregaMin === undefined || d.entregaMax === undefined || d.entregaMax >= d.entregaMin;
+
+const ENTREGA_FORA_DE_ORDEM = {
+  message: "O prazo mais demorado não pode ser menor que o mais rápido",
+  path: ["entregaMax"],
+};
+
+export const lojaCriarSchema = z.object(camposDaLoja).refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
+
+/** Editar manda o cadastro inteiro; ligar e desligar manda só `ativa`. */
+export const lojaAlterarSchema = z
+  .object(camposDaLoja)
+  .partial()
+  .extend({ ativa: z.boolean().optional() })
+  .refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
+
 export const respostaDoBalcaoSchema = z.object({
   /** Peça → ofertas da loja. Lista vazia é "não tenho". */
   itens: z.record(

@@ -811,7 +811,13 @@ model Despesa {
 model Loja {
   id          String   @id @default(cuid())
   nome        String
+  /// Onde a loja fica.
   cidade      String?
+  /// Cidades que ela atende (a região). A oficina vê a loja quando a cidade dela —
+  /// a da configuração — está aqui. Comparação sem acento nem maiúscula.
+  atende      String[] @default([])
+  /// Contato do balcão, para o cadastro manual.
+  telefone    String?
   /// Segredo do link do balcão (`/balcao/<token>`). Diferente do convite, fica inteiro:
   /// o link precisa poder ser mostrado de novo. Vazou? Gera-se outro.
   tokenBalcao String   @unique

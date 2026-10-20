@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { bancoDaOficina } from "@/lib/db-oficina";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
+import { normalizarBusca } from "@/lib/utils";
 import {
   ehEtapaEntrega,
   proximaEtapa,
@@ -28,41 +29,139 @@ import {
 } from "@/components/peca-peca/regras";
 
 // ─── Lojas ──────────────────────────────────────────────────────────────────
-
-/** As lojas da prévia, em Suzano. Viram cadastro de verdade quando o piloto começar. */
-const LOJAS_DA_PREVIA = [
-  { nome: "Yoshio", cidade: "Suzano", entregaMin: 30, entregaMax: 50 },
-  { nome: "Bom Preço", cidade: "Suzano", entregaMin: 20, entregaMax: 40 },
-];
+//
+// O cadastro é do painel admin (/admin/lojas): o dono da plataforma cria cada loja à
+// mão, com a cidade onde ela fica e as cidades que atende — a região dela.
 
 function novoToken() {
   return randomBytes(24).toString("base64url");
 }
 
-/** Cria as lojas da prévia na primeira vez. A trava evita duas criações ao mesmo tempo. */
-export async function garantirLojasDaPrevia() {
-  if ((await prisma.loja.count()) > 0) return;
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(771977)`;
-    if ((await tx.loja.count()) > 0) return;
-    await tx.loja.createMany({ data: LOJAS_DA_PREVIA.map((l) => ({ ...l, tokenBalcao: novoToken() })) });
-  });
+const CAMPOS_DA_LOJA = {
+  id: true,
+  nome: true,
+  cidade: true,
+  atende: true,
+  entregaMin: true,
+  entregaMax: true,
+} as const;
+
+/** A mesma cidade, escrita de qualquer jeito: "Poá", "poa", " POÁ ". */
+export function mesmaCidade(a: string, b: string): boolean {
+  return normalizarBusca(a) === normalizarBusca(b);
 }
 
-const CAMPOS_DA_LOJA = { id: true, nome: true, cidade: true, entregaMin: true, entregaMax: true } as const;
-
-export async function listarLojas(): Promise<LojaVista[]> {
-  return prisma.loja.findMany({ where: { ativa: true }, orderBy: { createdAt: "asc" }, select: CAMPOS_DA_LOJA });
-}
-
-/** Com o link do balcão — só para a tela da prévia, que abre o balcão em outra aba. */
-export async function lojasComLink(): Promise<LojaVista[]> {
+/**
+ * Lojas ativas que atendem a cidade da oficina. Oficina sem cidade na configuração
+ * vê todas — é melhor mostrar a mais do que esconder a loja que a atenderia.
+ *
+ * `comLink` só na prévia: a tela da oficina abre o balcão em outra aba para testar.
+ */
+export async function lojasQueAtendem(cidade: string | null, comLink = false): Promise<LojaVista[]> {
   const lojas = await prisma.loja.findMany({
     where: { ativa: true },
-    orderBy: { createdAt: "asc" },
+    orderBy: { nome: "asc" },
     select: { ...CAMPOS_DA_LOJA, tokenBalcao: true },
   });
-  return lojas.map(({ tokenBalcao, ...l }) => ({ ...l, link: `/balcao/${tokenBalcao}` }));
+  return lojas
+    .filter((l) => !cidade?.trim() || l.atende.some((c) => mesmaCidade(c, cidade)))
+    .map(({ tokenBalcao, ...l }) => (comLink ? { ...l, link: `/balcao/${tokenBalcao}` } : l));
+}
+
+/** Todas as lojas, inclusive as desativadas — a cotação antiga continua com o nome dela. */
+export async function todasAsLojas(): Promise<Map<string, LojaVista>> {
+  const lojas = await prisma.loja.findMany({ select: CAMPOS_DA_LOJA });
+  return new Map(lojas.map((l) => [l.id, l]));
+}
+
+// ─── Painel admin ───────────────────────────────────────────────────────────
+
+export type DadosDaLoja = {
+  nome: string;
+  cidade: string;
+  atende: string[];
+  telefone: string | null;
+  entregaMin: number;
+  entregaMax: number;
+};
+
+export type LojaDoPainel = LojaVista & {
+  telefone: string | null;
+  ativa: boolean;
+  link: string;
+  criadaEm: string;
+  cotacoes: number;
+  respondidas: number;
+  pedidos: number;
+};
+
+/** Cidades sem repetição (do jeito que vierem escritas), com a da própria loja junto. */
+function regiao(cidade: string, atende: string[]): string[] {
+  const lista: string[] = [];
+  for (const c of [cidade, ...atende].map((x) => x.trim()).filter(Boolean)) {
+    if (!lista.some((x) => mesmaCidade(x, c))) lista.push(c);
+  }
+  return lista;
+}
+
+export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
+  const [lojas, respondidas, pedidos] = await Promise.all([
+    prisma.loja.findMany({
+      orderBy: [{ ativa: "desc" }, { nome: "asc" }],
+      select: {
+        ...CAMPOS_DA_LOJA,
+        telefone: true,
+        ativa: true,
+        tokenBalcao: true,
+        createdAt: true,
+        _count: { select: { envios: true } },
+      },
+    }),
+    prisma.cotacaoLoja.groupBy({ by: ["lojaId"], where: { respondidaEm: { not: null } }, _count: { _all: true } }),
+    prisma.cotacaoLoja.groupBy({ by: ["lojaId"], where: { entrega: { not: null } }, _count: { _all: true } }),
+  ]);
+  const contar = (lista: { lojaId: string; _count: { _all: number } }[], id: string) =>
+    lista.find((x) => x.lojaId === id)?._count._all ?? 0;
+
+  return lojas.map(({ tokenBalcao, createdAt, _count, ...l }) => ({
+    ...l,
+    link: `/balcao/${tokenBalcao}`,
+    criadaEm: createdAt.toISOString(),
+    cotacoes: _count.envios,
+    respondidas: contar(respondidas, l.id),
+    pedidos: contar(pedidos, l.id),
+  }));
+}
+
+export async function criarLoja(dados: DadosDaLoja) {
+  return prisma.loja.create({
+    data: { ...dados, atende: regiao(dados.cidade, dados.atende), tokenBalcao: novoToken() },
+    select: { id: true },
+  });
+}
+
+/** Edita o cadastro e/ou liga e desliga a loja. Loja inexistente devolve `null`. */
+export async function atualizarLoja(id: string, dados: Partial<DadosDaLoja> & { ativa?: boolean }) {
+  const atual = await prisma.loja.findUnique({ where: { id }, select: { cidade: true, atende: true } });
+  if (!atual) return null;
+  const cidade = dados.cidade ?? atual.cidade ?? "";
+  return prisma.loja.update({
+    where: { id },
+    data: {
+      ...dados,
+      ...(dados.cidade !== undefined || dados.atende !== undefined
+        ? { atende: regiao(cidade, dados.atende ?? atual.atende) }
+        : {}),
+    },
+    select: { id: true },
+  });
+}
+
+/** Link novo para o balcão: o antigo para de funcionar na hora (vazou, trocou de funcionário). */
+export async function trocarLinkDaLoja(id: string) {
+  const existe = await prisma.loja.findUnique({ where: { id }, select: { id: true } });
+  if (!existe) return null;
+  return prisma.loja.update({ where: { id }, data: { tokenBalcao: novoToken() }, select: { id: true } });
 }
 
 export async function lojaPeloToken(token: string | undefined | null) {

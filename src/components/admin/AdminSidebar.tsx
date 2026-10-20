@@ -8,7 +8,7 @@ import type { Papel } from "@/lib/permissoes";
 import { LogoBoxOS, SimboloBoxOS } from "../marca/LogoBoxOS";
 import { NotificacaoSino } from "../ui/Notificacoes";
 import { SeletorTema } from "../ui/Tema";
-import { Chave, Dinheiro, Fechar, Mais, Menu as IconeMenu, Patio, Sair } from "../ui/Icones";
+import { Chave, Dinheiro, Fechar, Mais, Menu as IconeMenu, Patio, PecaPeca, Sair } from "../ui/Icones";
 
 // Menu do painel admin do boxOS. Mesmo desenho do menu da oficina (Sidebar.tsx) —
 // lateral no computador, cabeçalho e barra inferior no celular —, com os destinos
@@ -21,6 +21,8 @@ const ITENS: Item[] = [
   { href: "/admin/oficinas", label: "Oficinas", Icone: Chave },
   { href: "/admin/convites", label: "Convites", Icone: Mais },
   { href: "/admin/receita", label: "Receita", Icone: Dinheiro },
+  // As autopeças do Peça Peça: cadastro manual, por região.
+  { href: "/admin/lojas", label: "Lojas", Icone: PecaPeca },
 ];
 
 export function AdminSidebar({ usuario }: { usuario: { nome: string; email: string; papel: Papel } }) {
@@ -164,12 +166,12 @@ export function AdminSidebar({ usuario }: { usuario: { nome: string; email: stri
         </div>
       )}
 
-      {/* Navegação inferior do celular: os quatro destinos, sem passar pela gaveta. */}
+      {/* Navegação inferior do celular: todos os destinos, sem passar pela gaveta. */}
       <nav
         aria-label="Navegação do painel"
         className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-linha bg-superficie/95 pb-segura backdrop-blur md:hidden"
       >
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-5">
           {ITENS.map((i) => (
             <Link
               key={i.href}

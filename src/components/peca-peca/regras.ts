@@ -19,10 +19,15 @@ export type LojaVista = {
   id: string;
   nome: string;
   cidade: string | null;
+  /** Cidades que a loja atende — a região dela. */
+  atende: string[];
   entregaMin: number;
   entregaMax: number;
   link?: string;
 };
+
+/** O que `/api/peca-peca/lojas` devolve: a cidade da oficina e as lojas que a atendem. */
+export type LojasDaOficina = { cidade: string | null; lojas: LojaVista[] };
 
 export type OfertaVista = { id: string; pecaId: string; marca: string; preco: number; prazoMin: number };
 

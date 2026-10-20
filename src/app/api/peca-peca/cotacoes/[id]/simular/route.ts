@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
-import { listarLojas } from "@/lib/balcao";
+import { todasAsLojas } from "@/lib/balcao";
 import { lerCotacao } from "@/lib/cotacoes";
 import { respostaSimulada } from "@/components/peca-peca/regras";
 
@@ -20,7 +20,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "O orçamento desta cotação já saiu" }, { status: 409 });
   }
 
-  const lojas = new Map((await listarLojas()).map((l) => [l.id, l]));
+  const lojas = await todasAsLojas();
   const pendentes = cotacao.envios.filter((e) => !e.respondidaEm);
 
   await transacao(async (tx) => {

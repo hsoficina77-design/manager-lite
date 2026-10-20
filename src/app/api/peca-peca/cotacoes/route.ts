@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
-import { listarLojas } from "@/lib/balcao";
+import { lojasQueAtendem } from "@/lib/balcao";
+import { getConfiguracao } from "@/lib/configuracao-db";
 import { listarCotacoes } from "@/lib/cotacoes";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { cotacaoCriarSchema } from "@/lib/schemas-peca-peca";
@@ -20,10 +21,12 @@ export async function POST(request: Request) {
   try {
     const dados = await lerJson(request, cotacaoCriarSchema);
 
-    const ativas = new Set((await listarLojas()).map((l) => l.id));
-    const lojas = [...new Set(dados.lojas)].filter((l) => ativas.has(l));
+    // Só vai para loja ativa que atende a cidade da oficina — a mesma lista da tela.
+    const { cidade } = await getConfiguracao(guarda);
+    const daRegiao = new Set((await lojasQueAtendem(cidade)).map((l) => l.id));
+    const lojas = [...new Set(dados.lojas)].filter((l) => daRegiao.has(l));
     if (lojas.length === 0) {
-      return NextResponse.json({ error: "Escolha ao menos uma loja" }, { status: 400 });
+      return NextResponse.json({ error: "Escolha ao menos uma loja que atenda a sua cidade" }, { status: 400 });
     }
 
     const v = dados.veiculo;

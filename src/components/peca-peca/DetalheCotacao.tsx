@@ -21,6 +21,7 @@ import {
   totaisDa,
   type CotacaoVista,
   type LojaVista,
+  type LojasDaOficina,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
@@ -30,7 +31,8 @@ type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 export function DetalheCotacao({ id }: { id: string }) {
   const url = `/api/peca-peca/cotacoes/${id}`;
   const { dados: cotacao, naoEncontrado, semConexao, carregar, gravar } = useAoVivo<CotacaoVista>(url, 4000);
-  const { dados: lojas } = useAoVivo<LojaVista[]>("/api/peca-peca/lojas", 60_000);
+  const { dados: daOficina } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
+  const lojas = daOficina?.lojas ?? null;
   useAvisosDasLojas(cotacao);
 
   if (naoEncontrado) {
