@@ -13,7 +13,6 @@ import {
   SITUACOES_NO_BALCAO,
   descricaoDoVeiculo,
   proximaEtapa,
-  respostaSimulada,
   rotuloDaEntrega,
   type CaixaDoBalcao,
   type EnvioNoBalcao,
@@ -398,25 +397,6 @@ function FormResposta({
     }));
   }
 
-  /** Preenche com uma resposta plausível — para testar rápido. */
-  function sugerir() {
-    const sugestao = respostaSimulada(envio.pecas, loja);
-    setRascunho(
-      Object.fromEntries(
-        envio.pecas.map((p) => {
-          const ofertas = sugestao[p.id] ?? [];
-          return [
-            p.id,
-            {
-              naoTem: ofertas.length === 0,
-              ofertas: ofertas.map((o) => ({ chave: chaveNova(), marca: o.marca, preco: String(o.preco), prazo: String(o.prazoMin) })),
-            },
-          ];
-        })
-      )
-    );
-  }
-
   async function enviar() {
     const itens: Record<string, { id?: string; marca: string; preco: number; prazoMin: number }[]> = {};
     for (const p of envio.pecas) {
@@ -471,12 +451,7 @@ function FormResposta({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-tinta-3">Mais de uma marca? Mande as duas: a oficina escolhe.</p>
-        <Botao variante="secundario" tamanho="denso" onClick={sugerir}>
-          Preencher com sugestão
-        </Botao>
-      </div>
+      <p className="text-sm text-tinta-3">Mais de uma marca? Mande as duas: a oficina escolhe.</p>
 
       {envio.pecas.map((p) => {
         const r = rascunho[p.id];

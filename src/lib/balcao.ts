@@ -52,24 +52,16 @@ const CAMPOS_DA_LOJA = {
 /**
  * Lojas ativas que atendem a cidade da oficina. Oficina sem cidade na configuração
  * vê todas — é melhor mostrar a mais do que esconder a loja que a atenderia.
- *
- * `comLink` só na prévia: a tela da oficina abre o balcão em outra aba para testar.
  */
-export async function lojasQueAtendem(
-  cidade: string | null,
-  estado: string | null,
-  comLink = false
-): Promise<LojaVista[]> {
+export async function lojasQueAtendem(cidade: string | null, estado: string | null): Promise<LojaVista[]> {
   const lojas = await prisma.loja.findMany({
     where: { ativa: true },
     orderBy: { nome: "asc" },
-    select: { ...CAMPOS_DA_LOJA, tokenBalcao: true },
+    select: CAMPOS_DA_LOJA,
   });
   // Com a UF, "Suzano - SP"; sem ela (cadastro antigo), o nome sozinho — ver mesmaCidade.
   const daOficina = cidade?.trim() ? (estado?.trim() ? `${cidade.trim()} - ${estado.trim()}` : cidade.trim()) : null;
-  return lojas
-    .filter((l) => !daOficina || l.atende.some((c) => mesmaCidade(c, daOficina)))
-    .map(({ tokenBalcao, ...l }) => (comLink ? { ...l, link: `/balcao/${tokenBalcao}` } : l));
+  return lojas.filter((l) => !daOficina || l.atende.some((c) => mesmaCidade(c, daOficina)));
 }
 
 /** Todas as lojas, inclusive as desativadas — a cotação antiga continua com o nome dela. */

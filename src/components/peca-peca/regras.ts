@@ -2,8 +2,6 @@
 // estes tipos e a tela faz as contas com as mesmas funções. Sem React e sem banco
 // aqui — o arquivo é importado por rotas de API e por componentes.
 
-import { normalizarBusca } from "@/lib/utils";
-
 // ─── O que a API devolve ────────────────────────────────────────────────────
 
 export type VeiculoCotado = {
@@ -14,7 +12,10 @@ export type VeiculoCotado = {
   motor: string;
 };
 
-/** Loja como a oficina vê. `link` só existe na prévia: é o balcão para abrir em outra aba. */
+/**
+ * Loja como a oficina vê. Sem o link do balcão: com ele daria para ver o que as
+ * outras oficinas mandaram para a loja. Quem passa o link à loja é o painel admin.
+ */
 export type LojaVista = {
   id: string;
   nome: string;
@@ -24,13 +25,15 @@ export type LojaVista = {
   atende: string[];
   entregaMin: number;
   entregaMax: number;
-  link?: string;
 };
 
 /** O que `/api/peca-peca/lojas` devolve: a cidade da oficina e as lojas que a atendem. */
 export type LojasDaOficina = { cidade: string | null; estado: string | null; lojas: LojaVista[] };
 
 export type OfertaVista = { id: string; pecaId: string; marca: string; preco: number; prazoMin: number };
+
+/** O que o balconista manda para uma peça. */
+export type OfertaNova = { marca: string; preco: number; prazoMin: number };
 
 export type EnvioVista = {
   id: string;
@@ -217,90 +220,3 @@ export function descricaoDoVeiculo(v: Pick<VeiculoCotado, "marca" | "modelo" | "
 export function normalizarPlaca(placa: string): string {
   return placa.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
-
-// ─── Simulação das lojas ────────────────────────────────────────────────────
-//
-// Para testar sem abrir o balcão: o servidor inventa uma resposta plausível, com
-// marcas que se vendem em autopeça de bairro e preço em torno do que a peça costuma
-// custar. Serve para enxergar a comparação, não como referência de preço.
-
-const CATALOGO: { termos: string[]; marcas: string[]; preco: number }[] = [
-  { termos: ["pastilha"], marcas: ["Cobreq", "Fras-le", "Bosch", "Jurid"], preco: 95 },
-  { termos: ["lona", "sapata"], marcas: ["Fras-le", "Cobreq"], preco: 110 },
-  { termos: ["disco"], marcas: ["Fremax", "Hipper Freios", "Cobreq"], preco: 175 },
-  { termos: ["correia dentada", "kit correia", "kit distribuicao"], marcas: ["Gates", "Continental", "Dayco"], preco: 320 },
-  { termos: ["correia"], marcas: ["Gates", "Continental", "Dayco"], preco: 85 },
-  { termos: ["filtro de oleo"], marcas: ["Tecfil", "Mann", "Fram", "Wega"], preco: 28 },
-  { termos: ["filtro de ar condicionado", "filtro de cabine"], marcas: ["Tecfil", "Mann", "Wega"], preco: 42 },
-  { termos: ["filtro de ar"], marcas: ["Tecfil", "Mann", "Fram"], preco: 45 },
-  { termos: ["filtro de combustivel"], marcas: ["Tecfil", "Mann", "Bosch"], preco: 35 },
-  { termos: ["oleo"], marcas: ["Mobil", "Shell", "Lubrax", "Castrol"], preco: 38 },
-  { termos: ["fluido", "aditivo"], marcas: ["Bosch", "Paraflu", "Varga"], preco: 30 },
-  { termos: ["amortecedor"], marcas: ["Cofap", "Monroe", "Nakata"], preco: 290 },
-  { termos: ["cabo de vela"], marcas: ["NGK", "Bosch"], preco: 120 },
-  { termos: ["vela"], marcas: ["NGK", "Bosch"], preco: 32 },
-  { termos: ["bobina"], marcas: ["Bosch", "Magneti Marelli", "NGK"], preco: 260 },
-  { termos: ["bateria"], marcas: ["Moura", "Heliar"], preco: 480 },
-  { termos: ["embreagem"], marcas: ["LUK", "Sachs", "Valeo"], preco: 650 },
-  { termos: ["bomba d", "bomba de agua"], marcas: ["Urba", "Nakata", "SKF"], preco: 150 },
-  { termos: ["bomba de combustivel"], marcas: ["Bosch", "Magneti Marelli"], preco: 340 },
-  { termos: ["pivo", "terminal", "bieleta", "bandeja"], marcas: ["Nakata", "Viemar", "TRW"], preco: 85 },
-  { termos: ["rolamento", "cubo"], marcas: ["SKF", "NSK", "Nakata"], preco: 140 },
-  { termos: ["lampada"], marcas: ["Philips", "Osram"], preco: 25 },
-  { termos: ["palheta"], marcas: ["Bosch", "Dyna"], preco: 45 },
-  { termos: ["junta"], marcas: ["Sabó", "Taranto"], preco: 70 },
-  { termos: ["radiador"], marcas: ["Visconde", "Valeo"], preco: 420 },
-  { termos: ["sensor"], marcas: ["Bosch", "MTE-Thomson"], preco: 130 },
-];
-
-const GENERICO = { marcas: ["Original", "Paralela"], preco: 120 };
-
-function sortear(min: number, max: number) {
-  return min + Math.random() * (max - min);
-}
-
-function embaralhar<T>(lista: T[]): T[] {
-  return [...lista].sort(() => Math.random() - 0.5);
-}
-
-export type OfertaNova = { marca: string; preco: number; prazoMin: number };
-
-/** Uma resposta inventada — o que o balconista mandaria. Lista vazia é "não tenho". */
-export function respostaSimulada(
-  pecas: { id: string; descricao: string }[],
-  entrega: { entregaMin: number; entregaMax: number }
-): Record<string, OfertaNova[]> {
-  const itens: Record<string, OfertaNova[]> = {};
-  for (const p of pecas) {
-    // De vez em quando a loja não tem — é o que faz a comparação valer a pena.
-    if (Math.random() < 0.12) {
-      itens[p.id] = [];
-      continue;
-    }
-    const nome = normalizarBusca(p.descricao);
-    const ref = CATALOGO.find((item) => item.termos.some((t) => nome.includes(t))) ?? GENERICO;
-    const prazo = Math.round(sortear(entrega.entregaMin, entrega.entregaMax) / 5) * 5;
-    const quantas = ref.marcas.length > 1 && Math.random() < 0.45 ? 2 : 1;
-    itens[p.id] = embaralhar(ref.marcas)
-      .slice(0, quantas)
-      .map((marca) => ({
-        marca,
-        // Preço de balcão: termina em ,90.
-        preco: Math.round((Math.max(5, Math.round(ref.preco * sortear(0.82, 1.22))) - 0.1) * 100) / 100,
-        prazoMin: prazo,
-      }));
-  }
-  return itens;
-}
-
-/** Cotação pronta para demonstrar o fluxo sem digitar nada. */
-export const EXEMPLO = {
-  veiculo: { placa: "BOX2A26", marca: "Volkswagen", modelo: "Gol 1.0", ano: "2015", motor: "1.0 12V Flex" },
-  pecas: [
-    { descricao: "Pastilha de freio dianteira", quantidade: 1 },
-    { descricao: "Disco de freio dianteiro", quantidade: 2 },
-    { descricao: "Kit correia dentada", quantidade: 1 },
-    { descricao: "Óleo 5W40 sintético (litro)", quantidade: 4 },
-    { descricao: "Filtro de óleo", quantidade: 1 },
-  ],
-};

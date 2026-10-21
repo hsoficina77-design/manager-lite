@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Botao, BotaoLink, classesBotao } from "@/components/ui/Botao";
-import { Aviso } from "@/components/ui/Campos";
+import { BotaoLink } from "@/components/ui/Botao";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
-import { useAvisar } from "@/components/ui/Avisos";
 import { Mais } from "@/components/ui/Icones";
-import { EXEMPLO, descricaoDoVeiculo, type CotacaoVista, type LojaVista, type LojasDaOficina } from "./regras";
-import { enviarJson, useAoVivo } from "./aoVivo";
-import { AvisoDaPrevia, AvisoSemConexao, Cabecalho, InformarCidade, PilulaEtapa, haQuanto } from "./ui";
+import { descricaoDoVeiculo, type CotacaoVista, type LojaVista, type LojasDaOficina } from "./regras";
+import { useAoVivo } from "./aoVivo";
+import { AvisoSemConexao, Cabecalho, InformarCidade, PilulaEtapa, haQuanto } from "./ui";
 
 const PASSOS = [
   { titulo: "Placa e peças", texto: "Digite a placa e o que precisa, do jeito que fala no balcão." },
@@ -21,37 +17,15 @@ const PASSOS = [
 ];
 
 export function ListaCotacoes() {
-  const router = useRouter();
   const { dados: cotacoes, semConexao } = useAoVivo<CotacaoVista[]>("/api/peca-peca/cotacoes", 5000);
   const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojas = daOficina?.lojas ?? null;
-  const [criando, setCriando] = useState(false);
-  const [erro, setErro] = useState("");
-
-  async function verExemplo() {
-    if (!lojas?.length) return;
-    setErro("");
-    setCriando(true);
-    try {
-      const r = await enviarJson("/api/peca-peca/cotacoes", "POST", { ...EXEMPLO, lojas: lojas.map((l) => l.id) })();
-      const corpo = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setErro(corpo.error ?? "Não consegui criar o exemplo.");
-        return;
-      }
-      router.push(`/peca-peca/${corpo.id}`);
-    } catch {
-      setErro("Sem conexão. Tente de novo.");
-    } finally {
-      setCriando(false);
-    }
-  }
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <Cabecalho
         titulo="Cotação de peças"
-        subtitulo="As autopeças de Suzano num lugar só."
+        subtitulo={`As autopeças ${daOficina?.cidade ? `de ${daOficina.cidade}` : "da região"} num lugar só.`}
         acao={
           <BotaoLink href="/peca-peca/nova">
             <Mais tamanho={16} />
@@ -60,7 +34,6 @@ export function ListaCotacoes() {
         }
       />
 
-      <AvisoDaPrevia />
       <AvisoSemConexao ativo={semConexao} />
       {daOficina && (!daOficina.cidade || !daOficina.estado) && (
         <InformarCidade cidadeAtual={daOficina.cidade} onSalva={recarregarLojas} />
@@ -74,54 +47,41 @@ export function ListaCotacoes() {
         ) : cotacoes.length === 0 ? (
           <Vazio
             titulo="Nenhuma cotação ainda"
-            texto="Comece uma do zero ou crie um exemplo pronto, com um Gol 2015 e cinco peças, enviado para as lojas."
-            acao={
-              <div className="flex flex-wrap justify-center gap-2">
-                <Botao variante="secundario" onClick={verExemplo} disabled={criando || !lojas}>
-                  {criando ? "Criando..." : "Criar um exemplo"}
-                </Botao>
-                <BotaoLink href="/peca-peca/nova">Nova cotação</BotaoLink>
-              </div>
-            }
+            texto="Digite a placa e as peças que precisa. A cotação vai para as lojas que atendem a sua cidade."
+            acao={<BotaoLink href="/peca-peca/nova">Nova cotação</BotaoLink>}
           />
         ) : (
-          <>
-            <div className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
-              {cotacoes.map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/peca-peca/${c.id}`}
-                  className="flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-superficie-2 sm:flex-row sm:items-center sm:gap-3"
-                >
-                  <div className="flex items-center gap-3 sm:contents">
-                    <span className="w-10 shrink-0 text-sm font-bold text-brand-texto">#{c.numero}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-tinta">
-                        {descricaoDoVeiculo(c.veiculo)}
-                        {c.veiculo.placa && <span className="text-tinta-3"> · {c.veiculo.placa}</span>}
-                      </p>
-                      <p className="truncate text-xs text-tinta-3">
-                        {c.pecas.length} {c.pecas.length === 1 ? "peça" : "peças"} ·{" "}
-                        {c.envios.filter((e) => e.respondidaEm).length} de {c.envios.length} lojas responderam ·{" "}
-                        {haQuanto(c.criadaEm)}
-                      </p>
-                    </div>
+          <div className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
+            {cotacoes.map((c) => (
+              <Link
+                key={c.id}
+                href={`/peca-peca/${c.id}`}
+                className="flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-superficie-2 sm:flex-row sm:items-center sm:gap-3"
+              >
+                <div className="flex items-center gap-3 sm:contents">
+                  <span className="w-10 shrink-0 text-sm font-bold text-brand-texto">#{c.numero}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-tinta">
+                      {descricaoDoVeiculo(c.veiculo)}
+                      {c.veiculo.placa && <span className="text-tinta-3"> · {c.veiculo.placa}</span>}
+                    </p>
+                    <p className="truncate text-xs text-tinta-3">
+                      {c.pecas.length} {c.pecas.length === 1 ? "peça" : "peças"} ·{" "}
+                      {c.envios.filter((e) => e.respondidaEm).length} de {c.envios.length} lojas responderam ·{" "}
+                      {haQuanto(c.criadaEm)}
+                    </p>
                   </div>
-                  <div className="pl-[3.25rem] sm:pl-0">
-                    <PilulaEtapa cotacao={c} />
-                  </div>
-                </Link>
-              ))}
-            </div>
-            <Botao variante="fantasma" tamanho="denso" onClick={verExemplo} disabled={criando || !lojas}>
-              {criando ? "Criando..." : "Criar outro exemplo"}
-            </Botao>
-          </>
+                </div>
+                <div className="pl-[3.25rem] sm:pl-0">
+                  <PilulaEtapa cotacao={c} />
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
-        {erro && <Aviso>{erro}</Aviso>}
       </section>
 
-      <PainelBalcoes lojas={lojas} cidade={daOficina?.cidade ?? null} />
+      <PainelLojas lojas={lojas} cidade={daOficina?.cidade ?? null} />
 
       <section className="space-y-3">
         <h2 className="font-semibold text-tinta">Como funciona</h2>
@@ -144,49 +104,28 @@ export function ListaCotacoes() {
   );
 }
 
-/** Os links dos balcões, para abrir em outra aba (ou mandar para o celular) e testar. */
-function PainelBalcoes({ lojas, cidade }: { lojas: LojaVista[] | null; cidade: string | null }) {
-  const avisar = useAvisar();
-
-  async function copiar(loja: LojaVista) {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}${loja.link}`);
-      avisar(`Link copiado: balcão ${loja.nome}`);
-    } catch {
-      avisar("Não consegui copiar. Abra o balcão e copie o endereço da aba.", "erro");
-    }
-  }
-
+/** As autopeças que recebem as cotações da oficina. */
+function PainelLojas({ lojas, cidade }: { lojas: LojaVista[] | null; cidade: string | null }) {
   return (
     <Painel
-      titulo={cidade ? `Lojas que atendem ${cidade}` : "Balcões das lojas"}
-      ajuda="Abra cada balcão numa aba nova, ou mande o link para outro aparelho, e faça o papel do balconista. Cada loja só vê o que foi mandado para ela."
+      titulo={cidade ? `Lojas que atendem ${cidade}` : "Lojas"}
+      ajuda="É para elas que vão as cotações. Cada loja só vê o que foi mandado para ela, nunca o preço da outra."
     >
       {!lojas ? (
         <EsqueletoLista linhas={2} />
       ) : lojas.length === 0 ? (
         <p className="text-sm text-tinta-3">
-          Nenhuma loja atende {cidade ?? "a oficina"} ainda. As lojas são cadastradas no painel admin do boxOS.
+          Nenhuma autopeça que atende {cidade ?? "a oficina"} está no Peça Peça ainda.
         </p>
       ) : (
         <ul className="divide-y divide-linha">
           {lojas.map((l) => (
-            <li key={l.id} className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-tinta">{l.nome}</p>
-                <p className="text-xs text-tinta-3">
-                  {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
-                </p>
-                <p className="text-xs text-tinta-3">Atende: {l.atende.join(", ") || "—"}</p>
-              </div>
-              <div className="flex gap-2">
-                <Botao variante="fantasma" tamanho="denso" onClick={() => copiar(l)}>
-                  Copiar link
-                </Botao>
-                <a href={l.link} target="_blank" rel="noopener" className={classesBotao("secundario", "denso")}>
-                  Abrir balcão
-                </a>
-              </div>
+            <li key={l.id} className="py-2.5 first:pt-0 last:pb-0">
+              <p className="text-sm font-semibold text-tinta">{l.nome}</p>
+              <p className="text-xs text-tinta-3">
+                {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
+              </p>
+              <p className="text-xs text-tinta-3">Atende: {l.atende.join(", ") || "—"}</p>
             </li>
           ))}
         </ul>

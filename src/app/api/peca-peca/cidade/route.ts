@@ -28,7 +28,7 @@ export async function PUT(request: Request) {
     if (!municipio) return NextResponse.json({ error: "Escolha a cidade na lista" }, { status: 400 });
     const campos = { cidade: municipio.nome, estado: municipio.uf };
     await guarda.db.configuracao.upsert({ where: { oficinaId: guarda.oficinaId }, update: campos, create: campos });
-    return NextResponse.json({ ...campos, lojas: await lojasQueAtendem(municipio.nome, municipio.uf, true) });
+    return NextResponse.json({ ...campos, lojas: await lojasQueAtendem(municipio.nome, municipio.uf) });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

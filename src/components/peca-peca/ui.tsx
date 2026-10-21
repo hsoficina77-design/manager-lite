@@ -18,9 +18,6 @@ export function MarcaPecaPeca({ className }: { className?: string }) {
       <span className="text-tinta">
         Peça<span className="text-brand-texto">Peça</span>
       </span>
-      <span className="rounded-full bg-brand-100 px-2 py-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-wide text-brand-texto">
-        Prévia
-      </span>
     </span>
   );
 }
@@ -56,21 +53,6 @@ export function Cabecalho({
       </div>
       {acao && <div className="shrink-0">{acao}</div>}
     </div>
-  );
-}
-
-/** Lembra, em toda tela, o que ainda é de teste. */
-export function AvisoDaPrevia({ children }: { children?: React.ReactNode }) {
-  return (
-    <p className="rounded-lg border border-dashed border-linha-forte bg-superficie-2 px-3 py-2 text-xs text-tinta-3">
-      {children ?? (
-        <>
-          <span className="font-semibold text-tinta-2">Prévia.</span> As cotações já são de verdade e as lojas
-          respondem pelo balcão delas, em tempo real. Para testar, abra os balcões em outras abas e faça o papel
-          do balconista.
-        </>
-      )}
-    </p>
   );
 }
 

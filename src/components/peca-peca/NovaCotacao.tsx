@@ -11,7 +11,7 @@ import { Busca, Confere, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { normalizarPlaca, type LojasDaOficina, type VeiculoCotado } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
-import { AvisoDaPrevia, Cabecalho, InformarCidade } from "./ui";
+import { Cabecalho, InformarCidade } from "./ui";
 
 // As peças que mais se pedem no balcão: um toque e entram na lista.
 const SUGESTOES = [
@@ -156,7 +156,6 @@ export function NovaCotacao() {
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <Cabecalho titulo="Nova cotação" voltar="/peca-peca" />
-      <AvisoDaPrevia />
 
       <Painel titulo="1. Veículo" ajuda="Comece pela placa: se o carro já passou pela oficina, o resto vem sozinho.">
         <div className="flex gap-2">
@@ -193,8 +192,7 @@ export function NovaCotacao() {
         )}
         {busca.tipo === "nao-achou" && (
           <p className="mt-3 rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-sm text-atencao">
-            Essa placa ainda não passou pela oficina. Preencha abaixo. Na versão final, a placa busca marca,
-            modelo, ano e motor sozinha, pela consulta veicular.
+            Essa placa ainda não passou pela oficina. Preencha os dados do carro abaixo.
           </p>
         )}
         {busca.tipo === "erro" && (
@@ -282,7 +280,7 @@ export function NovaCotacao() {
         {!lojasDisponiveis && <EsqueletoLista linhas={2} />}
         {lojasDisponiveis?.length === 0 && (
           <p className="text-sm text-tinta-3">
-            Nenhuma loja atende {daOficina?.cidade ?? "a oficina"} ainda. As lojas são cadastradas no painel admin do boxOS.
+            Nenhuma autopeça que atende {daOficina?.cidade ?? "a oficina"} está no Peça Peça ainda.
           </p>
         )}
         <div className="grid gap-2 sm:grid-cols-2">

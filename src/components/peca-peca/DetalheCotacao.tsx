@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { Botao, BotaoLink, classesBotao } from "@/components/ui/Botao";
+import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
@@ -20,8 +20,6 @@ import {
   rotuloDaEntrega,
   totaisDa,
   type CotacaoVista,
-  type LojaVista,
-  type LojasDaOficina,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
@@ -31,8 +29,6 @@ type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 export function DetalheCotacao({ id }: { id: string }) {
   const url = `/api/peca-peca/cotacoes/${id}`;
   const { dados: cotacao, naoEncontrado, semConexao, carregar, gravar } = useAoVivo<CotacaoVista>(url, 4000);
-  const { dados: daOficina } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
-  const lojas = daOficina?.lojas ?? null;
   useAvisosDasLojas(cotacao);
 
   if (naoEncontrado) {
@@ -57,7 +53,7 @@ export function DetalheCotacao({ id }: { id: string }) {
   }
 
   return (
-    <Conteudo c={cotacao} url={url} lojas={lojas} gravar={gravar} recarregar={carregar} semConexao={semConexao} />
+    <Conteudo c={cotacao} url={url} gravar={gravar} recarregar={carregar} semConexao={semConexao} />
   );
 }
 
@@ -100,14 +96,12 @@ const POSICAO = { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, ENTREGU
 function Conteudo({
   c: doServidor,
   url,
-  lojas,
   gravar,
   recarregar,
   semConexao,
 }: {
   c: CotacaoVista;
   url: string;
-  lojas: LojaVista[] | null;
   gravar: Gravar;
   recarregar: () => Promise<void>;
   semConexao: boolean;
@@ -135,7 +129,6 @@ function Conteudo({
   // Depois do orçamento, mudar a escolha faria a cotação contar uma história e o
   // orçamento outra.
   const travado = Boolean(c.orcamento);
-  const linkDaLoja = new Map((lojas ?? []).map((l) => [l.id, l.link]));
 
   async function alterar(corpo: object, otimista?: (d: CotacaoVista) => CotacaoVista) {
     const r = await gravar(enviarJson(url, "PATCH", corpo), { otimista, devolveDado: true });
@@ -227,17 +220,9 @@ function Conteudo({
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           {/* Com o orçamento feito, o que importa agora é o pedido: ele sobe. */}
-          {c.orcamento && <PainelPedido c={c} url={url} gravar={gravar} linkDaLoja={linkDaLoja} />}
+          {c.orcamento && <PainelPedido c={c} url={url} gravar={gravar} />}
 
-          <PainelLojas
-            c={c}
-            travado={travado}
-            linkDaLoja={linkDaLoja}
-            onSimular={async () => {
-              const r = await gravar(enviarJson(`${url}/simular`, "POST"), { devolveDado: true });
-              if (!r.ok) avisar(r.erro, "erro");
-            }}
-          />
+          <PainelLojas c={c} />
 
           {respondeu ? (
             <PainelEscolha
@@ -258,7 +243,7 @@ function Conteudo({
             <Vazio
               compacto
               titulo="Esperando as lojas"
-              texto="Quando o balconista responder, os preços aparecem aqui sozinhos, lado a lado. Para testar, abra o balcão da loja em outra aba, ou simule as respostas."
+              texto="Quando o balconista responder, os preços aparecem aqui sozinhos, lado a lado. Com esta tela aberta, toca um aviso quando uma loja responder."
             />
           )}
 
@@ -311,46 +296,12 @@ function Conteudo({
 
 // ─── Lojas ──────────────────────────────────────────────────────────────────
 
-function PainelLojas({
-  c,
-  travado,
-  linkDaLoja,
-  onSimular,
-}: {
-  c: CotacaoVista;
-  travado: boolean;
-  linkDaLoja: Map<string, string | undefined>;
-  onSimular: () => Promise<void>;
-}) {
-  const [simulando, setSimulando] = useState(false);
-  const faltam = c.envios.some((e) => !e.respondidaEm);
-
+function PainelLojas({ c }: { c: CotacaoVista }) {
   return (
-    <Painel
-      titulo="Lojas"
-      ajuda="Atualiza sozinho. O balconista confere a aplicação de cada peça antes de responder."
-      acao={
-        faltam &&
-        !travado && (
-          <Botao
-            variante="secundario"
-            tamanho="denso"
-            disabled={simulando}
-            onClick={async () => {
-              setSimulando(true);
-              await onSimular();
-              setSimulando(false);
-            }}
-          >
-            {simulando ? "Simulando..." : "Simular as que faltam"}
-          </Botao>
-        )
-      }
-    >
+    <Painel titulo="Lojas" ajuda="Atualiza sozinho. O balconista confere a aplicação de cada peça antes de responder.">
       <ul className="divide-y divide-linha">
         {c.envios.map((e) => {
           const temQuantas = c.pecas.filter((p) => e.ofertas.some((o) => o.pecaId === p.id)).length;
-          const link = linkDaLoja.get(e.lojaId);
           return (
             <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
               <span
@@ -365,16 +316,6 @@ function PainelLojas({
                     : "Esperando o balconista responder"}
                 </p>
               </div>
-              {link && (
-                <a
-                  href={`${link}/${e.id}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="text-xs font-medium text-brand-texto underline-offset-2 hover:underline"
-                >
-                  Abrir no balcão
-                </a>
-              )}
             </li>
           );
         })}
@@ -440,7 +381,7 @@ function PainelEscolha({
                     ? "Ficou fora do orçamento."
                     : aguardando
                       ? "Ainda sem preço. Falta loja responder."
-                      : "Nenhuma loja tem. Na versão final, dá para mandar só esta peça para outras lojas."}
+                      : "Nenhuma das lojas tem esta peça."}
                 </p>
               ) : (
                 <div className="space-y-1.5">
@@ -822,17 +763,7 @@ function ModalOrcamento({
 
 // ─── Pedido e entrega ───────────────────────────────────────────────────────
 
-function PainelPedido({
-  c,
-  url,
-  gravar,
-  linkDaLoja,
-}: {
-  c: CotacaoVista;
-  url: string;
-  gravar: Gravar;
-  linkDaLoja: Map<string, string | undefined>;
-}) {
+function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar: Gravar }) {
   const avisar = useAvisar();
   const [pedindo, setPedindo] = useState(false);
   const [erro, setErro] = useState("");
@@ -881,22 +812,9 @@ function PainelPedido({
           const etapa = e.entrega ?? "ENVIADO";
           const posicao = ETAPAS_ENTREGA.findIndex((x) => x.value === etapa);
           const pecas = c.pecas.filter((p) => e.ofertas.some((o) => o.id === p.ofertaId));
-          const link = linkDaLoja.get(e.lojaId);
           return (
             <div key={e.id} className="rounded-lg border border-linha p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
-                {link && etapa !== "ENTREGUE" && (
-                  <a
-                    href={`${link}/${e.id}`}
-                    target="_blank"
-                    rel="noopener"
-                    className={classesBotao("secundario", "denso")}
-                  >
-                    Abrir no balcão
-                  </a>
-                )}
-              </div>
+              <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
               <ul className="mt-1 text-xs text-tinta-3">
                 {pecas.map((p) => (
                   <li key={p.id}>
