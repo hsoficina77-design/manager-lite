@@ -236,6 +236,12 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
             </div>
           ))}
         </dl>
+        {envio.observacao && (
+          <div className="mt-3 rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm">
+            <p className="text-xs text-tinta-3">Observação da oficina</p>
+            <p className="whitespace-pre-line font-medium text-tinta">{envio.observacao}</p>
+          </div>
+        )}
       </Painel>
 
       {envio.travada ? (
@@ -281,6 +287,13 @@ function PedidoNoBalcao({ envio, url, gravar }: { envio: EnvioNoBalcao; url: str
           <span className="status status-entregue">Entregue</span>
         )}
       </div>
+      {etapa === "ENTREGUE" && (
+        <p className="text-sm text-tinta-2">
+          {envio.oficinaRecebeuEm
+            ? `A oficina confirmou que recebeu as peças às ${horaCurta(envio.oficinaRecebeuEm)}.`
+            : "A oficina ainda vai conferir as peças e confirmar o recebimento."}
+        </p>
+      )}
       <ul className="space-y-1 rounded-lg bg-superficie p-3 text-sm">
         {pedidas.map((p) => (
           <li key={p.id} className="text-tinta">

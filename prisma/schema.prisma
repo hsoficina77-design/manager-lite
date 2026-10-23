@@ -842,6 +842,8 @@ model Cotacao {
   modelo      String
   ano         String?
   motor       String?
+  /// Recado livre da oficina para o balconista (versão, ABS, urgência...).
+  observacao  String?
   // Só da oficina — a loja nunca recebe.
   clienteId   String?
   veiculoId   String?
@@ -895,6 +897,9 @@ model CotacaoLoja {
   lojaId       String
   respondidaEm DateTime?
   entrega      String?
+  /// A oficina conferiu as peças. É isto que fecha a entrega: a loja marcar
+  /// "entregue" só avisa a oficina, que confirma do lado dela.
+  oficinaRecebeuEm DateTime?
   createdAt    DateTime  @default(now())
 
   cotacao Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)

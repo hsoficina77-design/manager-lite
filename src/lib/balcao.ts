@@ -192,6 +192,7 @@ const SELECAO_DO_ENVIO = {
   createdAt: true,
   respondidaEm: true,
   entrega: true,
+  oficinaRecebeuEm: true,
   ofertas: {
     orderBy: { createdAt: "asc" },
     select: { id: true, pecaId: true, marca: true, preco: true, prazoMin: true },
@@ -203,6 +204,7 @@ const SELECAO_DO_ENVIO = {
       modelo: true,
       ano: true,
       motor: true,
+      observacao: true,
       orcamentoId: true,
       pedidoEm: true,
       // `ofertaId` só serve para saber se a peça foi fechada com ESTA loja; não sai daqui.
@@ -249,6 +251,7 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
     respondidaEm: e.respondidaEm?.toISOString() ?? null,
     situacao,
     entrega: ehEtapaEntrega(e.entrega) ? e.entrega : null,
+    oficinaRecebeuEm: e.oficinaRecebeuEm?.toISOString() ?? null,
     travada,
     veiculo: {
       placa: c.placa ?? "",
@@ -257,6 +260,7 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
       ano: c.ano ?? "",
       motor: c.motor ?? "",
     },
+    observacao: c.observacao ?? "",
     pecas: c.pecas.map((p) => ({
       id: p.id,
       descricao: p.descricao,
@@ -354,17 +358,56 @@ export async function responderEnvio(
   });
 }
 
-/** O balconista avança a entrega: recebido → separando → saiu com o motoboy → entregue. */
+/** Tipo da notificação "a loja entregou" — a confirmação da oficina dá ela por lida. */
+export const TIPO_AVISO_ENTREGA = "PECA_PECA_ENTREGA";
+
+/**
+ * O balconista avança a entrega: recebido → separando → saiu com o motoboy → entregue.
+ *
+ * "Entregue" pela loja não fecha a entrega: avisa a oficina, no sino, para ela conferir
+ * as peças e confirmar. Se a oficina já confirmou, a etapa já está em "entregue" e não
+ * há mais o que avançar.
+ */
 export async function avancarEntrega(
   lojaId: string,
   envioId: string
 ): Promise<ResultadoDoBalcao | EtapaEntrega> {
-  const envio = await prisma.cotacaoLoja.findFirst({ where: { id: envioId, lojaId }, select: { id: true, entrega: true } });
+  const envio = await prisma.cotacaoLoja.findFirst({
+    where: { id: envioId, lojaId },
+    select: {
+      id: true,
+      oficinaId: true,
+      entrega: true,
+      oficinaRecebeuEm: true,
+      cotacao: { select: { id: true, numero: true } },
+      loja: { select: { nome: true } },
+    },
+  });
   if (!envio) return "nao-encontrado";
   if (!ehEtapaEntrega(envio.entrega)) return "sem-pedido";
   const proxima = proximaEtapa(envio.entrega);
   if (!proxima) return envio.entrega;
   // A condição na etapa atual impede que dois cliques pulem uma etapa.
-  await prisma.cotacaoLoja.updateMany({ where: { id: envio.id, entrega: envio.entrega }, data: { entrega: proxima } });
+  const { count } = await prisma.cotacaoLoja.updateMany({
+    where: { id: envio.id, entrega: envio.entrega },
+    data: { entrega: proxima },
+  });
+
+  if (count > 0 && proxima === "ENTREGUE" && !envio.oficinaRecebeuEm) {
+    // Cliente cru, com o `oficinaId` do envio: a loja não está logada em oficina nenhuma.
+    // O aviso não pode desfazer a etapa que já foi gravada.
+    await prisma.notificacao
+      .create({
+        data: {
+          oficinaId: envio.oficinaId,
+          tipo: TIPO_AVISO_ENTREGA,
+          publico: "TODOS",
+          titulo: "Peças entregues pela loja",
+          mensagem: `${envio.loja.nome} marcou como entregues as peças da cotação #${envio.cotacao.numero}. Confira e confirme o recebimento.`,
+          link: `/peca-peca/${envio.cotacao.id}`,
+        },
+      })
+      .catch((err: unknown) => console.error("Falha ao avisar a oficina da entrega:", err));
+  }
   return proxima;
 }

@@ -47,10 +47,11 @@ export async function POST(request: Request) {
         data: {
           numero: seq.ultimo,
           placa: normalizarPlaca(v.placa) || null,
-          marca: v.marca || null,
+          marca: v.marca,
           modelo: v.modelo,
-          ano: v.ano || null,
-          motor: v.motor || null,
+          ano: v.ano,
+          motor: v.motor,
+          observacao: dados.observacao || null,
           veiculoId: doCadastro?.id ?? null,
           clienteId: doCadastro?.clienteId ?? null,
           pecas: {

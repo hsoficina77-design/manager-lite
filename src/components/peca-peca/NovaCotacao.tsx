@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { anoVeiculo } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Botao } from "@/components/ui/Botao";
-import { Aviso, Campo, CampoQuantidade, Entrada } from "@/components/ui/Campos";
+import { Area, Aviso, Campo, CampoQuantidade, Entrada } from "@/components/ui/Campos";
 import { Painel } from "@/components/ui/Dados";
-import { Busca, Confere, Lixeira, Mais } from "@/components/ui/Icones";
+import { useConfirmar } from "@/components/ui/Avisos";
+import { Busca, Confere, Fechar, Lapis, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { normalizarPlaca, type LojasDaOficina, type VeiculoCotado } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
@@ -42,7 +43,7 @@ type VeiculoDoBoxOS = {
 type EstadoBusca =
   | { tipo: "nada" }
   | { tipo: "buscando" }
-  | { tipo: "achou"; clienteNome?: string }
+  | { tipo: "achou"; clienteNome?: string; doCadastro: (keyof VeiculoCotado)[] }
   | { tipo: "nao-achou" }
   | { tipo: "erro" };
 
@@ -57,9 +58,12 @@ export function NovaCotacao() {
   const lojasDisponiveis = daOficina?.lojas ?? null;
   const [veiculo, setVeiculo] = useState<VeiculoNaTela>(VEICULO_VAZIO);
   const [busca, setBusca] = useState<EstadoBusca>({ tipo: "nada" });
+  const [observacao, setObservacao] = useState("");
   const [pecas, setPecas] = useState<{ descricao: string; quantidade: number }[]>([]);
   const [novaPeca, setNovaPeca] = useState("");
   const [quantidade, setQuantidade] = useState("1");
+  const [editando, setEditando] = useState<{ indice: number; descricao: string; quantidade: string } | null>(null);
+  const confirmar = useConfirmar();
   // Nulo até a pessoa mexer: aí vale "todas as lojas".
   const [marcadas, setMarcadas] = useState<string[] | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -94,29 +98,53 @@ export function NovaCotacao() {
         return;
       }
       const clienteNome = clientes.find((c) => c.id === achado.clienteId)?.nome;
-      setVeiculo({
+      const doCarro = {
         placa,
         marca: achado.marca,
         modelo: achado.modelo,
         ano: anoVeiculo(achado) ?? "",
         motor: achado.motorizacao ?? "",
-        clienteId: achado.clienteId,
-        veiculoId: achado.id,
-        clienteNome,
-      });
-      setBusca({ tipo: "achou", clienteNome });
+      };
+      setVeiculo({ ...doCarro, clienteId: achado.clienteId, veiculoId: achado.id, clienteNome });
+      // O motor fica sempre aberto: o cadastro às vezes tem só "1.0" e o balconista quer mais.
+      const doCadastro = (["marca", "modelo", "ano"] as const).filter((campo) => doCarro[campo].trim());
+      setBusca({ tipo: "achou", clienteNome, doCadastro });
     } catch {
       setBusca({ tipo: "erro" });
     }
   }
 
+  // Peça se pede por unidade (o óleo, por litro): a quantidade é inteira.
+  const unidades = (valor: string) => Math.max(1, Math.round(Number(valor) || 1));
+
   function adicionar(descricao = novaPeca) {
     const texto = descricao.trim();
     if (!texto) return;
-    // Peça se pede por unidade (o óleo, por litro): a quantidade é inteira.
-    setPecas((lista) => [...lista, { descricao: texto, quantidade: Math.max(1, Math.round(Number(quantidade) || 1)) }]);
+    setPecas((lista) => [...lista, { descricao: texto, quantidade: unidades(quantidade) }]);
     setNovaPeca("");
     setQuantidade("1");
+  }
+
+  function salvarEdicao() {
+    if (!editando) return;
+    const texto = editando.descricao.trim();
+    if (!texto) return;
+    setPecas((lista) =>
+      lista.map((p, i) => (i === editando.indice ? { descricao: texto, quantidade: unidades(editando.quantidade) } : p))
+    );
+    setEditando(null);
+  }
+
+  async function tirar(indice: number) {
+    const ok = await confirmar({
+      titulo: "Tirar esta peça da lista?",
+      texto: `${pecas[indice].quantidade}× ${pecas[indice].descricao}`,
+      acao: "Tirar peça",
+      perigo: true,
+    });
+    if (!ok) return;
+    setPecas((lista) => lista.filter((_, j) => j !== indice));
+    setEditando(null);
   }
 
   function alternarLoja(id: string) {
@@ -124,15 +152,18 @@ export function NovaCotacao() {
   }
 
   async function enviar() {
-    if (!veiculo.modelo.trim()) return setErro("Informe ao menos o modelo do veículo.");
+    const { placa, marca, modelo, ano, motor, veiculoId } = veiculo;
+    if (![marca, modelo, ano, motor].every((v) => v.trim())) {
+      return setErro("Preencha marca, modelo, ano e motor do veículo.");
+    }
     if (pecas.length === 0) return setErro("Adicione ao menos uma peça.");
     if (lojas.length === 0) return setErro("Escolha ao menos uma loja.");
     setErro("");
     setEnviando(true);
     try {
-      const { placa, marca, modelo, ano, motor, veiculoId } = veiculo;
       const r = await enviarJson("/api/peca-peca/cotacoes", "POST", {
         veiculo: { placa: normalizarPlaca(placa), marca, modelo, ano, motor },
+        observacao,
         veiculoId: veiculoId ?? null,
         pecas,
         lojas,
@@ -151,7 +182,8 @@ export function NovaCotacao() {
   }
 
   // O veículo veio do cadastro: editar à mão desligaria o vínculo sem a pessoa perceber.
-  const travado = busca.tipo === "achou";
+  // O que o cadastro não tinha fica aberto para completar.
+  const travado = (campo: keyof VeiculoCotado) => busca.tipo === "achou" && busca.doCadastro.includes(campo);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
@@ -200,22 +232,30 @@ export function NovaCotacao() {
         )}
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Campo rotulo="Marca">
-            <Entrada value={veiculo.marca} onChange={(e) => mudar("marca", e.target.value)} disabled={travado} placeholder="Volkswagen" />
+          <Campo rotulo="Marca" obrigatorio>
+            <Entrada value={veiculo.marca} onChange={(e) => mudar("marca", e.target.value)} disabled={travado("marca")} placeholder="Volkswagen" />
           </Campo>
           <Campo rotulo="Modelo" obrigatorio>
-            <Entrada value={veiculo.modelo} onChange={(e) => mudar("modelo", e.target.value)} disabled={travado} placeholder="Gol 1.0" />
+            <Entrada value={veiculo.modelo} onChange={(e) => mudar("modelo", e.target.value)} disabled={travado("modelo")} placeholder="Gol" />
           </Campo>
-          <Campo rotulo="Ano">
-            <Entrada value={veiculo.ano} onChange={(e) => mudar("ano", e.target.value)} disabled={travado} inputMode="numeric" placeholder="2015" />
+          <Campo rotulo="Ano" obrigatorio>
+            <Entrada value={veiculo.ano} onChange={(e) => mudar("ano", e.target.value)} disabled={travado("ano")} inputMode="numeric" placeholder="2015" />
           </Campo>
-          <Campo rotulo="Motor">
+          <Campo rotulo="Motor" obrigatorio>
             <Entrada value={veiculo.motor} onChange={(e) => mudar("motor", e.target.value)} placeholder="1.0 12V Flex" />
           </Campo>
         </div>
         <p className="mt-2 text-xs text-tinta-3">
           O motor é o que mais evita peça errada. O balconista confere a aplicação antes de responder.
         </p>
+        <Campo rotulo="Observação (opcional)" className="mt-4">
+          <Area
+            value={observacao}
+            onChange={(e) => setObservacao(e.target.value)}
+            rows={2}
+            placeholder="Ex.: carro com ABS, prefere peça original, precisa para hoje"
+          />
+        </Campo>
       </Painel>
 
       <Painel titulo="2. Peças" ajuda="Escreva do jeito que você pede no balcão.">
@@ -249,21 +289,66 @@ export function NovaCotacao() {
 
         {pecas.length > 0 && (
           <ul className="mt-4 divide-y divide-linha rounded-lg border border-linha">
-            {pecas.map((p, i) => (
-              <li key={`${p.descricao}-${i}`} className="flex items-center gap-3 px-3 py-1.5">
-                <span className="w-8 shrink-0 text-sm font-semibold text-tinta-2">{p.quantidade}×</span>
-                <span className="min-w-0 flex-1 text-sm text-tinta">{p.descricao}</span>
-                <Botao
-                  variante="fantasma"
-                  tamanho="icone"
-                  onClick={() => setPecas((lista) => lista.filter((_, j) => j !== i))}
-                  aria-label={`Tirar ${p.descricao}`}
-                  className="text-perigo"
-                >
-                  <Lixeira tamanho={16} />
-                </Botao>
-              </li>
-            ))}
+            {pecas.map((p, i) =>
+              editando?.indice === i ? (
+                <li key={`${p.descricao}-${i}`} className="flex items-center gap-2 px-3 py-1.5">
+                  <Entrada
+                    value={editando.descricao}
+                    onChange={(e) => setEditando({ ...editando, descricao: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.preventDefault(), salvarEdicao());
+                      if (e.key === "Escape") setEditando(null);
+                    }}
+                    autoFocus
+                    aria-label="Peça"
+                    className="min-w-0 flex-1"
+                  />
+                  <CampoQuantidade
+                    valor={editando.quantidade}
+                    onChange={(valor) => setEditando({ ...editando, quantidade: valor })}
+                    onEnter={salvarEdicao}
+                    aria-label="Quantidade"
+                    className="w-16 shrink-0"
+                  />
+                  <Botao
+                    variante="fantasma"
+                    tamanho="icone"
+                    onClick={salvarEdicao}
+                    disabled={!editando.descricao.trim()}
+                    aria-label="Salvar peça"
+                    className="text-ok"
+                  >
+                    <Confere tamanho={16} />
+                  </Botao>
+                  <Botao variante="fantasma" tamanho="icone" onClick={() => setEditando(null)} aria-label="Cancelar edição">
+                    <Fechar tamanho={16} />
+                  </Botao>
+                </li>
+              ) : (
+                <li key={`${p.descricao}-${i}`} className="flex items-center gap-3 px-3 py-1.5">
+                  <span className="w-8 shrink-0 text-sm font-semibold text-tinta-2">{p.quantidade}×</span>
+                  <span className="min-w-0 flex-1 text-sm text-tinta">{p.descricao}</span>
+                  <Botao
+                    variante="fantasma"
+                    tamanho="icone"
+                    onClick={() => setEditando({ indice: i, descricao: p.descricao, quantidade: String(p.quantidade) })}
+                    aria-label={`Editar ${p.descricao}`}
+                    className="text-tinta-2"
+                  >
+                    <Lapis tamanho={16} />
+                  </Botao>
+                  <Botao
+                    variante="fantasma"
+                    tamanho="icone"
+                    onClick={() => tirar(i)}
+                    aria-label={`Tirar ${p.descricao}`}
+                    className="text-perigo"
+                  >
+                    <Lixeira tamanho={16} />
+                  </Botao>
+                </li>
+              )
+            )}
           </ul>
         )}
       </Painel>

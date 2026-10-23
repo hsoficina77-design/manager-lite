@@ -41,6 +41,8 @@ export type EnvioVista = {
   lojaNome: string;
   respondidaEm: string | null;
   entrega: EtapaEntrega | null;
+  /** A oficina conferiu as peças desta loja. */
+  oficinaRecebeuEm: string | null;
   ofertas: OfertaVista[];
 };
 
@@ -57,6 +59,8 @@ export type CotacaoVista = {
   numero: number;
   criadaEm: string;
   veiculo: VeiculoCotado;
+  /** Recado da oficina para as lojas; vazio quando não escreveu nada. */
+  observacao: string;
   /** Preenchidos quando a placa já estava no boxOS: o orçamento nasce ligado a eles. */
   clienteId: string | null;
   veiculoId: string | null;
@@ -107,9 +111,12 @@ export type EnvioNoBalcao = {
   respondidaEm: string | null;
   situacao: SituacaoNoBalcao;
   entrega: EtapaEntrega | null;
+  /** A oficina confirmou que as peças chegaram. */
+  oficinaRecebeuEm: string | null;
   /** A oficina já gerou o orçamento: a resposta não muda mais. */
   travada: boolean;
   veiculo: VeiculoCotado;
+  observacao: string;
   pecas: PecaNoBalcao[];
 };
 
@@ -144,20 +151,33 @@ export function rotuloDaEntrega(etapa: EtapaEntrega): string {
 
 // ─── Etapas da cotação (lado da oficina) ────────────────────────────────────
 
-export type Etapa = "AGUARDANDO" | "RESPONDIDA" | "ORCAMENTO" | "PEDIDO" | "ENTREGUE";
+export type Etapa = "AGUARDANDO" | "RESPONDIDA" | "ORCAMENTO" | "PEDIDO" | "CONFERIR" | "ENTREGUE";
 
 export const ETAPAS: Record<Etapa, { rotulo: string; cor: string }> = {
   AGUARDANDO: { rotulo: "Aguardando as lojas", cor: "status status-aberta" },
   RESPONDIDA: { rotulo: "Lojas responderam", cor: "status status-andamento" },
   ORCAMENTO: { rotulo: "Com o cliente", cor: "status status-peca" },
   PEDIDO: { rotulo: "Peças a caminho", cor: "status status-andamento" },
+  CONFERIR: { rotulo: "Confirmar recebimento", cor: "status status-peca" },
   ENTREGUE: { rotulo: "Peças entregues", cor: "status status-entregue" },
 };
 
+/** As lojas do pedido: as que receberam o pedido (só elas ganham etapa de entrega). */
+export function enviosDoPedido(c: CotacaoVista): EnvioVista[] {
+  return c.envios.filter((e) => e.entrega);
+}
+
+/** A loja marcou "entregue" e a oficina ainda não confirmou que as peças chegaram. */
+export function aConferir(e: EnvioVista): boolean {
+  return e.entrega === "ENTREGUE" && !e.oficinaRecebeuEm;
+}
+
+/** Só a oficina fecha a entrega: a loja marcar "entregue" deixa a cotação em CONFERIR. */
 export function etapaDa(c: CotacaoVista): Etapa {
   if (c.pedidoEm) {
-    const entregas = c.envios.flatMap((e) => (e.entrega ? [e.entrega] : []));
-    return entregas.length > 0 && entregas.every((e) => e === "ENTREGUE") ? "ENTREGUE" : "PEDIDO";
+    const doPedido = enviosDoPedido(c);
+    if (doPedido.length > 0 && doPedido.every((e) => e.oficinaRecebeuEm)) return "ENTREGUE";
+    return doPedido.some(aConferir) ? "CONFERIR" : "PEDIDO";
   }
   if (c.orcamento) return "ORCAMENTO";
   if (c.envios.some((e) => e.respondidaEm)) return "RESPONDIDA";

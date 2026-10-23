@@ -11,6 +11,7 @@ import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Confere } from "@/components/ui/Icones";
 import {
   ETAPAS_ENTREGA,
+  aConferir,
   descricaoDoVeiculo,
   escolhaDa,
   etapaDa,
@@ -79,8 +80,13 @@ function useAvisosDasLojas(c: CotacaoVista | null) {
       if (e.respondidaEm && e.respondidaEm !== era.respondidaEm) {
         novidades.push(era.respondidaEm ? `${e.lojaNome} corrigiu a resposta` : `${e.lojaNome} respondeu`);
       }
-      if (e.entrega && e.entrega !== era.entrega && era.entrega) {
-        novidades.push(`${e.lojaNome}: ${rotuloDaEntrega(e.entrega).toLowerCase()}`);
+      // A oficina confirmando o recebimento também leva a etapa a "entregue": aí não é novidade.
+      if (e.entrega && e.entrega !== era.entrega && era.entrega && !e.oficinaRecebeuEm) {
+        novidades.push(
+          e.entrega === "ENTREGUE"
+            ? `${e.lojaNome} marcou como entregue. Confira as peças e confirme o recebimento.`
+            : `${e.lojaNome}: ${rotuloDaEntrega(e.entrega).toLowerCase()}`
+        );
       }
     }
     if (novidades.length > 0) {
@@ -91,7 +97,7 @@ function useAvisosDasLojas(c: CotacaoVista | null) {
 }
 
 const LINHA_DO_TEMPO = ["Enviada", "Lojas responderam", "Orçamento", "Pedido", "Entregue"];
-const POSICAO = { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, ENTREGUE: 4 } as const;
+const POSICAO = { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, CONFERIR: 3, ENTREGUE: 4 } as const;
 
 function Conteudo({
   c: doServidor,
@@ -214,6 +220,13 @@ function Conteudo({
           </li>
         ))}
       </ol>
+
+      {c.observacao && (
+        <div className="rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm">
+          <p className="text-xs text-tinta-3">Observação enviada às lojas</p>
+          <p className="whitespace-pre-line text-tinta">{c.observacao}</p>
+        </div>
+      )}
 
       <AvisoSemConexao ativo={semConexao} />
 
@@ -765,7 +778,9 @@ function ModalOrcamento({
 
 function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar: Gravar }) {
   const avisar = useAvisar();
+  const confirmar = useConfirmar();
   const [pedindo, setPedindo] = useState(false);
+  const [confirmando, setConfirmando] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const orcamento = c.orcamento!;
 
@@ -779,6 +794,26 @@ function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar
     setPedindo(false);
     if (!r.ok) return setErro(r.erro);
     avisar(doPedido.length === 1 ? "Pedido enviado à loja" : "Pedido enviado às lojas");
+  }
+
+  /**
+   * Só a oficina fecha a entrega. Antes de a loja marcar "entregue" pede confirmação:
+   * não tem volta, e o balcão da loja passa a mostrar entregue também.
+   */
+  async function confirmarRecebimento(envio: CotacaoVista["envios"][number]) {
+    if (!aConferir(envio)) {
+      const ok = await confirmar({
+        titulo: `As peças da ${envio.lojaNome} chegaram?`,
+        texto: "A loja ainda não marcou como entregue. Confirmando, a entrega fecha aqui e no balcão dela.",
+        acao: "Chegaram, confirmar",
+      });
+      if (!ok) return;
+    }
+    setConfirmando(envio.id);
+    const r = await gravar(enviarJson(`${url}/recebido`, "POST", { envioId: envio.id }), { devolveDado: true });
+    setConfirmando(null);
+    if (!r.ok) return avisar(r.erro, "erro");
+    avisar(`Recebimento das peças da ${envio.lojaNome} confirmado`);
   }
 
   if (!c.pedidoEm) {
@@ -805,15 +840,19 @@ function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar
   return (
     <Painel
       titulo="Pedido das peças"
-      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. Quem avança a entrega é o balconista, do balcão dele; aqui atualiza sozinho.`}
+      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. O balconista avança a entrega do balcão dele, e aqui atualiza sozinho. Quando as peças chegarem, confirme o recebimento.`}
     >
       <div className="space-y-4">
         {doPedido.map((e) => {
           const etapa = e.entrega ?? "ENVIADO";
           const posicao = ETAPAS_ENTREGA.findIndex((x) => x.value === etapa);
           const pecas = c.pecas.filter((p) => e.ofertas.some((o) => o.id === p.ofertaId));
+          const conferir = aConferir(e);
           return (
-            <div key={e.id} className="rounded-lg border border-linha p-3">
+            <div
+              key={e.id}
+              className={cn("rounded-lg border p-3", conferir ? "border-atencao-linha bg-atencao-fraco" : "border-linha")}
+            >
               <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
               <ul className="mt-1 text-xs text-tinta-3">
                 {pecas.map((p) => (
@@ -837,6 +876,37 @@ function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar
                   </li>
                 ))}
               </ol>
+              {e.oficinaRecebeuEm ? (
+                <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-ok">
+                  <Confere tamanho={16} className="shrink-0" />
+                  Recebimento confirmado às {horaCurta(e.oficinaRecebeuEm)}
+                </p>
+              ) : conferir ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm font-medium text-atencao">
+                    A loja marcou como entregue. Confira as peças e confirme o recebimento.
+                  </p>
+                  <Botao
+                    variante="sucesso"
+                    onClick={() => confirmarRecebimento(e)}
+                    disabled={confirmando === e.id}
+                    className="w-full sm:w-auto"
+                  >
+                    <Confere tamanho={16} />
+                    {confirmando === e.id ? "Confirmando..." : "Confirmar recebimento"}
+                  </Botao>
+                </div>
+              ) : (
+                <Botao
+                  variante="secundario"
+                  tamanho="denso"
+                  onClick={() => confirmarRecebimento(e)}
+                  disabled={confirmando === e.id}
+                  className="mt-3"
+                >
+                  {confirmando === e.id ? "Confirmando..." : "Já chegou? Marcar como recebido"}
+                </Botao>
+              )}
             </div>
           );
         })}

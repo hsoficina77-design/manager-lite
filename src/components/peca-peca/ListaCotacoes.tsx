@@ -4,7 +4,14 @@ import Link from "next/link";
 import { BotaoLink } from "@/components/ui/Botao";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { Mais } from "@/components/ui/Icones";
-import { descricaoDoVeiculo, type CotacaoVista, type LojaVista, type LojasDaOficina } from "./regras";
+import {
+  aConferir,
+  descricaoDoVeiculo,
+  etapaDa,
+  type CotacaoVista,
+  type LojaVista,
+  type LojasDaOficina,
+} from "./regras";
 import { useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, InformarCidade, PilulaEtapa, haQuanto } from "./ui";
 
@@ -20,6 +27,7 @@ export function ListaCotacoes() {
   const { dados: cotacoes, semConexao } = useAoVivo<CotacaoVista[]>("/api/peca-peca/cotacoes", 5000);
   const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojas = daOficina?.lojas ?? null;
+  const paraConferir = (cotacoes ?? []).filter((c) => etapaDa(c) === "CONFERIR");
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -37,6 +45,26 @@ export function ListaCotacoes() {
       <AvisoSemConexao ativo={semConexao} />
       {daOficina && (!daOficina.cidade || !daOficina.estado) && (
         <InformarCidade cidadeAtual={daOficina.cidade} onSalva={recarregarLojas} />
+      )}
+
+      {/* A loja marcou "entregue": só a oficina fecha a entrega, conferindo as peças. */}
+      {paraConferir.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-atencao-linha bg-atencao-fraco p-4">
+          <p className="text-sm font-semibold text-atencao">Peças entregues pela loja: confira e confirme</p>
+          <ul className="space-y-1">
+            {paraConferir.map((c) => (
+              <li key={c.id}>
+                <Link href={`/peca-peca/${c.id}`} className="text-sm font-medium text-tinta underline-offset-2 hover:underline">
+                  #{c.numero} · {descricaoDoVeiculo(c.veiculo)} ·{" "}
+                  {c.envios
+                    .filter(aConferir)
+                    .map((e) => e.lojaNome)
+                    .join(" e ")}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <section className="space-y-3">

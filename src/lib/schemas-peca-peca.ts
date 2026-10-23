@@ -31,11 +31,13 @@ const inteiro = (rotulo: string, min: number, max: number) =>
 export const cotacaoCriarSchema = z.object({
   veiculo: z.object({
     placa: texto("Placa", LIMITES.identidade),
-    marca: texto("Marca", LIMITES.nomeCurto),
+    // O balconista precisa dos quatro para acertar a aplicação.
+    marca: obrigatorio("Marca", LIMITES.nomeCurto),
     modelo: obrigatorio("Modelo", LIMITES.nomeCurto),
-    ano: texto("Ano", 20),
-    motor: texto("Motor", LIMITES.nomeCurto),
+    ano: obrigatorio("Ano", 20),
+    motor: obrigatorio("Motor", LIMITES.nomeCurto),
   }),
+  observacao: texto("Observação", LIMITES.observacao),
   /** Carro já cadastrado na oficina, achado pela placa. */
   veiculoId: idNulavel("Veículo").optional(),
   pecas: z
@@ -57,6 +59,9 @@ export const cotacaoAlterarSchema = z.object({
   venda: z.object({ pecaId: id("Peça"), valor: dinheiroNulavel("Preço de venda") }).optional(),
   menorPreco: z.literal(true).optional(),
 });
+
+/** A oficina confirma que as peças de uma loja do pedido chegaram. */
+export const cotacaoRecebidoSchema = z.object({ envioId: id("Loja do pedido") });
 
 export const cotacaoOrcamentoSchema = z.object({
   clienteNome: nulavel("Nome do cliente", LIMITES.nome).optional(),

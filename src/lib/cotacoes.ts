@@ -35,6 +35,7 @@ function vista(c: CotacaoDoBanco, nomesDasLojas: Map<string, string>): CotacaoVi
     numero: c.numero,
     criadaEm: c.createdAt.toISOString(),
     veiculo: { placa: c.placa ?? "", marca: c.marca ?? "", modelo: c.modelo, ano: c.ano ?? "", motor: c.motor ?? "" },
+    observacao: c.observacao ?? "",
     clienteId: c.clienteId,
     veiculoId: c.veiculoId,
     clienteNome: c.cliente?.nome ?? null,
@@ -54,6 +55,7 @@ function vista(c: CotacaoDoBanco, nomesDasLojas: Map<string, string>): CotacaoVi
       lojaNome: nomesDasLojas.get(e.lojaId) ?? "Loja",
       respondidaEm: e.respondidaEm?.toISOString() ?? null,
       entrega: ehEtapaEntrega(e.entrega) ? e.entrega : null,
+      oficinaRecebeuEm: e.oficinaRecebeuEm?.toISOString() ?? null,
       ofertas: e.ofertas.map((o) => ({ id: o.id, pecaId: o.pecaId, marca: o.marca, preco: o.preco, prazoMin: o.prazoMin })),
     })),
   };
