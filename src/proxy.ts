@@ -114,8 +114,9 @@ function comRota(request: NextRequest) {
 
 export const config = {
   // Tudo, menos os arquivos que o próprio Next serve e os estáticos da pasta public
-  // (a logo aparece na tela de login, que é pública por definição).
+  // (a logo aparece na tela de login, que é pública por definição). O `sw.js` também:
+  // o navegador recusa service worker que redireciona, e o login o registra sem sessão.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|webp|svg|ico|txt|xml|webmanifest)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js$|.*\\.(?:png|jpe?g|gif|webp|svg|ico|txt|xml|webmanifest)$).*)",
   ],
 };

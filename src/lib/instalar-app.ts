@@ -12,5 +12,9 @@ export const EVENTO_INSTALAR = "boxos:instalar";
  * antes de a tela terminar de montar — ou numa tela que não é o Início. O aviso fica
  * guardado na janela até alguém tocar em "Instalar". O `preventDefault` segura a
  * barrinha do próprio Chrome no Android, para o convite ser um só: o do boxOS.
+ *
+ * Também registra o service worker (public/sw.js): sem ele, o Chrome do celular nunca
+ * dá esse aviso — só deixa instalar pelo menu ⋮. Depois do `load`, para não disputar
+ * a rede com a primeira tela.
  */
-export const SCRIPT_INSTALAR = `(function(){addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__boxosInstalar=e;dispatchEvent(new Event("${EVENTO_INSTALAR}"))});addEventListener("appinstalled",function(){window.__boxosInstalar=null;window.__boxosInstalado=true;dispatchEvent(new Event("${EVENTO_INSTALAR}"))})})();`;
+export const SCRIPT_INSTALAR = `(function(){addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__boxosInstalar=e;dispatchEvent(new Event("${EVENTO_INSTALAR}"))});addEventListener("appinstalled",function(){window.__boxosInstalar=null;window.__boxosInstalado=true;dispatchEvent(new Event("${EVENTO_INSTALAR}"))});if("serviceWorker"in navigator){addEventListener("load",function(){navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).catch(function(){})})}})();`;

@@ -14,17 +14,15 @@ import { Instalar } from "./Icones";
  * de endereço, que ninguém procura. Aqui o convite vem do próprio boxOS:
  *
  *   Chrome e Edge (Android, Windows)   o navegador avisa que dá para instalar, e o botão
- *                                      "Instalar" abre a janela oficial dele;
- *   Android, antes do aviso            o convite aparece do mesmo jeito, e o botão mostra
- *                                      o caminho pelos três pontinhos (ver abaixo);
+ *                                      "Instalar" abre a janela oficial dele — um toque;
  *   iPhone e iPad                      o Safari não deixa o site abrir essa janela: o
  *                                      botão mostra o caminho pelo Compartilhar;
  *   o resto (Firefox, Instagram...)    nada aparece.
  *
- * No celular o Chrome só avisa depois de a pessoa tocar na página e ficar nela uns
- * 30 segundos — o mecânico já saiu do Início antes disso, e o convite nunca aparecia.
- * Por isso no Android ele não espera o aviso: se ele já chegou, "Instalar" abre a
- * janela do Chrome; se não, ensina o menu ⋮.
+ * No Android o convite só aparece com o aviso do Chrome: o dono pediu o botão que
+ * instala, não uma tela ensinando a instalar. O aviso depende do service worker
+ * (public/sw.js) e de a pessoa já ter usado o site um pouco — toque e uns 30 segundos.
+ * Sem ele, o passo a passo do menu ⋮ fica só no item "Instalar o boxOS" do menu.
  *
  * O aviso do navegador é guardado pelo `SCRIPT_INSTALAR` (lib/instalar-app), no `<head>`.
  */
@@ -146,7 +144,10 @@ export function useInstalarApp() {
   }, []);
 
   return {
+    /** Dá para instalar de algum jeito: o item do menu aparece. */
     disponivel: situacao === "navegador" || situacao === "iphone" || situacao === "android",
+    /** Vale o convite do Início: instala com um toque, ou é iPhone (que não tem outro jeito). */
+    convidar: situacao === "navegador" || situacao === "iphone",
     instalar,
     explicacao: explicando ? (
       <ModalDeAjuda ajuda={explicando} onFechar={() => setExplicando(null)} />
@@ -156,7 +157,9 @@ export function useInstalarApp() {
 
 /* ------------------------------------------------------------------- Convite */
 
-const CHAVE_DISPENSA = "boxos:instalar-dispensado";
+// "v2": na primeira versão, ler o passo a passo do Android contava como "Agora não" e
+// escondia o convite por 30 dias — justo de quem agora pode instalar com um toque.
+const CHAVE_DISPENSA = "boxos:instalar-dispensado:v2";
 
 /** Depois de um "Agora não", o convite some deste aparelho por este tempo. */
 const PAUSA_MS = 30 * 24 * 60 * 60_000;
@@ -188,7 +191,7 @@ function lembrarDispensa() {
  * Quem mudar de ideia acha "Instalar o boxOS" no menu.
  */
 export function ConviteInstalar() {
-  const { disponivel, instalar, explicacao } = useInstalarApp();
+  const { convidar, instalar, explicacao } = useInstalarApp();
   const tituloId = useId();
   // Começa escondido: só no navegador dá para saber se a pessoa já dispensou.
   const [dispensado, setDispensado] = useState(true);
@@ -204,7 +207,7 @@ export function ConviteInstalar() {
 
   async function aoInstalar() {
     const resultado = await instalar();
-    // Recusou a janela do navegador ou já leu o passo a passo do menu: o convite
+    // Recusou a janela do navegador ou já leu o passo a passo do iPhone: o convite
     // cumpriu o papel. Quem aceitou não precisa: a instalação já o esconde.
     if (resultado !== "aceitou") agoraNao();
   }
@@ -212,9 +215,9 @@ export function ConviteInstalar() {
   return (
     <>
       {/* Espaço no fim da página para os últimos cartões poderem subir acima do convite. */}
-      {disponivel && !dispensado && <div aria-hidden="true" className="h-40" />}
+      {convidar && !dispensado && <div aria-hidden="true" className="h-40" />}
 
-      {disponivel && !dispensado && (
+      {convidar && !dispensado && (
         <aside
           aria-labelledby={tituloId}
           className="no-print fixed inset-x-4 bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px)+0.75rem)] z-20 rounded-2xl border border-linha bg-superficie p-4 shadow-xl md:inset-x-auto md:bottom-6 md:right-6 md:w-96"
