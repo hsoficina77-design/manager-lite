@@ -92,6 +92,15 @@ const TELAS_DO_PECA_PECA = [
 ];
 
 /**
+ * Tela que só existe no Peça Peça — balcão, painel e convite da loja, cadastro e boas-
+ * vindas. Enquanto o Peça Peça não tem endereço próprio, elas moram no do boxOS, mas
+ * continuam com a cara do Peça Peça e sem o menu de quem estiver logado.
+ */
+export function ehTelaDoPecaPeca(pathname: string): boolean {
+  return comecaCom(pathname, TELAS_SO_DO_PECA_PECA);
+}
+
+/**
  * Endereço para onde a tela deve ir, quando foi aberta no produto errado. `null` = fica.
  * Só desvia quando o outro endereço está configurado — sem `PECA_PECA_URL`, o boxOS
  * serve tudo.

@@ -5,13 +5,12 @@ import { EVENTO_INSTALAR } from "@/lib/instalar-app";
 import { ModalDeAjuda, type TextoDeAjuda } from "./Ajuda";
 import { Botao } from "./Botao";
 import { Instalar } from "./Icones";
-import { useProduto } from "@/components/ProdutoProvider";
 
 /**
  * Instalar o boxOS no aparelho: um ícone na tela do celular ou na área de trabalho, que
  * abre o boxOS direto, sem a barra do navegador.
  *
- * O boxOS já era instalável (ver app/manifest.ts), mas só por um ícone pequeno na barra
+ * O boxOS já era instalável (ver app/boxos.webmanifest), mas só por um ícone pequeno na barra
  * de endereço, que ninguém procura. Aqui o convite vem do próprio boxOS:
  *
  *   Chrome e Edge (Android, Windows)   o navegador avisa que dá para instalar, e o botão
@@ -121,11 +120,13 @@ type Resultado = "aceitou" | "recusou" | "explicou";
  *
  * `explicacao` é a janela do passo a passo (iPhone, ou Android sem o aviso do Chrome):
  * quem usa o hook a coloca na tela.
+ *
+ * `app` é o da moldura, não o do endereço: enquanto o Peça Peça mora no endereço do
+ * boxOS, a loja instala o Peça Peça mesmo assim (ver app/pecapeca.webmanifest).
  */
-export function useInstalarApp() {
+export function useInstalarApp(app: "boxOS" | "Peça Peça" = "boxOS") {
   const situacao = useSyncExternalStore(assinar, situacaoAgora, () => "indisponivel" as const);
   const [explicando, setExplicando] = useState<TextoDeAjuda | null>(null);
-  const app = useProduto() === "peca-peca" ? "Peça Peça" : "boxOS";
 
   const instalar = useCallback(async (): Promise<Resultado> => {
     const pedido = window.__boxosInstalar;

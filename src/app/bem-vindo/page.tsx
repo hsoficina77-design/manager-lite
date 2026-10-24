@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUsuarioAtual } from "@/lib/auth";
+import { getContaLojaAtual } from "@/lib/conta-loja";
 import { cadastroPecaPecaAberto } from "@/lib/sistema";
 import { linkWhatsappBoxOS } from "@/lib/plano";
 import { urlPecaPeca } from "@/lib/produto";
@@ -9,6 +10,9 @@ import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 
 // A porta de entrada do Peça Peça: o "/" do endereço dele para quem ainda não entrou
 // (o proxy reescreve para cá). Pública e curta — o que é, como funciona, criar conta.
+//
+// No endereço do boxOS é também onde abre o Peça Peça instalado (pecapeca.webmanifest):
+// quem já entrou segue direto para a sua tela, como no "/" do endereço próprio.
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +44,7 @@ const PASSOS = [
 
 export default async function BemVindoPage() {
   if (await getUsuarioAtual()) redirect("/peca-peca");
+  if (await getContaLojaAtual()) redirect("/loja");
 
   const contato = linkWhatsappBoxOS("Olá! Tenho uma autopeça e quero receber cotações pelo Peça Peça.");
 

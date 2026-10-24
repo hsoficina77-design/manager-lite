@@ -61,7 +61,7 @@ export function Moldura({
   const pathname = usePathname();
   const router = useRouter();
   const pedirSaida = usePedirSaida();
-  const instalacao = useInstalarApp();
+  const instalacao = useInstalarApp("Peça Peça");
   const [aberta, setAberta] = useState(false);
   const [saindo, setSaindo] = useState(false);
 

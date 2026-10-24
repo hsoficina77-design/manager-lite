@@ -16,7 +16,7 @@ import { contarPendencias } from "@/lib/pendencias";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
 import { HEADER_ROTA, ehRotaDaLoja, ehRotaDoBalcao, ehRotaPublica } from "@/lib/permissoes";
-import { urlBoxOS } from "@/lib/produto";
+import { ehTelaDoPecaPeca, urlBoxOS, type Produto } from "@/lib/produto";
 import { produtoDaRequisicao } from "@/lib/produto-servidor";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
@@ -67,18 +67,34 @@ function icones(pasta: "/brand" | "/brand-pecapeca"): Metadata["icons"] {
   };
 }
 
-// A aba e o ícone são do produto do endereço (boxOS ou Peça Peça); a logo da oficina
-// fica só nos documentos. Logado, o nome da oficina vai na frente para distinguir abas
-// de oficinas diferentes.
+/**
+ * A cara da tela: a do produto do endereço — e a do Peça Peça, em qualquer endereço,
+ * nas telas que só existem nele e para quem só tem o Peça Peça. Enquanto o Peça Peça
+ * não tem domínio próprio, é o que impede o convite da loja de sair laranja — e a loja
+ * de instalar o boxOS no lugar do Peça Peça.
+ */
+function caraDaTela(
+  produto: Produto,
+  rota: string,
+  usuario: Awaited<ReturnType<typeof getUsuarioAtual>>
+): Produto {
+  if (produto === "peca-peca" || ehTelaDoPecaPeca(rota)) return "peca-peca";
+  return usuario && !usuario.usaBoxOS ? "peca-peca" : "boxos";
+}
+
+// A aba, o ícone e o app que o navegador instala são do produto da tela (boxOS ou Peça
+// Peça); a logo da oficina fica só nos documentos. Logado, o nome da oficina vai na
+// frente para distinguir abas de oficinas diferentes.
 export async function generateMetadata(): Promise<Metadata> {
-  const [usuario, produto] = await Promise.all([getUsuarioAtual(), produtoDaRequisicao()]);
+  const [usuario, produto, cabecalhos] = await Promise.all([getUsuarioAtual(), produtoDaRequisicao(), headers()]);
   const config = usuario ? await configuracaoDaSessao(usuario) : null;
-  if (produto === "peca-peca") {
+  if (caraDaTela(produto, cabecalhos.get(HEADER_ROTA) ?? "", usuario) === "peca-peca") {
     return {
       title: config ? `${nomeDoMenu(config)} · Peça Peça` : "Peça Peça",
       applicationName: "Peça Peça",
       description: "Peça Peça — cotação de peças nas autopeças da região.",
       icons: icones("/brand-pecapeca"),
+      manifest: "/pecapeca.webmanifest",
     };
   }
   return {
@@ -86,6 +102,7 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: "boxOS",
     description: "boxOS — gestão para oficinas mecânicas.",
     icons: icones("/brand"),
+    manifest: "/boxos.webmanifest",
   };
 }
 
@@ -103,6 +120,7 @@ export default async function RootLayout({
   // produto para todo mundo (globals.css).
   const config = await configuracaoDaSessao(usuario);
   const rota = cabecalhos.get(HEADER_ROTA) ?? "";
+  const cara = caraDaTela(produto, rota, usuario);
 
   // Painel da autopeça: conta própria, separada da oficina (lib/conta-loja.ts).
   const daLoja = ehRotaDaLoja(rota);
@@ -132,13 +150,17 @@ export default async function RootLayout({
   // A moldura: o Peça Peça tem a dele — no endereço dele, e para quem só tem o Peça
   // Peça em qualquer endereço. As telas de login, convite e primeiro acesso caem aqui
   // sem usuário e não ganham menu. O balcão antigo, por link, também não: é a tela de
-  // outra empresa, mesmo quando o dono da oficina a abre noutra aba para testar.
+  // outra empresa, mesmo quando o dono da oficina a abre noutra aba para testar. Nem as
+  // telas abertas do Peça Peça (convite da loja, cadastro, boas-vindas): quem as abre
+  // logado como plataforma ou oficina vê o mesmo que o dono da loja verá.
   const conteudo = ehRotaDoBalcao(rota) ? (
     children
   ) : contaLoja ? (
     <MolduraDaLoja loja={contaLoja.loja.nome} pessoa={contaLoja}>
       {children}
     </MolduraDaLoja>
+  ) : ehTelaDoPecaPeca(rota) ? (
+    children
   ) : usuario?.administraPlataforma ? (
     <AdminComMenu usuario={usuario}>{children}</AdminComMenu>
   ) : usuario && (produto === "peca-peca" || !usuario.usaBoxOS) ? (
@@ -159,14 +181,15 @@ export default async function RootLayout({
   );
 
   return (
-    <html lang="pt-BR" className={poppins.variable} data-produto={produto}>
+    // `data-conta-loja`: com que conta a aba do painel da loja nasceu (ver `buscar`).
+    <html lang="pt-BR" className={poppins.variable} data-produto={cara} data-conta-loja={contaLoja?.id}>
       <head>
         {/* Claro ou escuro antes da primeira pintura — senão a tela nasce
             branca e pisca para escura no primeiro render. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
         {/* Guarda o "pode instalar" do navegador, que chega uma vez só e às vezes
             antes do React — o convite do Início e o menu leem daqui. */}
-        <script dangerouslySetInnerHTML={{ __html: scriptInstalar(produto) }} />
+        <script dangerouslySetInnerHTML={{ __html: scriptInstalar(cara) }} />
       </head>
       {/* `100dvh` em vez de `100vh`: no iOS a unidade antiga conta a altura com a
           barra de endereço escondida, e o fim de cada tela ficava cortado. */}

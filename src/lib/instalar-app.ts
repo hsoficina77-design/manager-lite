@@ -19,6 +19,10 @@ export const EVENTO_INSTALAR = "boxos:instalar";
  * só deixa instalar pelo menu ⋮. Depois do `load`, para não disputar a rede com a
  * primeira tela. Cada produto tem o seu (public/sw.js e public/sw-pecapeca.js): o que
  * muda é a tela "Sem internet", com a marca do app instalado.
+ *
+ * No mesmo endereço, os dois disputam a mesma vaga (o navegador guarda um service worker
+ * por endereço): fica o da última tela aberta. Só quem usa os dois produtos no mesmo
+ * navegador vê a troca, e o único efeito é a marca da tela "Sem internet".
  */
 export function scriptInstalar(produto: Produto): string {
   const sw = produto === "peca-peca" ? "/sw-pecapeca.js" : "/sw.js";
