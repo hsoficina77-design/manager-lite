@@ -31,8 +31,11 @@ export default function LoginForm({ destino }: { destino: string }) {
         setSenha("");
         return;
       }
+      // Quem trabalha numa autopeça vai para o painel da loja — a não ser que já viesse
+      // para uma tela dele.
+      const para = json.tipo === "loja" && !destino.startsWith("/loja") ? "/loja" : destino;
       // `refresh` antes do `push` para o layout já vir com o usuário carregado.
-      router.replace(destino);
+      router.replace(para);
       router.refresh();
     } catch {
       setErro("Sem conexão com o servidor. Verifique a internet e tente de novo.");

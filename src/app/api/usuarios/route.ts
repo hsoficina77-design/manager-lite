@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { guardaApi } from "@/lib/auth";
 import { hashSenha, validarSenha } from "@/lib/senha";
 import { ehPapelValido } from "@/lib/permissoes";
+import { emailEmUso } from "@/lib/sistema";
 
 // `senhaHash` nunca sai daqui.
 const CAMPOS = {
@@ -43,6 +44,12 @@ export async function POST(request: Request) {
     }
     const problema = validarSenha(senha);
     if (problema) return NextResponse.json({ error: problema }, { status: 400 });
+
+    // O índice único só cobre as oficinas; o e-mail também não pode ser de alguém de
+    // autopeça (a tela de login procura nas duas).
+    if (await emailEmUso(email.trim().toLowerCase())) {
+      return NextResponse.json({ error: "Este e-mail já é usado por outro acesso no sistema" }, { status: 409 });
+    }
 
     // Dono não precisa de checkbox (já tem tudo); operador nasce com o que for
     // marcado no formulário, e sem marcação nasce sem financeiro nem exclusão. A

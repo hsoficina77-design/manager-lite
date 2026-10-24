@@ -86,7 +86,10 @@ export type DadosDaLoja = {
 export type LojaDoPainel = LojaVista & {
   telefone: string | null;
   ativa: boolean;
+  /** Link antigo do balcão. Só vale enquanto a loja não tem conta (`contas` zero). */
   link: string;
+  /** Pessoas da loja com login ativo. */
+  contas: number;
   criadaEm: string;
   cotacoes: number;
   respondidas: number;
@@ -121,7 +124,7 @@ export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
         ativa: true,
         tokenBalcao: true,
         createdAt: true,
-        _count: { select: { envios: true } },
+        _count: { select: { envios: true, usuarios: { where: { ativo: true } } } },
       },
     }),
     prisma.cotacaoLoja.groupBy({ by: ["lojaId"], where: { respondidaEm: { not: null } }, _count: { _all: true } }),
@@ -133,6 +136,7 @@ export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
   return lojas.map(({ tokenBalcao, createdAt, _count, ...l }) => ({
     ...l,
     link: `/balcao/${tokenBalcao}`,
+    contas: _count.usuarios,
     criadaEm: createdAt.toISOString(),
     cotacoes: _count.envios,
     respondidas: contar(respondidas, l.id),
@@ -174,15 +178,25 @@ export async function trocarLinkDaLoja(id: string) {
   return prisma.loja.update({ where: { id }, data: { tokenBalcao: novoToken() }, select: { id: true } });
 }
 
+/**
+ * A loja do link antigo do balcão (`/balcao/<token>`), da época em que a loja não tinha
+ * conta. O link só vale enquanto a loja não tem ninguém com login: a partir da primeira
+ * conta, `comLogin` vem verdadeiro e as rotas do link recusam — o balcão passa a ser o
+ * painel da loja, com acesso por pessoa.
+ */
 export async function lojaPeloToken(token: string | undefined | null) {
   // Token de verdade tem 32 caracteres; qualquer coisa muito diferente nem vai ao banco.
   if (!token || token.length < 16 || token.length > 64) return null;
   const loja = await prisma.loja.findUnique({
     where: { tokenBalcao: token },
-    select: { ...CAMPOS_DA_LOJA, ativa: true },
+    select: { ...CAMPOS_DA_LOJA, ativa: true, _count: { select: { usuarios: { where: { ativo: true } } } } },
   });
-  return loja?.ativa ? loja : null;
+  if (!loja?.ativa) return null;
+  const { _count, ...resto } = loja;
+  return { ...resto, comLogin: _count.usuarios > 0 };
 }
+
+export { MENSAGEM_BALCAO_COM_LOGIN } from "@/components/peca-peca/regras";
 
 // ─── Caixa de entrada ───────────────────────────────────────────────────────
 
@@ -273,7 +287,9 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
   };
 }
 
-export async function caixaDaLoja(loja: NonNullable<Awaited<ReturnType<typeof lojaPeloToken>>>): Promise<CaixaDoBalcao> {
+export async function caixaDaLoja(
+  loja: Pick<LojaVista, "id" | "nome" | "cidade" | "entregaMin" | "entregaMax">
+): Promise<CaixaDoBalcao> {
   const envios = await lerEnvios({ lojaId: loja.id });
   const nomes = await nomesDasOficinas([...new Set(envios.map((e) => e.oficinaId))]);
   return {
@@ -304,7 +320,9 @@ export type ResultadoDoBalcao = "ok" | "nao-encontrado" | "travada" | "sem-pedid
 export async function responderEnvio(
   lojaId: string,
   envioId: string,
-  itens: Record<string, (OfertaNova & { id?: string | null })[]>
+  itens: Record<string, (OfertaNova & { id?: string | null })[]>,
+  /** Quem respondeu, no painel com login; nulo no link antigo. */
+  respondidoPor: string | null = null
 ): Promise<ResultadoDoBalcao> {
   return prisma.$transaction(async (tx) => {
     const envio = await tx.cotacaoLoja.findFirst({
@@ -353,7 +371,7 @@ export async function responderEnvio(
     if (precoMudou.length > 0) {
       await tx.cotacaoPeca.updateMany({ where: { ofertaId: { in: precoMudou } }, data: { vendaUnit: null } });
     }
-    await tx.cotacaoLoja.update({ where: { id: envio.id }, data: { respondidaEm: new Date() } });
+    await tx.cotacaoLoja.update({ where: { id: envio.id }, data: { respondidaEm: new Date(), respondidoPor } });
     return "ok";
   });
 }
@@ -410,4 +428,110 @@ export async function avancarEntrega(
       .catch((err: unknown) => console.error("Falha ao avisar a oficina da entrega:", err));
   }
   return proxima;
+}
+
+// ─── Resumo da loja ─────────────────────────────────────────────────────────
+//
+// O que o dono da autopeça vê do próprio balcão: quantas cotações chegaram, quantas a
+// loja respondeu e em quanto tempo, quantas viraram pedido e quanto valeram. Tudo a
+// partir dos envios para esta loja — nada de outra loja nem de dentro da oficina.
+
+const MESES_DO_RESUMO = 6;
+
+export type MesDoResumo = {
+  /** "2026-10" */
+  mes: string;
+  recebidas: number;
+  respondidas: number;
+  pedidos: number;
+  /** Soma das peças pedidas à loja (preço da loja × quantidade). */
+  valor: number;
+};
+
+export type ResumoDaLoja = {
+  /** Últimos 30 dias. */
+  recebidas: number;
+  respondidas: number;
+  pedidos: number;
+  valor: number;
+  /** Mediana, em minutos, entre a cotação chegar e a loja responder. */
+  minutosParaResponder: number | null;
+  meses: MesDoResumo[];
+  /** Quem respondeu nos últimos 30 dias (no painel com login). */
+  quemRespondeu: { nome: string; respostas: number }[];
+};
+
+export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
+  const agora = new Date();
+  const inicio = new Date(agora.getFullYear(), agora.getMonth() - (MESES_DO_RESUMO - 1), 1);
+  const ha30dias = new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [envios, pessoas] = await Promise.all([
+    prisma.cotacaoLoja.findMany({
+      where: { lojaId, createdAt: { gte: inicio } },
+      select: {
+        createdAt: true,
+        respondidaEm: true,
+        entrega: true,
+        respondidoPor: true,
+        ofertas: { select: { id: true, preco: true } },
+        cotacao: { select: { pecas: { select: { ofertaId: true, quantidade: true } } } },
+      },
+    }),
+    prisma.usuarioLoja.findMany({ where: { lojaId }, select: { id: true, nome: true } }),
+  ]);
+
+  const valorDoPedido = (e: (typeof envios)[number]) => {
+    if (!e.entrega) return 0;
+    const preco = new Map(e.ofertas.map((o) => [o.id, o.preco]));
+    return e.cotacao.pecas.reduce((s, p) => s + (p.ofertaId ? (preco.get(p.ofertaId) ?? 0) * p.quantidade : 0), 0);
+  };
+
+  const meses = new Map<string, MesDoResumo>();
+  for (let i = 0; i < MESES_DO_RESUMO; i++) {
+    const d = new Date(inicio.getFullYear(), inicio.getMonth() + i, 1);
+    const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    meses.set(mes, { mes, recebidas: 0, respondidas: 0, pedidos: 0, valor: 0 });
+  }
+
+  let recebidas = 0;
+  let respondidas = 0;
+  let pedidos = 0;
+  let valor = 0;
+  const tempos: number[] = [];
+  const respostasPorPessoa = new Map<string, number>();
+
+  for (const e of envios) {
+    const mes = meses.get(`${e.createdAt.getFullYear()}-${String(e.createdAt.getMonth() + 1).padStart(2, "0")}`);
+    const v = valorDoPedido(e);
+    if (mes) {
+      mes.recebidas += 1;
+      if (e.respondidaEm) mes.respondidas += 1;
+      if (e.entrega) mes.pedidos += 1;
+      mes.valor += v;
+    }
+    if (e.createdAt < ha30dias) continue;
+    recebidas += 1;
+    if (e.respondidaEm) {
+      respondidas += 1;
+      tempos.push((e.respondidaEm.getTime() - e.createdAt.getTime()) / 60000);
+    }
+    if (e.entrega) pedidos += 1;
+    valor += v;
+    if (e.respondidoPor) respostasPorPessoa.set(e.respondidoPor, (respostasPorPessoa.get(e.respondidoPor) ?? 0) + 1);
+  }
+
+  tempos.sort((a, b) => a - b);
+  const nomes = new Map(pessoas.map((p) => [p.id, p.nome]));
+  return {
+    recebidas,
+    respondidas,
+    pedidos,
+    valor,
+    minutosParaResponder: tempos.length ? Math.round(tempos[Math.floor(tempos.length / 2)]) : null,
+    meses: [...meses.values()],
+    quemRespondeu: [...respostasPorPessoa.entries()]
+      .map(([id, respostas]) => ({ nome: nomes.get(id) ?? "Alguém da loja", respostas }))
+      .sort((a, b) => b.respostas - a.respostas),
+  };
 }

@@ -104,16 +104,46 @@ export const ROTAS_PUBLICAS = [
   // Avisos do gateway de pagamento. Sem cookie, mas com segredo e assinatura próprios,
   // conferidos na rota antes de qualquer coisa.
   "/api/webhooks",
-  // Balcão do Peça Peça: a autopeça não tem conta no boxOS. O segredo é o link
-  // (`/balcao/<token>`), conferido em toda rota por `lojaPeloToken`.
+  // Balcão antigo do Peça Peça, por link secreto (`/balcao/<token>`), conferido em toda
+  // rota por `lojaPeloToken`. Só vale para loja que ainda não tem conta (ver balcao.ts).
   "/balcao",
   "/api/balcao",
+  // Peça Peça: a página de boas-vindas e o cadastro aberto da oficina.
+  "/bem-vindo",
+  "/cadastro",
+  "/api/cadastro",
+  // Primeiro acesso de quem trabalha numa autopeça: o convite é o segredo.
+  "/acesso-loja",
+  "/api/acesso-loja",
 ];
 
-/** Telas do balcão da loja: abrem sem o menu do boxOS, mesmo com alguém logado. */
+/** Telas do balcão antigo (por link): abrem sem menu nenhum, mesmo com alguém logado. */
 export function ehRotaDoBalcao(pathname: string): boolean {
   return pathname === "/balcao" || pathname.startsWith("/balcao/");
 }
+
+/**
+ * Painel da autopeça. Não usa a sessão da oficina: tem cookie próprio (`pp_loja`),
+ * conferido pelo proxy e, com o banco, por `guardaLoja`/`exigirContaLoja`.
+ */
+export const ROTAS_DA_LOJA = ["/loja", "/api/loja"];
+
+export function ehRotaDaLoja(pathname: string): boolean {
+  return ROTAS_DA_LOJA.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));
+}
+
+/**
+ * APIs que a oficina sem boxOS (só Peça Peça) alcança. O resto responde 403 para ela em
+ * `guardaApi` — o boxOS é vendido à parte.
+ */
+const ROTAS_API_SEM_BOXOS = ["/api/peca-peca", "/api/notificacoes", "/api/auth", "/api/boxos"];
+
+export function apiLiberadaSemBoxOS(pathname: string): boolean {
+  return ROTAS_API_SEM_BOXOS.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`));
+}
+
+/** Código que a API devolve junto com o 403 de quem não tem boxOS. */
+export const CODIGO_SEM_BOXOS = "SEM_BOXOS";
 
 /** Cabeçalho com a rota atual, escrito pelo proxy e lido pelo layout raiz. */
 export const HEADER_ROTA = "x-rota-atual";

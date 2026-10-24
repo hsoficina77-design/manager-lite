@@ -8,17 +8,22 @@ import { UsuarioProvider } from "@/components/UsuarioProvider";
 import { AvisosProvider } from "@/components/ui/Avisos";
 import { SaidaSeguraProvider } from "@/components/ui/SaidaSegura";
 import { SCRIPT_TEMA } from "@/components/ui/Tema";
-import { SCRIPT_INSTALAR } from "@/lib/instalar-app";
+import { scriptInstalar } from "@/lib/instalar-app";
 import { getUsuarioAtual } from "@/lib/auth";
+import { getContaLojaAtual } from "@/lib/conta-loja";
 import { bancoDaOficina } from "@/lib/db-oficina";
 import { contarPendencias } from "@/lib/pendencias";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
-import { HEADER_ROTA, ehRotaDoBalcao, ehRotaPublica } from "@/lib/permissoes";
+import { HEADER_ROTA, ehRotaDaLoja, ehRotaDoBalcao, ehRotaPublica } from "@/lib/permissoes";
+import { urlBoxOS } from "@/lib/produto";
+import { produtoDaRequisicao } from "@/lib/produto-servidor";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
 import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
 import { VoltaAoInicio } from "@/components/VoltaAoInicio";
+import { ProdutoProvider } from "@/components/ProdutoProvider";
+import { MolduraDaLoja, MolduraDaOficina } from "@/components/peca-peca/Moldura";
 import { vePecaPeca } from "@/lib/peca-peca";
 import "./globals.css";
 
@@ -50,23 +55,37 @@ async function configuracaoDaSessao(usuario: Awaited<ReturnType<typeof getUsuari
   return getConfiguracao(usuario ? bancoDaOficina(usuario.oficinaId) : null);
 }
 
-// A aba e o ícone são do sistema (boxOS); a logo da oficina fica só nos documentos.
-// Logado, o nome da oficina vai na frente para distinguir abas de oficinas diferentes.
+/** Os ícones da aba e da tela inicial do celular, de cada produto. */
+function icones(pasta: "/brand" | "/brand-pecapeca"): Metadata["icons"] {
+  return {
+    icon: [
+      { url: `${pasta}/favicon_16.png`, sizes: "16x16", type: "image/png" },
+      { url: `${pasta}/favicon_32.png`, sizes: "32x32", type: "image/png" },
+      { url: `${pasta}/favicon_48.png`, sizes: "48x48", type: "image/png" },
+    ],
+    apple: { url: `${pasta}/favicon_180.png`, sizes: "180x180", type: "image/png" },
+  };
+}
+
+// A aba e o ícone são do produto do endereço (boxOS ou Peça Peça); a logo da oficina
+// fica só nos documentos. Logado, o nome da oficina vai na frente para distinguir abas
+// de oficinas diferentes.
 export async function generateMetadata(): Promise<Metadata> {
-  const usuario = await getUsuarioAtual();
+  const [usuario, produto] = await Promise.all([getUsuarioAtual(), produtoDaRequisicao()]);
   const config = usuario ? await configuracaoDaSessao(usuario) : null;
+  if (produto === "peca-peca") {
+    return {
+      title: config ? `${nomeDoMenu(config)} · Peça Peça` : "Peça Peça",
+      applicationName: "Peça Peça",
+      description: "Peça Peça — cotação de peças nas autopeças da região.",
+      icons: icones("/brand-pecapeca"),
+    };
+  }
   return {
     title: usuario?.administraPlataforma ? "Admin · boxOS" : config ? `${nomeDoMenu(config)} · boxOS` : "boxOS",
     applicationName: "boxOS",
     description: "boxOS — gestão para oficinas mecânicas.",
-    icons: {
-      icon: [
-        { url: "/brand/favicon_16.png", sizes: "16x16", type: "image/png" },
-        { url: "/brand/favicon_32.png", sizes: "32x32", type: "image/png" },
-        { url: "/brand/favicon_48.png", sizes: "48x48", type: "image/png" },
-      ],
-      apple: { url: "/brand/favicon_180.png", sizes: "180x180", type: "image/png" },
-    },
+    icons: icones("/brand"),
   };
 }
 
@@ -79,33 +98,58 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [usuario, cabecalhos] = await Promise.all([getUsuarioAtual(), headers()]);
+  const [usuario, cabecalhos, produto] = await Promise.all([getUsuarioAtual(), headers(), produtoDaRequisicao()]);
   // Nome da oficina de quem entrou, para o menu. As cores não vêm daqui: são as do
-  // boxOS para todo mundo (globals.css).
+  // produto para todo mundo (globals.css).
   const config = await configuracaoDaSessao(usuario);
+  const rota = cabecalhos.get(HEADER_ROTA) ?? "";
+
+  // Painel da autopeça: conta própria, separada da oficina (lib/conta-loja.ts).
+  const daLoja = ehRotaDaLoja(rota);
+  const contaLoja = daLoja ? await getContaLojaAtual() : null;
+  if (daLoja && !contaLoja) redirect(`/login?next=${encodeURIComponent(rota)}`);
 
   // Cookie válido mas sem usuário significa sessão que deixou de existir — acesso
   // desativado ou derrubado pelo dono. O proxy não tem como saber disso (não alcança
   // o banco), então é aqui que essa pessoa é mandada de volta ao login.
-  const rota = cabecalhos.get(HEADER_ROTA) ?? "";
-  if (!usuario && rota && !ehRotaPublica(rota)) {
+  if (!usuario && !daLoja && rota && !ehRotaPublica(rota)) {
     redirect(`/login?next=${encodeURIComponent(rota)}`);
   }
 
   // A conta da plataforma não opera oficina: mora no painel admin. Qualquer outra tela
   // (inclusive o "/" para onde o login manda) leva para lá. As públicas ficam de fora:
   // não são da oficina, e o balcão da loja precisa abrir para quem estiver logado.
-  if (usuario?.administraPlataforma && rota && !ehRotaDoAdmin(rota) && !ehRotaPublica(rota)) {
+  if (usuario?.administraPlataforma && rota && !ehRotaDoAdmin(rota) && !ehRotaPublica(rota) && !daLoja) {
     redirect("/admin");
   }
 
-  // As telas de login, convite e primeiro acesso caem aqui sem usuário — e não devem
-  // ganhar menu lateral nem contagem de pendências. O balcão da loja também não: é a
-  // tela de outra empresa, mesmo quando o dono da oficina a abre noutra aba para testar.
+  // Oficina só do Peça Peça: as telas do boxOS levam à oferta dele; o "/" (Início do
+  // boxOS) leva às cotações.
+  if (usuario && !usuario.usaBoxOS && !daLoja && rota && !ehTelaSemBoxOS(rota)) {
+    redirect(rota === "/" ? "/peca-peca" : "/conheca-o-boxos");
+  }
+
+  // A moldura: o Peça Peça tem a dele — no endereço dele, e para quem só tem o Peça
+  // Peça em qualquer endereço. As telas de login, convite e primeiro acesso caem aqui
+  // sem usuário e não ganham menu. O balcão antigo, por link, também não: é a tela de
+  // outra empresa, mesmo quando o dono da oficina a abre noutra aba para testar.
   const conteudo = ehRotaDoBalcao(rota) ? (
     children
+  ) : contaLoja ? (
+    <MolduraDaLoja loja={contaLoja.loja.nome} pessoa={contaLoja}>
+      {children}
+    </MolduraDaLoja>
   ) : usuario?.administraPlataforma ? (
     <AdminComMenu usuario={usuario}>{children}</AdminComMenu>
+  ) : usuario && (produto === "peca-peca" || !usuario.usaBoxOS) ? (
+    <MolduraDaOficina
+      nome={nomeDoMenu(config)}
+      usuario={usuario}
+      usaBoxOS={usuario.usaBoxOS}
+      urlBoxOS={produto === "peca-peca" ? urlBoxOS() : ""}
+    >
+      {children}
+    </MolduraDaOficina>
   ) : usuario ? (
     <AppComMenu usuario={usuario} config={config}>
       {children}
@@ -115,14 +159,14 @@ export default async function RootLayout({
   );
 
   return (
-    <html lang="pt-BR" className={poppins.variable}>
+    <html lang="pt-BR" className={poppins.variable} data-produto={produto}>
       <head>
         {/* Claro ou escuro antes da primeira pintura — senão a tela nasce
             branca e pisca para escura no primeiro render. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
         {/* Guarda o "pode instalar" do navegador, que chega uma vez só e às vezes
             antes do React — o convite do Início e o menu leem daqui. */}
-        <script dangerouslySetInnerHTML={{ __html: SCRIPT_INSTALAR }} />
+        <script dangerouslySetInnerHTML={{ __html: scriptInstalar(produto) }} />
       </head>
       {/* `100dvh` em vez de `100vh`: no iOS a unidade antiga conta a altura com a
           barra de endereço escondida, e o fim de cada tela ficava cortado. */}
@@ -138,6 +182,7 @@ export default async function RootLayout({
                   podeFinanceiro: usuario.podeFinanceiro,
                   podeExcluir: usuario.podeExcluir,
                   administraPlataforma: usuario.administraPlataforma,
+                  usaBoxOS: usuario.usaBoxOS,
                   plano: {
                     situacao: usuario.situacao,
                     testeAte: usuario.testeAte?.toISOString() ?? null,
@@ -148,10 +193,12 @@ export default async function RootLayout({
               : null
           }
         >
-          <AvisosProvider>
-            {/* Por dentro do menu: o "Sair" da conta também passa pela pergunta. */}
-            <SaidaSeguraProvider>{conteudo}</SaidaSeguraProvider>
-          </AvisosProvider>
+          <ProdutoProvider valor={{ produto, urlBoxOS: produto === "peca-peca" ? urlBoxOS() : "" }}>
+            <AvisosProvider>
+              {/* Por dentro do menu: o "Sair" da conta também passa pela pergunta. */}
+              <SaidaSeguraProvider>{conteudo}</SaidaSeguraProvider>
+            </AvisosProvider>
+          </ProdutoProvider>
         </UsuarioProvider>
       </body>
     </html>
@@ -201,6 +248,14 @@ async function AppComMenu({
 
 function ehRotaDoAdmin(rota: string) {
   return rota === "/admin" || rota.startsWith("/admin/");
+}
+
+/** Telas que a oficina só do Peça Peça abre: as dele, a oferta do boxOS e as públicas. */
+function ehTelaSemBoxOS(rota: string) {
+  return (
+    ehRotaPublica(rota) ||
+    ["/peca-peca", "/conheca-o-boxos"].some((tela) => rota === tela || rota.startsWith(`${tela}/`))
+  );
 }
 
 /** O mesmo esqueleto do app, com o menu do painel admin e sem nada de plano de oficina. */

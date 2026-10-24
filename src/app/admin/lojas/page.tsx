@@ -1,5 +1,6 @@
 import { exigirPlataforma } from "@/lib/auth";
 import { lojasDoPainel } from "@/lib/balcao";
+import { urlPecaPeca } from "@/lib/produto";
 import { Lojas } from "@/components/admin/Lojas";
 import { CabecalhoAdmin } from "@/components/admin/CabecalhoAdmin";
 
@@ -15,7 +16,7 @@ export default async function AdminLojasPage() {
         titulo="Lojas do Peça Peça"
         texto="As autopeças que recebem cotação. Cada oficina vê as lojas que atendem a cidade dela."
       />
-      <Lojas lojas={lojas} />
+      <Lojas lojas={lojas} enderecoPecaPeca={urlPecaPeca() || null} />
     </div>
   );
 }

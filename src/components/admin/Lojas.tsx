@@ -12,12 +12,18 @@ import { Aviso, Campo, Entrada } from "@/components/ui/Campos";
 import { Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
 import { Fechar, Mais } from "@/components/ui/Icones";
+import { Equipe } from "@/components/peca-peca/Equipe";
+import { ACESSOS_DA_PLATAFORMA } from "@/lib/acessos-loja";
 
 // Cadastro das autopeças do Peça Peça — manual, do dono da plataforma.
 //
 // A região de uma loja é a lista de cidades que ela atende. É por ela que cada oficina
 // vê as lojas certas: a oficina de Suzano vê toda loja que tem Suzano na lista, esteja
 // ela em Suzano ou em Ferraz.
+//
+// Quem trabalha na loja entra com login, pela equipe: a plataforma convida o dono, e
+// ele convida os vendedores. O link antigo do balcão só aparece para loja que ainda não
+// tem ninguém com conta.
 
 const chave = (cidade: string) => normalizarBusca(cidade);
 
@@ -34,12 +40,21 @@ type Formulario = {
 
 const FORM_VAZIO: Formulario = { nome: "", sede: null, atende: [], telefone: "", entregaMin: "20", entregaMax: "40" };
 
-export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
+export function Lojas({
+  lojas,
+  enderecoPecaPeca,
+}: {
+  lojas: LojaDoPainel[];
+  /** Onde a loja abre o balcão: o endereço do Peça Peça, quando configurado. */
+  enderecoPecaPeca: string | null;
+}) {
   const router = useRouter();
   const avisar = useAvisar();
   const confirmar = useConfirmar();
   const [filtro, setFiltro] = useState<string | null>(null);
   const [editando, setEditando] = useState<{ loja: LojaDoPainel | null } | null>(null);
+  const [equipeDe, setEquipeDe] = useState<LojaDoPainel | null>(null);
+  const linkCompleto = (l: LojaDoPainel) => `${enderecoPecaPeca ?? window.location.origin}${l.link}`;
 
   // As cidades que aparecem nas regiões, com quantas lojas ativas atendem cada uma.
   const cidades = new Map<string, { nome: string; lojas: number }>();
@@ -74,7 +89,7 @@ export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
 
   async function copiar(l: LojaDoPainel) {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${l.link}`);
+      await navigator.clipboard.writeText(linkCompleto(l));
       avisar(`Link copiado: balcão ${l.nome}`);
     } catch {
       avisar("Não deu para copiar. Abra o balcão e copie o endereço da aba.", "erro");
@@ -126,6 +141,28 @@ export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
         </Botao>
       </div>
 
+      {equipeDe && (
+        <section className="space-y-2 rounded-xl border-2 border-brand-500 bg-superficie-2 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold text-tinta">Equipe da {equipeDe.nome}</p>
+            <Botao
+              variante="secundario"
+              tamanho="denso"
+              onClick={() => {
+                setEquipeDe(null);
+                router.refresh();
+              }}
+            >
+              Fechar
+            </Botao>
+          </div>
+          <p className="text-xs text-tinta-3">
+            Convide o dono da loja: ele entra pelo link, cria a senha e daí convida os vendedores.
+          </p>
+          <Equipe api={`/api/plataforma/lojas/${equipeDe.id}/equipe`} meusAcessos={ACESSOS_DA_PLATAFORMA} />
+        </section>
+      )}
+
       {filtro && (
         <p className="text-sm text-tinta-3">
           Lojas que atendem <strong className="text-tinta-2">{cidades.get(filtro)?.nome}</strong> — é o que uma oficina
@@ -136,7 +173,7 @@ export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
       {lojas.length === 0 ? (
         <Vazio
           titulo="Nenhuma loja cadastrada"
-          texto="Cadastre a primeira autopeça. Ela ganha um link de balcão para mandar ao dono ou ao balconista."
+          texto="Cadastre a primeira autopeça e convide o dono dela pela equipe, no cartão da loja."
           acao={<Botao onClick={() => setEditando({ loja: null })}>Nova loja</Botao>}
         />
       ) : (
@@ -173,17 +210,28 @@ export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
                 {l.respondidas === 1 ? "respondida" : "respondidas"} ·{" "}
                 {l.pedidos} {l.pedidos === 1 ? "pedido" : "pedidos"}
               </p>
+              <p className="text-xs text-tinta-3">
+                {l.contas > 0
+                  ? `Balcão com login: ${l.contas} ${l.contas === 1 ? "pessoa" : "pessoas"} na equipe.`
+                  : "Ainda sem ninguém com login — vale o link antigo do balcão."}
+              </p>
 
               <div className="flex flex-wrap gap-2 border-t border-linha pt-3">
                 <Botao variante="secundario" tamanho="denso" onClick={() => setEditando({ loja: l })}>
                   Editar
                 </Botao>
                 {l.ativa && (
+                  <Botao variante="secundario" tamanho="denso" onClick={() => setEquipeDe(l)}>
+                    Equipe
+                  </Botao>
+                )}
+                {/* O link antigo só enquanto a loja não tem conta: depois dela, o balcão é com login. */}
+                {l.ativa && l.contas === 0 && (
                   <>
-                    <Botao variante="secundario" tamanho="denso" onClick={() => copiar(l)}>
-                      Copiar link do balcão
+                    <Botao variante="fantasma" tamanho="denso" onClick={() => copiar(l)}>
+                      Copiar link antigo
                     </Botao>
-                    <a href={l.link} target="_blank" rel="noopener" className={classesBotao("fantasma", "denso")}>
+                    <a href={linkCompleto(l)} target="_blank" rel="noopener" className={classesBotao("fantasma", "denso")}>
                       Abrir balcão
                     </a>
                     <Botao variante="fantasma" tamanho="denso" onClick={() => trocarLink(l)}>
@@ -215,7 +263,7 @@ export function Lojas({ lojas }: { lojas: LojaDoPainel[] }) {
               ? await chamar(`/api/plataforma/lojas/${editando.loja.id}`, "PATCH", corpo)
               : await chamar("/api/plataforma/lojas", "POST", corpo);
             if (ok) {
-              avisar(editando.loja ? "Loja salva" : `${corpo.nome} cadastrada. Copie o link do balcão no cartão dela.`);
+              avisar(editando.loja ? "Loja salva" : `${corpo.nome} cadastrada. Convide o dono pela equipe, no cartão dela.`);
               setEditando(null);
             }
           }}

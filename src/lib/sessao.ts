@@ -24,6 +24,15 @@ export const DURACAO_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const COOKIE_SESSAO = COOKIE;
 
+/**
+ * Sessão de quem trabalha numa autopeça (painel da loja no Peça Peça). Cookie próprio,
+ * no mesmo formato: o token leva o papel `LOJA`, e as sessões moram em `SessaoLoja` —
+ * um cookie de loja posto no lugar do da oficina (ou o contrário) não acha sessão
+ * nenhuma no banco, e o proxy já o recusa pelo papel.
+ */
+export const COOKIE_SESSAO_LOJA = "pp_loja";
+export const PAPEL_LOJA = "LOJA";
+
 function segredo(): string {
   const valor = process.env.AUTH_SECRET;
   if (!valor || valor.length < 32) {
@@ -127,6 +136,12 @@ export async function lerToken(token: string | undefined | null): Promise<TokenL
   } catch {
     return null;
   }
+}
+
+/** Token do painel da loja: assinatura em dia e papel `LOJA`. */
+export async function lerTokenDeLoja(token: string | undefined | null): Promise<TokenLido | null> {
+  const lido = await lerToken(token);
+  return lido?.papel === PAPEL_LOJA ? lido : null;
 }
 
 /** Opções do cookie. `httpOnly` tira o token do alcance de qualquer JavaScript. */

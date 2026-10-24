@@ -54,7 +54,7 @@ export function Sidebar({
   pendingCount?: number;
   nome?: string;
   usuario: { nome: string; papel: Papel; podeFinanceiro: boolean };
-  /** Prévia do Peça Peça, aberta só para algumas contas (lib/peca-peca). */
+  /** Quem usa o Peça Peça: dono e operador com financeiro (lib/peca-peca). */
   pecaPeca?: boolean;
 }) {
   const pathname = usePathname();
@@ -110,7 +110,7 @@ export function Sidebar({
     // Aberto ao operador: é ele que precisa saber se tem a peça na prateleira ao
     // montar a OS. Custo e lucro da tela somem sozinhos — a API os apaga na resposta.
     { href: "/estoque", label: "Estoque", Icone: Caixa },
-    // Cotação nas autopeças da região. Quem não está na prévia nem vê o item.
+    // Cotação nas autopeças da região. Quem não vê custo também não vê o item.
     ...(pecaPeca ? [{ href: "/peca-peca", label: "Peça Peça", Icone: PecaPeca }] : []),
     {
       href: "/contas-receber",

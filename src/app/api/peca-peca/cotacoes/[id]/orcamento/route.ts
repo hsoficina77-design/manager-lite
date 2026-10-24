@@ -3,18 +3,33 @@ import { guardaPecaPeca } from "@/lib/peca-peca";
 import { itensDoOrcamento, lerCotacao } from "@/lib/cotacoes";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { cotacaoOrcamentoSchema } from "@/lib/schemas-peca-peca";
+import { CODIGO_SEM_BOXOS } from "@/lib/permissoes";
+import { CODIGO_SOMENTE_LEITURA, MENSAGEM_SOMENTE_LEITURA } from "@/lib/plano";
 import { descricaoDoVeiculo } from "@/components/peca-peca/regras";
 
 /**
  * Gera o orçamento da cotação — um orçamento comum do boxOS, com o mesmo número, a
  * mesma tela e a mesma conversão em OS. Os preços saem do servidor (escolhas, margem e
  * preços digitados gravados na cotação), não do que a tela mandar.
+ *
+ * É a parte do boxOS dentro do Peça Peça: só para a oficina que tem o boxOS, e fora do
+ * modo só leitura — o resto do Peça Peça é grátis e passa pelo bloqueio, esta não.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaPecaPeca();
   if (guarda.resposta) return guarda.resposta;
-  const { db, transacao, oficinaId } = guarda;
+  const { db, transacao, oficinaId, usuario } = guarda;
   const { id } = await params;
+
+  if (!usuario.usaBoxOS) {
+    return NextResponse.json(
+      { error: "O orçamento para o cliente é do boxOS, que ainda não está ativo na sua oficina.", codigo: CODIGO_SEM_BOXOS },
+      { status: 403 }
+    );
+  }
+  if (usuario.somenteLeitura) {
+    return NextResponse.json({ error: MENSAGEM_SOMENTE_LEITURA, codigo: CODIGO_SOMENTE_LEITURA }, { status: 402 });
+  }
 
   try {
     const dados = await lerJson(request, cotacaoOrcamentoSchema);

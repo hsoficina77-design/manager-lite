@@ -7,19 +7,15 @@ import { Botao } from "@/components/ui/Botao";
 import { CampoCidade } from "@/components/ui/CampoCidade";
 import type { Municipio } from "@/lib/municipios";
 import { useAvisar } from "@/components/ui/Avisos";
-import { PecaPeca, Voltar } from "@/components/ui/Icones";
+import { Voltar } from "@/components/ui/Icones";
+import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
+import { useProduto } from "@/components/ProdutoProvider";
+import { useUsaBoxOS } from "@/components/UsuarioProvider";
 import { ETAPAS, etapaDa, type CotacaoVista } from "./regras";
 
-/** Nome do produto. Fica dentro do boxOS, então usa as cores dele. */
+/** Nome do produto, com as cores dele — também dentro do boxOS: é outro produto. */
 export function MarcaPecaPeca({ className }: { className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 font-marca font-bold tracking-tight", className)}>
-      <PecaPeca tamanho={18} className="text-brand-600" />
-      <span className="text-tinta">
-        Peça<span className="text-brand-texto">Peça</span>
-      </span>
-    </span>
-  );
+  return <LogoPecaPeca className={cn("text-tinta", className)} />;
 }
 
 export function Cabecalho({
@@ -33,6 +29,9 @@ export function Cabecalho({
   voltar?: string;
   acao?: React.ReactNode;
 }) {
+  // Dentro do boxOS a marca diz que esta parte é o Peça Peça; na moldura do próprio
+  // Peça Peça ela já está no cabeçalho de cima.
+  const naMolduraPropria = useProduto() === "peca-peca" || !useUsaBoxOS();
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3">
@@ -46,8 +45,8 @@ export function Cabecalho({
           </Link>
         )}
         <div className="min-w-0">
-          <MarcaPecaPeca className="text-sm" />
-          <h1 className="mt-1 text-xl font-bold text-tinta">{titulo}</h1>
+          {!naMolduraPropria && <MarcaPecaPeca className="text-sm" />}
+          <h1 className={cn("text-xl font-bold text-tinta", !naMolduraPropria && "mt-1")}>{titulo}</h1>
           {subtitulo && <div className="mt-0.5 text-sm text-tinta-3">{subtitulo}</div>}
         </div>
       </div>

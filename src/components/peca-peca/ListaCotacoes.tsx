@@ -14,16 +14,27 @@ import {
 } from "./regras";
 import { useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, InformarCidade, PilulaEtapa, haQuanto } from "./ui";
+import { useUsaBoxOS } from "@/components/UsuarioProvider";
 
-const PASSOS = [
-  { titulo: "Placa e peças", texto: "Digite a placa e o que precisa, do jeito que fala no balcão." },
+const PASSOS_INICIO = [
+  { titulo: "Carro e peças", texto: "Digite o carro e o que precisa, do jeito que fala no balcão." },
   { titulo: "As lojas respondem", texto: "Cada loja recebe no balcão dela e manda preço, marca e prazo." },
   { titulo: "Você escolhe", texto: "Os preços aparecem lado a lado. Dá para misturar lojas." },
+];
+
+// Com o boxOS, a escolha ainda vira orçamento e OS; sem ele, o caminho termina no pedido.
+const PASSOS_COM_BOXOS = [
+  ...PASSOS_INICIO,
   { titulo: "Orçamento pronto", texto: "Com o seu preço, já no boxOS. Só precisa do nome do cliente." },
   { titulo: "Pede e vira OS", texto: "Cliente aprovou: o pedido vai para a loja e o orçamento vira OS." },
 ];
+const PASSOS_SEM_BOXOS = [
+  ...PASSOS_INICIO,
+  { titulo: "Faz o pedido", texto: "Vai direto para o balcão de cada loja, e a entrega aparece aqui." },
+];
 
 export function ListaCotacoes() {
+  const passos = useUsaBoxOS() ? PASSOS_COM_BOXOS : PASSOS_SEM_BOXOS;
   const { dados: cotacoes, semConexao } = useAoVivo<CotacaoVista[]>("/api/peca-peca/cotacoes", 5000);
   const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojas = daOficina?.lojas ?? null;
@@ -75,7 +86,7 @@ export function ListaCotacoes() {
         ) : cotacoes.length === 0 ? (
           <Vazio
             titulo="Nenhuma cotação ainda"
-            texto="Digite a placa e as peças que precisa. A cotação vai para as lojas que atendem a sua cidade."
+            texto="Digite o carro e as peças que precisa. A cotação vai para as lojas que atendem a sua cidade."
             acao={<BotaoLink href="/peca-peca/nova">Nova cotação</BotaoLink>}
           />
         ) : (
@@ -113,8 +124,8 @@ export function ListaCotacoes() {
 
       <section className="space-y-3">
         <h2 className="font-semibold text-tinta">Como funciona</h2>
-        <ol className="grid gap-2 sm:grid-cols-5">
-          {PASSOS.map((p, i) => (
+        <ol className={`grid gap-2 ${passos.length === 5 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+          {passos.map((p, i) => (
             // No celular, número ao lado do texto: cinco cartões empilhados tomavam a tela.
             <li key={p.titulo} className="flex gap-3 rounded-xl border border-linha bg-superficie p-3 sm:block">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-brand-fg">
@@ -143,7 +154,8 @@ function PainelLojas({ lojas, cidade }: { lojas: LojaVista[] | null; cidade: str
         <EsqueletoLista linhas={2} />
       ) : lojas.length === 0 ? (
         <p className="text-sm text-tinta-3">
-          Nenhuma autopeça que atende {cidade ?? "a oficina"} está no Peça Peça ainda.
+          Nenhuma autopeça que atende {cidade ?? "a oficina"} está no Peça Peça ainda. Estamos chegando a novas
+          cidades — a sua já está na nossa lista.
         </p>
       ) : (
         <ul className="divide-y divide-linha">

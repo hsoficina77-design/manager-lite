@@ -284,6 +284,45 @@
     --idade-4-bg: 51 27 25;  --idade-4-fg: 242 145 137; --idade-4-ponto: 214 84 74;
   }
 
+  /* --- identidade Peça Peça ------------------------------------------------
+     O mesmo app serve o Peça Peça num endereço próprio; o layout marca o <html>
+     com `data-produto="peca-peca"` e só a escala da marca muda — azul em vez do
+     laranja do boxOS (AZUL_PECA_PECA em marca/LogoPecaPeca.tsx). Provisória até
+     chegar o pacote de identidade. Sobre o 600 o texto é branco (5,2:1). */
+  :root[data-produto="peca-peca"] {
+    --brand-50: 239 246 255;
+    --brand-100: 219 234 254;
+    --brand-200: 191 219 254;
+    --brand-300: 147 197 253;
+    --brand-400: 96 165 250;
+    --brand-500: 59 130 246;
+    --brand-600: 37 99 235;
+    --brand-700: 29 78 216;
+    --brand-800: 30 64 175;
+    --brand-900: 30 58 138;
+    --brand-950: 23 37 84;
+    --brand-fg: 255 255 255;
+    --brand-texto: 29 78 216;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-produto="peca-peca"]:not([data-tema="claro"]) {
+      --brand-50: 20 31 54;
+      --brand-100: 24 39 70;
+      --brand-200: 30 52 98;
+      --brand-300: 39 74 145;
+      --brand-texto: 96 165 250;
+    }
+  }
+
+  :root[data-produto="peca-peca"][data-tema="escuro"] {
+    --brand-50: 20 31 54;
+    --brand-100: 24 39 70;
+    --brand-200: 30 52 98;
+    --brand-300: 39 74 145;
+    --brand-texto: 96 165 250;
+  }
+
   /* Folha do documento (OS e orçamento na tela). É o único lugar com a cor da
      oficina: `estiloDoDocumento` (src/lib/cor-documento.ts) escreve as três
      variáveis no `style` do elemento; sem elas vale o laranja boxOS. O texto

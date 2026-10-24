@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
 import { validarSenha } from "@/lib/senha";
 import { municipioOficial } from "@/lib/municipios-servidor";
+import { mesmaCidade } from "@/lib/municipios";
 import { CARENCIA_DIAS, fimDoTeste, situacaoDaOficina } from "@/lib/plano";
 import { EVENTOS_DE_PAGAMENTO, type EventoGateway } from "@/lib/asaas";
 
@@ -62,6 +63,11 @@ export async function criarOficinaComDono(
     administraPlataforma?: boolean;
     /** Só no cadastro público: a oficina nasce em teste grátis. */
     teste?: { whatsapp: string; origem: string | null };
+    /**
+     * Cadastro grátis do Peça Peça: a oficina nasce sem o boxOS (`boxosDesde` nulo) e
+     * sem prazo nenhum — o Peça Peça não cobra. O boxOS vem depois, se ela quiser.
+     */
+    soPecaPeca?: { whatsapp: string; origem: string | null };
   }
 ) {
   // A conta da plataforma não testa nem paga: o painel dela não pode cair em só leitura.
@@ -71,6 +77,14 @@ export async function criarOficinaComDono(
       nome: dados.nomeOficina,
       ...(dados.teste && !daPlataforma
         ? { testeAte: fimDoTeste(), whatsapp: dados.teste.whatsapp, origem: dados.teste.origem }
+        : {}),
+      ...(dados.soPecaPeca && !daPlataforma
+        ? {
+            boxosDesde: null,
+            veioDoPecaPeca: true,
+            whatsapp: dados.soPecaPeca.whatsapp,
+            origem: dados.soPecaPeca.origem,
+          }
         : {}),
     },
   });
@@ -148,16 +162,34 @@ export function cadastroTesteAberto() {
   return process.env.CADASTRO_TESTE_ABERTO !== "0";
 }
 
+/** A mesma chave para o cadastro grátis do Peça Peça: `CADASTRO_PECA_PECA_ABERTO=0`. */
+export function cadastroPecaPecaAberto() {
+  return process.env.CADASTRO_PECA_PECA_ABERTO !== "0";
+}
+
 /**
- * Cria uma oficina em teste grátis — o cadastro aberto do link da bio.
+ * E-mail já usado por alguém — de oficina ou de autopeça. A tela de login é uma só e
+ * procura nas duas tabelas, então o e-mail tem de ser único entre elas.
+ */
+export async function emailOcupado(tx: Pick<Tx, "usuario" | "usuarioLoja">, email: string) {
+  const [deOficina, deLoja] = await Promise.all([
+    tx.usuario.count({ where: { email } }),
+    tx.usuarioLoja.count({ where: { email } }),
+  ]);
+  return deOficina + deLoja > 0;
+}
+
+/**
+ * Cria uma oficina pelo cadastro aberto: o teste grátis do boxOS (link da bio) ou a
+ * conta grátis do Peça Peça.
  *
- * Um teste por pessoa: o e-mail já é único no sistema, e o WhatsApp não pode ter
- * aberto outro teste. As duas checagens rodam dentro da transação Serializable, para
- * dois envios simultâneos não passarem juntos.
+ * Uma conta por pessoa: o e-mail já é único no sistema, e o WhatsApp não pode ter
+ * aberto outra. As duas checagens rodam dentro da transação Serializable, para dois
+ * envios simultâneos não passarem juntos.
  *
  * Devolve o motivo da recusa em vez de lançar, para a rota responder 409 com a frase certa.
  */
-export async function criarOficinaDeTeste(dados: {
+export async function criarOficinaPeloCadastro(dados: {
   nomeOficina: string;
   cidade: string;
   estado: string;
@@ -166,10 +198,12 @@ export async function criarOficinaDeTeste(dados: {
   senhaHash: string;
   whatsapp: string;
   origem: string | null;
+  produto: "boxos" | "peca-peca";
 }) {
+  const contato = { whatsapp: dados.whatsapp, origem: dados.origem };
   const criada = await prisma.$transaction(
     async (tx) => {
-      if ((await tx.usuario.count({ where: { email: dados.email } })) > 0) return "email" as const;
+      if (await emailOcupado(tx, dados.email)) return "email" as const;
       if ((await tx.oficina.count({ where: { whatsapp: dados.whatsapp } })) > 0) return "whatsapp" as const;
       return criarOficinaComDono(tx, {
         nomeOficina: dados.nomeOficina,
@@ -178,21 +212,52 @@ export async function criarOficinaDeTeste(dados: {
         nome: dados.nome,
         email: dados.email,
         senhaHash: dados.senhaHash,
-        teste: { whatsapp: dados.whatsapp, origem: dados.origem },
+        ...(dados.produto === "peca-peca" ? { soPecaPeca: contato } : { teste: contato }),
       });
     },
     { isolationLevel: "Serializable" }
   );
 
   if (typeof criada !== "string" && dados.email !== EMAIL_PLATAFORMA) {
+    const deOnde = `${dados.nomeOficina}, de ${dados.cidade} - ${dados.estado} (${dados.nome})`;
+    const origem = dados.origem ? ` — veio de ${dados.origem}` : "";
     // Fora da transação: o aviso não pode desfazer um cadastro que deu certo.
-    avisarPlataforma({
-      titulo: "Nova oficina em teste",
-      mensagem: `${dados.nomeOficina}, de ${dados.cidade} - ${dados.estado} (${dados.nome}), começou o teste grátis${dados.origem ? ` — veio de ${dados.origem}` : ""}.`,
-      link: `/admin/oficinas/${criada.oficina.id}`,
-    }).catch((err: unknown) => console.error("Falha ao avisar a plataforma do cadastro:", err));
+    avisarPlataforma(
+      dados.produto === "peca-peca"
+        ? {
+            titulo: "Nova oficina no Peça Peça",
+            mensagem: `${deOnde}, criou a conta grátis do Peça Peça${origem}.`,
+            link: "/admin/peca-peca",
+          }
+        : {
+            titulo: "Nova oficina em teste",
+            mensagem: `${deOnde}, começou o teste grátis${origem}.`,
+            link: `/admin/oficinas/${criada.oficina.id}`,
+          }
+    ).catch((err: unknown) => console.error("Falha ao avisar a plataforma do cadastro:", err));
   }
   return criada;
+}
+
+/**
+ * A oficina só do Peça Peça ativa o boxOS: ganha o teste grátis de sempre, contando de
+ * hoje, e passa a abrir o boxOS com o mesmo login. As cotações continuam lá. Só vale
+ * uma vez — quem já tem boxOS devolve `false`.
+ */
+export async function ativarBoxOS(oficinaId: string) {
+  const r = await prisma.oficina.updateMany({
+    where: { id: oficinaId, boxosDesde: null },
+    data: { boxosDesde: new Date(), testeAte: fimDoTeste() },
+  });
+  if (r.count > 0) {
+    const oficina = await prisma.oficina.findUnique({ where: { id: oficinaId }, select: { nome: true } });
+    avisarPlataforma({
+      titulo: "Oficina do Peça Peça ativou o boxOS",
+      mensagem: `${oficina?.nome ?? "Uma oficina"} começou o teste grátis do boxOS pelo Peça Peça.`,
+      link: `/admin/oficinas/${oficinaId}`,
+    }).catch((err: unknown) => console.error("Falha ao avisar a plataforma da ativação:", err));
+  }
+  return r.count > 0;
 }
 
 /**
@@ -368,6 +433,7 @@ export async function listarOficinas() {
       whatsapp: true,
       origem: true,
       gatewayAssinaturaId: true,
+      boxosDesde: true,
       configuracao: { select: { cidade: true, estado: true } },
       _count: { select: { usuarios: true, ordens: true, clientes: true } },
     },
@@ -403,6 +469,8 @@ export async function listarOficinas() {
       ? [o.configuracao.cidade.trim(), o.configuracao.estado?.trim()].filter(Boolean).join(" - ")
       : null,
     assinaturaAutomatica: Boolean(o.gatewayAssinaturaId),
+    /** Sem boxOS = conta grátis só do Peça Peça; fica fora das métricas do boxOS. */
+    usaBoxOS: o.boxosDesde !== null,
     usuarios: o._count.usuarios,
     ordens: o._count.ordens,
     ordens30d: recentesPorOficina.get(o.id) ?? 0,
@@ -500,6 +568,93 @@ export async function fichaDaOficina(id: string) {
 export type FichaDaOficina = NonNullable<Awaited<ReturnType<typeof fichaDaOficina>>>;
 
 /**
+ * O Peça Peça visto pela plataforma: as contas grátis, o uso (cotações e pedidos), o
+ * funil até o boxOS e onde há procura sem loja — a cidade da próxima autopeça. Continua
+ * a casca: contagens e cidades, nada de dentro das cotações.
+ */
+export async function resumoDoPecaPeca() {
+  const agora = Date.now();
+  const ha7dias = new Date(agora - 7 * DIA_MS);
+  const ha30dias = new Date(agora - 30 * DIA_MS);
+
+  const [contas, cotacoes30d, pedidos30d, cotando, lojas, cidades, acessos] = await Promise.all([
+    prisma.oficina.findMany({
+      where: { ...SO_OFICINAS, veioDoPecaPeca: true },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        nome: true,
+        ativa: true,
+        createdAt: true,
+        whatsapp: true,
+        origem: true,
+        boxosDesde: true,
+        pagoAte: true,
+        configuracao: { select: { cidade: true, estado: true } },
+        _count: { select: { cotacoes: true } },
+      },
+    }),
+    prisma.cotacao.count({ where: { createdAt: { gte: ha30dias } } }),
+    prisma.cotacao.count({ where: { pedidoEm: { gte: ha30dias } } }),
+    prisma.cotacao.groupBy({ by: ["oficinaId"], where: { createdAt: { gte: ha30dias } }, _count: { _all: true } }),
+    prisma.loja.findMany({ where: { ativa: true }, select: { atende: true } }),
+    prisma.configuracao.findMany({
+      where: { oficina: { ...SO_OFICINAS, ativa: true } },
+      select: { cidade: true, estado: true, oficina: { select: { boxosDesde: true } } },
+    }),
+    prisma.usuario.groupBy({ by: ["oficinaId"], _max: { ultimoAcesso: true } }),
+  ]);
+
+  const ultimoAcesso = new Map(acessos.map((a) => [a.oficinaId, a._max.ultimoAcesso]));
+  const rotulo = (c: { cidade: string | null; estado: string | null } | null) =>
+    c?.cidade?.trim() ? [c.cidade.trim(), c.estado?.trim()].filter(Boolean).join(" - ") : null;
+
+  // Procura sem loja: oficinas (do boxOS e do Peça Peça) de cidades que nenhuma loja
+  // ativa atende. É a lista de onde abrir a próxima autopeça.
+  const atendidas = lojas.flatMap((l) => l.atende);
+  const semLoja = new Map<string, { cidade: string; oficinas: number; soPecaPeca: number }>();
+  for (const c of cidades) {
+    const nome = rotulo(c);
+    if (!nome || atendidas.some((a) => mesmaCidade(a, nome))) continue;
+    const atual = semLoja.get(nome) ?? { cidade: nome, oficinas: 0, soPecaPeca: 0 };
+    atual.oficinas += 1;
+    if (c.oficina.boxosDesde === null) atual.soPecaPeca += 1;
+    semLoja.set(nome, atual);
+  }
+
+  return {
+    contas: contas.length,
+    novas7d: contas.filter((o) => o.createdAt >= ha7dias).length,
+    novas30d: contas.filter((o) => o.createdAt >= ha30dias).length,
+    ativas7d: contas.filter((o) => (ultimoAcesso.get(o.id)?.getTime() ?? 0) >= ha7dias.getTime()).length,
+    cotacoes30d,
+    pedidos30d,
+    oficinasCotando30d: cotando.length,
+    funil: [
+      { rotulo: "Criaram a conta", valor: contas.length },
+      { rotulo: "Mandaram cotação", valor: contas.filter((o) => o._count.cotacoes > 0).length },
+      { rotulo: "Ativaram o boxOS", valor: contas.filter((o) => o.boxosDesde !== null).length },
+      { rotulo: "Pagaram o boxOS", valor: contas.filter((o) => o.pagoAte !== null).length },
+    ],
+    semLoja: [...semLoja.values()].sort((a, b) => b.oficinas - a.oficinas),
+    lista: contas.map((o) => ({
+      id: o.id,
+      nome: o.nome,
+      ativa: o.ativa,
+      criadaEm: o.createdAt.toISOString(),
+      whatsapp: o.whatsapp,
+      origem: o.origem,
+      cidade: rotulo(o.configuracao),
+      cotacoes: o._count.cotacoes,
+      usaBoxOS: o.boxosDesde !== null,
+      ultimoAcesso: ultimoAcesso.get(o.id)?.toISOString() ?? null,
+    })),
+  };
+}
+
+export type ResumoDoPecaPeca = Awaited<ReturnType<typeof resumoDoPecaPeca>>;
+
+/**
  * O que entrou no caixa do boxOS: os eventos de pagamento do gateway nos últimos
  * meses, com o nome da oficina. É dinheiro da plataforma, não da oficina.
  */
@@ -574,9 +729,12 @@ export function usuarioPorEmail(email: string) {
   });
 }
 
-/** E-mail já usado por alguém, em qualquer oficina. O e-mail é a chave do login. */
+/**
+ * E-mail já usado por alguém, em qualquer oficina ou autopeça. O e-mail é a chave do
+ * login, e a tela de login é uma só.
+ */
 export async function emailEmUso(email: string) {
-  return (await prisma.usuario.count({ where: { email } })) > 0;
+  return emailOcupado(prisma, email);
 }
 
 // ─── Pagamento ───────────────────────────────────────────────────────────────

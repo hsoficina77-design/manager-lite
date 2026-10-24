@@ -7,7 +7,8 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Aviso, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { useAvisar } from "@/components/ui/Avisos";
-import { Confere, Lixeira, Mais, PecaPeca, Voltar } from "@/components/ui/Icones";
+import { Confere, Lixeira, Mais, Voltar } from "@/components/ui/Icones";
+import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 import {
   ETAPAS_ENTREGA,
   SITUACOES_NO_BALCAO,
@@ -20,28 +21,49 @@ import {
 import { enviarJson, tocarAviso, useAoVivo, useTituloComContador } from "./aoVivo";
 import { AvisoSemConexao, haQuanto, horaCurta } from "./ui";
 
-// O balcão é a tela da autopeça — outra empresa, sem conta no boxOS, aberta por um
-// link secreto. Por isso não tem o menu do boxOS, e só mostra o que a loja precisa:
-// o carro, as peças, as próprias respostas e o pedido quando a oficina fecha.
+// O balcão é a tela da autopeça — outra empresa. Só mostra o que a loja precisa: o
+// carro, as peças, as próprias respostas e o pedido quando a oficina fecha.
+//
+// Mora em dois lugares: no painel da loja (`/loja`, com login e acesso por pessoa,
+// dentro da moldura do painel) e no link antigo (`/balcao/<token>`, sem conta e com
+// cabeçalho próprio), que só vale enquanto a loja não tem ninguém com login.
 
 export type LojaDoBalcao = { nome: string; cidade: string | null; entregaMin: number; entregaMax: number };
 
-function Moldura({ loja, children }: { loja: LojaDoBalcao; children: React.ReactNode }) {
+/** Onde o balcão está servido: as telas e a API de cada um dos dois lugares. */
+export type CaminhosDoBalcao = {
+  /** A caixa de entrada. */
+  inicio: string;
+  /** Prefixo da tela de cada cotação: `${telas}/<envioId>`. */
+  telas: string;
+  /** Prefixo da API: `${api}` é a caixa, `${api}/<envioId>` a cotação. */
+  api: string;
+  /** O link antigo traz o próprio cabeçalho; o painel já está numa moldura. */
+  comCabecalho: boolean;
+};
+
+/** O que a pessoa pode no balcão. No link antigo, tudo; no painel, o acesso dela. */
+export type PodeNoBalcao = { responder: boolean; entrega: boolean };
+
+function Moldura({
+  loja,
+  comCabecalho,
+  children,
+}: {
+  loja: LojaDoBalcao;
+  comCabecalho: boolean;
+  children: React.ReactNode;
+}) {
+  if (!comCabecalho) return <div className="mx-auto max-w-3xl space-y-5 px-4 py-5">{children}</div>;
   return (
     <div className="min-h-[100dvh] bg-fundo">
       <header className="border-b border-linha bg-superficie">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
-          <PecaPeca tamanho={24} className="shrink-0 text-brand-600" />
-          <div className="min-w-0 flex-1">
-            <p className="font-marca text-sm font-bold leading-tight text-tinta">
-              Peça<span className="text-brand-texto">Peça</span>
-              <span className="ml-1.5 font-sans text-xs font-medium text-tinta-3">· Balcão</span>
-            </p>
-            <p className="truncate text-xs text-tinta-3">
-              {loja.nome}
-              {loja.cidade && ` · ${loja.cidade}`}
-            </p>
-          </div>
+          <LogoPecaPeca className="text-base text-tinta" />
+          <p className="min-w-0 flex-1 truncate text-xs text-tinta-3">
+            Balcão · {loja.nome}
+            {loja.cidade && ` · ${loja.cidade}`}
+          </p>
         </div>
       </header>
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5 pb-segura">{children}</main>
@@ -51,9 +73,9 @@ function Moldura({ loja, children }: { loja: LojaDoBalcao; children: React.React
 
 // ─── Caixa de entrada ───────────────────────────────────────────────────────
 
-export function CaixaDoBalcaoTela({ token, loja }: { token: string; loja: LojaDoBalcao }) {
+export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalcao; loja: LojaDoBalcao }) {
   const avisar = useAvisar();
-  const { dados, semConexao } = useAoVivo<CaixaDoBalcao>(`/api/balcao/${token}`, 4000);
+  const { dados, semConexao } = useAoVivo<CaixaDoBalcao>(caminhos.api, 4000);
   const envios = dados?.envios ?? [];
 
   const responder = envios.filter((e) => e.situacao === "RESPONDER");
@@ -82,7 +104,7 @@ export function CaixaDoBalcaoTela({ token, loja }: { token: string; loja: LojaDo
   }, [dados]);
 
   return (
-    <Moldura loja={loja}>
+    <Moldura loja={loja} comCabecalho={caminhos.comCabecalho}>
       <div>
         {/* O nome sozinho: "da Yoshio", mas "do Bom Preço" — o artigo muda de loja para loja. */}
         <h1 className="text-xl font-bold text-tinta">{loja.nome}</h1>
@@ -112,7 +134,7 @@ export function CaixaDoBalcaoTela({ token, loja }: { token: string; loja: LojaDo
 
           {pedidosAbertos.length > 0 && (
             <Secao titulo="Pedidos para separar">
-              <Lista envios={pedidosAbertos} token={token} />
+              <Lista envios={pedidosAbertos} telas={caminhos.telas} />
             </Secao>
           )}
 
@@ -120,13 +142,13 @@ export function CaixaDoBalcaoTela({ token, loja }: { token: string; loja: LojaDo
             {responder.length === 0 ? (
               <p className="text-sm text-tinta-3">Nada esperando resposta.</p>
             ) : (
-              <Lista envios={responder} token={token} />
+              <Lista envios={responder} telas={caminhos.telas} />
             )}
           </Secao>
 
           {(outras.length > 0 || pedidos.length > pedidosAbertos.length) && (
             <Secao titulo="Respondidas">
-              <Lista envios={[...outras, ...pedidos.filter((e) => e.entrega === "ENTREGUE")]} token={token} />
+              <Lista envios={[...outras, ...pedidos.filter((e) => e.entrega === "ENTREGUE")]} telas={caminhos.telas} />
             </Secao>
           )}
         </>
@@ -144,13 +166,13 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
-function Lista({ envios, token }: { envios: EnvioNoBalcao[]; token: string }) {
+function Lista({ envios, telas }: { envios: EnvioNoBalcao[]; telas: string }) {
   return (
     <div className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
       {envios.map((e) => (
         <Link
           key={e.id}
-          href={`/balcao/${token}/${e.id}`}
+          href={`${telas}/${e.id}`}
           className="flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-superficie-2 sm:flex-row sm:items-center sm:gap-3"
         >
           <div className="min-w-0 flex-1">
@@ -173,14 +195,25 @@ function Lista({ envios, token }: { envios: EnvioNoBalcao[]; token: string }) {
 
 // ─── Uma cotação no balcão ──────────────────────────────────────────────────
 
-export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; envioId: string; loja: LojaDoBalcao }) {
-  const url = `/api/balcao/${token}/${envioId}`;
+export function EnvioDoBalcaoTela({
+  caminhos,
+  envioId,
+  loja,
+  pode,
+}: {
+  caminhos: CaminhosDoBalcao;
+  envioId: string;
+  loja: LojaDoBalcao;
+  pode: PodeNoBalcao;
+}) {
+  const url = `${caminhos.api}/${envioId}`;
   const { dados: envio, naoEncontrado, semConexao, gravar } = useAoVivo<EnvioNoBalcao>(url, 4000);
   useTituloComContador(`Balcão · ${loja.nome}`, 0);
+  const { comCabecalho } = caminhos;
 
   const voltar = (
     <Link
-      href={`/balcao/${token}`}
+      href={caminhos.inicio}
       className="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-tinta-2 hover:text-tinta"
     >
       <Voltar tamanho={16} />
@@ -190,7 +223,7 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
 
   if (naoEncontrado) {
     return (
-      <Moldura loja={loja}>
+      <Moldura loja={loja} comCabecalho={comCabecalho}>
         {voltar}
         <Vazio titulo="Cotação não encontrada" texto="A oficina pode ter excluído esta cotação." />
       </Moldura>
@@ -199,7 +232,7 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
 
   if (!envio) {
     return (
-      <Moldura loja={loja}>
+      <Moldura loja={loja} comCabecalho={comCabecalho}>
         {voltar}
         <EsqueletoLista linhas={4} />
       </Moldura>
@@ -207,7 +240,7 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
   }
 
   return (
-    <Moldura loja={loja}>
+    <Moldura loja={loja} comCabecalho={comCabecalho}>
       {voltar}
       <div>
         <h1 className="text-xl font-bold text-tinta">Cotação de {envio.oficina}</h1>
@@ -219,7 +252,9 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
 
       <AvisoSemConexao ativo={semConexao} />
 
-      {envio.situacao === "PEDIDO" && <PedidoNoBalcao envio={envio} url={url} gravar={gravar} />}
+      {envio.situacao === "PEDIDO" && (
+        <PedidoNoBalcao envio={envio} url={url} gravar={gravar} podeAvancar={pode.entrega} />
+      )}
 
       {/* O que o balconista precisa para conferir a aplicação — e nada da oficina além do nome. */}
       <Painel titulo="Veículo">
@@ -244,12 +279,12 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
         )}
       </Painel>
 
-      {envio.travada ? (
-        <RespostaFechada envio={envio} />
+      {envio.travada || !pode.responder ? (
+        <RespostaFechada envio={envio} semAcesso={!envio.travada} />
       ) : (
         // A chave refaz o formulário se a cotação mudar de peças; as atualizações
         // automáticas não mexem no que o balconista está digitando.
-        <FormResposta key={envio.id} envio={envio} url={url} loja={loja} gravar={gravar} token={token} />
+        <FormResposta key={envio.id} envio={envio} url={url} loja={loja} gravar={gravar} inicio={caminhos.inicio} />
       )}
     </Moldura>
   );
@@ -257,7 +292,17 @@ export function EnvioDoBalcaoTela({ token, envioId, loja }: { token: string; env
 
 type GravarEnvio = ReturnType<typeof useAoVivo<EnvioNoBalcao>>["gravar"];
 
-function PedidoNoBalcao({ envio, url, gravar }: { envio: EnvioNoBalcao; url: string; gravar: GravarEnvio }) {
+function PedidoNoBalcao({
+  envio,
+  url,
+  gravar,
+  podeAvancar,
+}: {
+  envio: EnvioNoBalcao;
+  url: string;
+  gravar: GravarEnvio;
+  podeAvancar: boolean;
+}) {
   const avisar = useAvisar();
   const [avancando, setAvancando] = useState(false);
   const etapa = envio.entrega ?? "ENVIADO";
@@ -279,12 +324,14 @@ function PedidoNoBalcao({ envio, url, gravar }: { envio: EnvioNoBalcao; url: str
           <p className="font-semibold text-ok">Pedido fechado</p>
           <p className="text-sm text-tinta-2">Separe e mande para {envio.oficina}:</p>
         </div>
-        {proxima ? (
+        {!proxima ? (
+          <span className="status status-entregue">Entregue</span>
+        ) : podeAvancar ? (
           <Botao variante="sucesso" onClick={avancar} disabled={avancando}>
             {avancando ? "Salvando..." : `Marcar: ${rotuloDaEntrega(proxima).toLowerCase()}`}
           </Botao>
         ) : (
-          <span className="status status-entregue">Entregue</span>
+          <span className="text-xs text-tinta-3">Quem avança a entrega é outra pessoa da loja.</span>
         )}
       </div>
       {etapa === "ENTREGUE" && (
@@ -315,13 +362,14 @@ function PedidoNoBalcao({ envio, url, gravar }: { envio: EnvioNoBalcao; url: str
   );
 }
 
-function RespostaFechada({ envio }: { envio: EnvioNoBalcao }) {
+function RespostaFechada({ envio, semAcesso = false }: { envio: EnvioNoBalcao; semAcesso?: boolean }) {
   const textos: Partial<Record<EnvioNoBalcao["situacao"], string>> = {
     COM_O_CLIENTE: "A oficina mandou o orçamento para o cliente com peças da loja. Se ele aprovar, o pedido chega aqui.",
     OUTRA_LOJA: "Desta vez a oficina fechou com outra loja.",
     ENCERRADA: "A oficina fechou a cotação antes da resposta da loja.",
   };
-  const texto = textos[envio.situacao];
+  // Quem só acompanha (sem o acesso "Responder cotações") vê a resposta, sem formulário.
+  const texto = semAcesso ? "Seu acesso não inclui responder cotações. Quem cuida da equipe da loja libera." : textos[envio.situacao];
   return (
     <>
       {texto && <Aviso tipo="atencao">{texto}</Aviso>}
@@ -361,13 +409,14 @@ function FormResposta({
   url,
   loja,
   gravar,
-  token,
+  inicio,
 }: {
   envio: EnvioNoBalcao;
   url: string;
   loja: LojaDoBalcao;
   gravar: GravarEnvio;
-  token: string;
+  /** A caixa de entrada, para o "voltar às cotações". */
+  inicio: string;
 }) {
   const avisar = useAvisar();
   const prazoPadrao = String(loja.entregaMin);
@@ -451,7 +500,7 @@ function FormResposta({
           &ldquo;Pedidos para separar&rdquo;, com aviso.
         </p>
         <div className="flex flex-wrap gap-2">
-          <BotaoLink href={`/balcao/${token}`} variante="sucesso">
+          <BotaoLink href={inicio} variante="sucesso">
             Voltar às cotações
           </BotaoLink>
           <Botao variante="secundario" onClick={() => setEnviada(false)}>

@@ -73,6 +73,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Os dois produtos no desenvolvimento: o mesmo servidor atende o Peça Peça em
+  // http://pecapeca.localhost:3000 e o boxOS em http://boxos.localhost:3000 (ver
+  // lib/produto.ts e o desvio em proxy.ts). Sem esta linha o `next dev` recusa os
+  // arquivos de tela pedidos por um host que não seja localhost. Só vale no `next dev`.
+  allowedDevOrigins: ["pecapeca.localhost", "boxos.localhost"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

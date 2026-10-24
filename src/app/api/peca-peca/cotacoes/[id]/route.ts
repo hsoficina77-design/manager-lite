@@ -18,9 +18,13 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 /**
- * O que a oficina mexe antes do orçamento: margem, a oferta escolhida de uma peça, o
- * preço de venda de uma peça, ou "menor preço em tudo". Trocar a oferta de uma peça
- * descarta o preço de venda digitado para ela — o custo mudou.
+ * O que a oficina mexe na cotação: a oferta escolhida de uma peça, "menor preço em
+ * tudo", e — para o orçamento do boxOS — a margem e o preço de venda de uma peça.
+ * Trocar a oferta de uma peça descarta o preço de venda digitado para ela — o custo
+ * mudou.
+ *
+ * Depois do pedido a escolha trava (as lojas já estão separando aquelas peças); os
+ * preços de venda seguem livres até o orçamento sair.
  */
 export async function PATCH(request: Request, { params }: Params) {
   const guarda = await guardaPecaPeca();
@@ -36,6 +40,7 @@ export async function PATCH(request: Request, { params }: Params) {
         where: { id },
         select: {
           orcamentoId: true,
+          pedidoEm: true,
           pecas: {
             select: { id: true, ofertaId: true, ofertas: { select: { id: true, preco: true, prazoMin: true } } },
           },
@@ -45,6 +50,12 @@ export async function PATCH(request: Request, { params }: Params) {
       if (c.orcamentoId) {
         return NextResponse.json(
           { error: "O orçamento desta cotação já saiu. Ajuste os preços no próprio orçamento." },
+          { status: 409 }
+        );
+      }
+      if (c.pedidoEm && (dados.escolha || dados.menorPreco)) {
+        return NextResponse.json(
+          { error: "O pedido já foi feito: as lojas estão separando estas peças." },
           { status: 409 }
         );
       }

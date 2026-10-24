@@ -8,7 +8,7 @@ import type { Papel } from "@/lib/permissoes";
 import { LogoBoxOS, SimboloBoxOS } from "../marca/LogoBoxOS";
 import { NotificacaoSino } from "../ui/Notificacoes";
 import { SeletorTema } from "../ui/Tema";
-import { Chave, Dinheiro, Fechar, Mais, Menu as IconeMenu, Patio, PecaPeca, Sair } from "../ui/Icones";
+import { Chave, Dinheiro, Fechar, Grafico, Mais, Menu as IconeMenu, Patio, PecaPeca, Sair } from "../ui/Icones";
 
 // Menu do painel admin do boxOS. Mesmo desenho do menu da oficina (Sidebar.tsx) —
 // lateral no computador, cabeçalho e barra inferior no celular —, com os destinos
@@ -21,7 +21,9 @@ const ITENS: Item[] = [
   { href: "/admin/oficinas", label: "Oficinas", Icone: Chave },
   { href: "/admin/convites", label: "Convites", Icone: Mais },
   { href: "/admin/receita", label: "Receita", Icone: Dinheiro },
-  // As autopeças do Peça Peça: cadastro manual, por região.
+  // O Peça Peça: contas grátis, uso e a procura por cidade.
+  { href: "/admin/peca-peca", label: "Peça Peça", Icone: Grafico },
+  // As autopeças do Peça Peça: cadastro manual, por região, e a equipe de cada uma.
   { href: "/admin/lojas", label: "Lojas", Icone: PecaPeca },
 ];
 
@@ -171,7 +173,7 @@ export function AdminSidebar({ usuario }: { usuario: { nome: string; email: stri
         aria-label="Navegação do painel"
         className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-linha bg-superficie/95 pb-segura backdrop-blur md:hidden"
       >
-        <div className="grid grid-cols-5">
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${ITENS.length}, minmax(0, 1fr))` }}>
           {ITENS.map((i) => (
             <Link
               key={i.href}
@@ -183,7 +185,7 @@ export function AdminSidebar({ usuario }: { usuario: { nome: string; email: stri
               )}
             >
               <i.Icone tamanho={19} />
-              <span className="text-xs leading-none">{i.label}</span>
+              <span className="max-w-full truncate px-0.5 text-[0.7rem] leading-none sm:text-xs">{i.label}</span>
             </Link>
           ))}
         </div>

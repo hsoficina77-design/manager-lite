@@ -1,6 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
-import { HEADER_METODO, HEADER_ROTA, ehRotaPublica, exigeDono, exigeFinanceiro, exigeExclusao } from "@/lib/permissoes";
+import { COOKIE_SESSAO, COOKIE_SESSAO_LOJA, PAPEL_LOJA, lerToken, lerTokenDeLoja } from "@/lib/sessao";
+import {
+  HEADER_METODO,
+  HEADER_ROTA,
+  ehRotaDaLoja,
+  ehRotaPublica,
+  exigeDono,
+  exigeFinanceiro,
+  exigeExclusao,
+} from "@/lib/permissoes";
+import { HEADER_PRODUTO, desvioDeProduto, hostDaRequisicao, produtoDoHost, type Produto } from "@/lib/produto";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 
 /** POST de foto: `/api/os/<id>/fotos` e `/api/orcamentos/<id>/fotos`. */
@@ -19,14 +28,17 @@ const ROTA_DE_UPLOAD = /^\/api\/(os|orcamentos)\/[^/]+\/fotos$/;
  * Aqui só se confere o que dá para conferir sem banco: assinatura, validade, papel e
  * as permissões de financeiro/exclusão, todos dentro do cookie assinado. A confirmação
  * de que a sessão continua existindo e de que o usuário segue ativo é feita no
- * servidor, em `auth.ts`.
+ * servidor, em `auth.ts` (oficina) e `conta-loja.ts` (autopeça).
  *
  * É também onde mora o freio de requisições (`lib/limite-requisicoes.ts`). Ele vem
  * antes de tudo de propósito: barrar aqui custa uma consulta a um `Map` e não encosta
  * no banco, no Storage nem no scrypt.
+ *
+ * E é quem separa os dois produtos (`lib/produto.ts`): o mesmo app atende o boxOS e o
+ * Peça Peça, e o endereço pelo qual a pessoa chegou decide qual ela vê.
  */
 export default async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
   // Tráfego interno do Next (HMR em desenvolvimento, chunks) não entra na conta: é
   // pedido pelo próprio app e em volume que não representa abuso.
@@ -40,24 +52,54 @@ export default async function proxy(request: NextRequest) {
   const esperaIp = consumir(`ip:${ip}`, REGRAS.porIp);
   if (esperaIp > 0) return respostaDeLimite(esperaIp, { json: ehApi });
 
+  const produto = produtoDoHost(hostDaRequisicao(request.headers));
+
+  // Tela aberta no endereço do outro produto vai para o endereço certo, com o mesmo
+  // caminho. É o que mantém vivos os links antigos do balcão (boxOS → Peça Peça).
+  //
+  // Cuidado no desenvolvimento: o Next encurta para relativo ("/os") o redirect cujo
+  // host é o do próprio servidor (e para ele localhost e 127.0.0.1 são o mesmo) — e
+  // "/os" no endereço do Peça Peça voltaria para cá. Em produção o servidor é
+  // localhost:8080 e os endereços são públicos, então não acontece; localmente, use
+  // APP_URL=http://boxos.localhost:3000.
+  const outroEndereco = desvioDeProduto(produto, pathname);
+  if (outroEndereco) return NextResponse.redirect(`${outroEndereco}${pathname}${search}`, 308);
+
+  // No Peça Peça, "/" é a lista de cotações de quem entrou como oficina, o balcão de
+  // quem entrou como loja e as boas-vindas de quem ainda não entrou.
+  let rota = pathname;
+  if (produto === "peca-peca" && pathname === "/") {
+    if (await sessaoDeOficina(request)) {
+      rota = "/peca-peca";
+    } else if (await lerTokenDeLoja(request.cookies.get(COOKIE_SESSAO_LOJA)?.value)) {
+      return NextResponse.redirect(new URL("/loja", request.url));
+    } else {
+      rota = "/bem-vindo";
+    }
+  }
+
+  const seguir = () => {
+    const init = { request: { headers: comRota(request, rota, produto) } };
+    return rota === pathname
+      ? NextResponse.next(init)
+      : NextResponse.rewrite(new URL(`${rota}${search}`, request.url), init);
+  };
+
   // Rota pública também leva a rota ao layout — é por ela que o balcão da loja abre sem
   // o menu do boxOS.
-  if (ehRotaPublica(pathname)) return NextResponse.next({ request: { headers: comRota(request) } });
+  if (ehRotaPublica(rota)) return seguir();
 
-  const sessao = await lerToken(request.cookies.get(COOKIE_SESSAO)?.value);
-
-  if (!sessao) {
-    if (ehApi) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-    const login = new URL("/login", request.url);
-    // Guarda para onde a pessoa ia, para voltar lá depois de entrar.
-    if (pathname !== "/") login.searchParams.set("next", pathname + request.nextUrl.search);
-    const resposta = NextResponse.redirect(login);
-    // Cookie inválido ou vencido não serve para mais nada — sai do navegador.
-    resposta.cookies.delete(COOKIE_SESSAO);
-    return resposta;
+  // Painel da autopeça: cookie próprio, separado do da oficina.
+  if (ehRotaDaLoja(rota)) {
+    const loja = await lerTokenDeLoja(request.cookies.get(COOKIE_SESSAO_LOJA)?.value);
+    if (!loja) return paraOLogin(request, ehApi, COOKIE_SESSAO_LOJA);
+    const espera = consumir(`loja:${loja.sessaoId}`, REGRAS.porSessao);
+    if (espera > 0) return respostaDeLimite(espera, { json: ehApi });
+    return seguir();
   }
+
+  const sessao = await sessaoDeOficina(request);
+  if (!sessao) return paraOLogin(request, ehApi, COOKIE_SESSAO);
 
   // Teto por sessão. Existe além do teto por IP porque a oficina inteira sai pelo mesmo
   // Wi-Fi: assim um cookie roubado — ou uma tela em laço — é contido sem derrubar os
@@ -102,21 +144,43 @@ export default async function proxy(request: NextRequest) {
   // ou derrubado, que só o banco revela e aqui no Edge não dá para consultar.
   // O método vai junto para o modo só leitura (`guardaApi`). `set` sobrescreve o que o
   // navegador tiver mandado com o mesmo nome — o valor que chega ao servidor é este.
-  return NextResponse.next({ request: { headers: comRota(request) } });
+  return seguir();
 }
 
-function comRota(request: NextRequest) {
+/** Sessão de oficina (boxOS ou Peça Peça). Token de loja no cookie errado não vale. */
+async function sessaoDeOficina(request: NextRequest) {
+  const lido = await lerToken(request.cookies.get(COOKIE_SESSAO)?.value);
+  return lido && lido.papel !== PAPEL_LOJA ? lido : null;
+}
+
+function paraOLogin(request: NextRequest, ehApi: boolean, cookie: string) {
+  if (ehApi) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+  const { pathname, search } = request.nextUrl;
+  const login = new URL("/login", request.url);
+  // Guarda para onde a pessoa ia, para voltar lá depois de entrar.
+  if (pathname !== "/") login.searchParams.set("next", pathname + search);
+  const resposta = NextResponse.redirect(login);
+  // Cookie inválido ou vencido não serve para mais nada — sai do navegador.
+  resposta.cookies.delete(cookie);
+  return resposta;
+}
+
+function comRota(request: NextRequest, rota: string, produto: Produto) {
   const headers = new Headers(request.headers);
-  headers.set(HEADER_ROTA, request.nextUrl.pathname);
+  headers.set(HEADER_ROTA, rota);
   headers.set(HEADER_METODO, request.method);
+  headers.set(HEADER_PRODUTO, produto);
   return headers;
 }
 
 export const config = {
   // Tudo, menos os arquivos que o próprio Next serve e os estáticos da pasta public
-  // (a logo aparece na tela de login, que é pública por definição). O `sw.js` também:
-  // o navegador recusa service worker que redireciona, e o login o registra sem sessão.
+  // (a logo aparece na tela de login, que é pública por definição). Os service workers
+  // também: o navegador recusa service worker que redireciona, e o login o registra
+  // sem sessão.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw.js$|.*\\.(?:png|jpe?g|gif|webp|svg|ico|txt|xml|webmanifest)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js$|sw-pecapeca.js$|.*\\.(?:png|jpe?g|gif|webp|svg|ico|txt|xml|webmanifest)$).*)",
   ],
 };

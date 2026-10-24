@@ -70,9 +70,11 @@ export const MENSAGEM_SOMENTE_LEITURA =
 
 /**
  * Rotas que continuam aceitando gravação em modo só leitura: sair, e assinar — que é
- * justamente o que a oficina bloqueada precisa conseguir fazer.
+ * justamente o que a oficina bloqueada precisa conseguir fazer. E o Peça Peça, que é
+ * grátis e não depende do plano do boxOS — menos gerar o orçamento, que cria dado no
+ * boxOS e por isso confere o modo só leitura na própria rota.
  */
-export const ROTAS_LIVRES_NO_BLOQUEIO = ["/api/auth/logout", "/api/assinatura"];
+export const ROTAS_LIVRES_NO_BLOQUEIO = ["/api/auth/logout", "/api/assinatura", "/api/peca-peca"];
 
 /** Métodos que não alteram nada — passam sempre. */
 const METODOS_DE_LEITURA = new Set(["GET", "HEAD", "OPTIONS"]);

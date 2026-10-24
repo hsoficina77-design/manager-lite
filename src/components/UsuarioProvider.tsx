@@ -22,6 +22,8 @@ export type UsuarioCliente = {
   podeExcluir: boolean;
   /** Dono da plataforma — só decide se a aba "Plataforma" aparece. */
   administraPlataforma: boolean;
+  /** A oficina tem o boxOS; sem ele, é só Peça Peça (e as telas oferecem o boxOS). */
+  usaBoxOS: boolean;
   plano: PlanoCliente;
 };
 
@@ -64,4 +66,9 @@ export function usePodeExcluir(): boolean {
  */
 export function usePlano(): PlanoCliente | null {
   return useContext(Contexto)?.plano ?? null;
+}
+
+/** A oficina tem o boxOS? Decide se a cotação vira orçamento ou mostra a oferta do boxOS. */
+export function useUsaBoxOS(): boolean {
+  return useContext(Contexto)?.usaBoxOS ?? false;
 }

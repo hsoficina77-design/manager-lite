@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashSenha } from "@/lib/senha";
-import { abrirSessao, cadastroTesteAberto, criarOficinaDeTeste, validarCadastroOficina } from "@/lib/sistema";
+import { abrirSessao, cadastroTesteAberto, criarOficinaPeloCadastro, validarCadastroOficina } from "@/lib/sistema";
 import { normalizarWhatsapp } from "@/lib/plano";
 import { REGRAS, consumir, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
 import { lerJsonCru, respostaDeValidacao } from "@/lib/validacao";
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const origem =
       typeof corpo?.origem === "string" ? corpo.origem.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40) || null : null;
 
-    const criada = await criarOficinaDeTeste({
+    const criada = await criarOficinaPeloCadastro({
       nomeOficina: dados.nomeOficina,
       cidade: dados.cidade,
       estado: dados.estado,
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       senhaHash: await hashSenha(dados.senha),
       whatsapp,
       origem,
+      produto: "boxos",
     });
 
     if (criada === "email") {

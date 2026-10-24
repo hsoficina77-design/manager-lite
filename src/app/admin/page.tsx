@@ -18,7 +18,8 @@ function pct(parte: number, todo: number) {
 
 export default async function AdminPage() {
   await exigirPlataforma();
-  const oficinas = await listarOficinas();
+  // Só as oficinas do boxOS: as contas grátis do Peça Peça têm a página delas.
+  const oficinas = (await listarOficinas()).filter((o) => o.usaBoxOS);
   const r = resumoDaPlataforma(oficinas);
 
   const barrasSemana = r.porSemana.map((s, i) => ({

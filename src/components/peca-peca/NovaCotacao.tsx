@@ -10,6 +10,7 @@ import { Painel } from "@/components/ui/Dados";
 import { useConfirmar } from "@/components/ui/Avisos";
 import { Busca, Confere, Fechar, Lapis, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
+import { useUsaBoxOS } from "@/components/UsuarioProvider";
 import { normalizarPlaca, type LojasDaOficina, type VeiculoCotado } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
 import { Cabecalho, InformarCidade } from "./ui";
@@ -54,6 +55,8 @@ const VEICULO_VAZIO: VeiculoNaTela = { placa: "", marca: "", modelo: "", ano: ""
 
 export function NovaCotacao() {
   const router = useRouter();
+  // A busca da placa olha os carros cadastrados no boxOS; sem ele, não há onde procurar.
+  const usaBoxOS = useUsaBoxOS();
   const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojasDisponiveis = daOficina?.lojas ?? null;
   const [veiculo, setVeiculo] = useState<VeiculoNaTela>(VEICULO_VAZIO);
@@ -189,7 +192,14 @@ export function NovaCotacao() {
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <Cabecalho titulo="Nova cotação" voltar="/peca-peca" />
 
-      <Painel titulo="1. Veículo" ajuda="Comece pela placa: se o carro já passou pela oficina, o resto vem sozinho.">
+      <Painel
+        titulo="1. Veículo"
+        ajuda={
+          usaBoxOS
+            ? "Comece pela placa: se o carro já passou pela oficina, o resto vem sozinho."
+            : "A placa é opcional. Marca, modelo, ano e motor são o que o balconista usa para acertar a peça."
+        }
+      >
         <div className="flex gap-2">
           <Entrada
             value={veiculo.placa}
@@ -200,17 +210,19 @@ export function NovaCotacao() {
                 setVeiculo((v) => ({ ...v, clienteId: undefined, veiculoId: undefined, clienteNome: undefined }));
               }
             }}
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), buscarPlaca())}
+            onKeyDown={(e) => usaBoxOS && e.key === "Enter" && (e.preventDefault(), buscarPlaca())}
             placeholder="ABC1D23"
             maxLength={8}
             autoCapitalize="characters"
             aria-label="Placa"
             className="max-w-[11rem] font-mono text-base uppercase tracking-widest"
           />
-          <Botao variante="contraste" onClick={buscarPlaca} disabled={busca.tipo === "buscando"}>
-            <Busca tamanho={16} />
-            {busca.tipo === "buscando" ? "Buscando..." : "Buscar placa"}
-          </Botao>
+          {usaBoxOS && (
+            <Botao variante="contraste" onClick={buscarPlaca} disabled={busca.tipo === "buscando"}>
+              <Busca tamanho={16} />
+              {busca.tipo === "buscando" ? "Buscando..." : "Buscar placa"}
+            </Botao>
+          )}
         </div>
 
         {busca.tipo === "achou" && (

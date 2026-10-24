@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { abrirSessao, usuarioPorEmail } from "@/lib/sistema";
+import { abrirSessaoLoja, usuarioLojaPorEmail } from "@/lib/conta-loja";
+import { hostDaRequisicao, produtoDoHost, urlPecaPeca } from "@/lib/produto";
 import { conferirSenha, hashSenha } from "@/lib/senha";
 import { chaveDaRequisicao, esperaRestante, limparFalhas, registrarFalha } from "@/lib/tentativas";
 import { REGRAS, consumir, esquecer, ipDaRequisicao, respostaDeLimite } from "@/lib/limite-requisicoes";
@@ -60,9 +62,39 @@ export async function POST(request: Request) {
     // O e-mail é único no sistema inteiro: é ele que diz de qual oficina a pessoa é.
     const usuario = await usuarioPorEmail(emailLimpo);
 
-    const senhaConfere = await conferirSenha(senha, usuario?.senhaHash ?? (await hashFalso()));
+    // Não é de oficina: pode ser de quem trabalha numa autopeça (painel da loja do Peça
+    // Peça). O e-mail é único também entre as duas tabelas.
+    if (!usuario) {
+      const daLoja = await usuarioLojaPorEmail(emailLimpo);
+      const confere = await conferirSenha(senha, daLoja?.senhaHash ?? (await hashFalso()));
+      if (!daLoja || !confere) {
+        registrarFalha(chave);
+        return NextResponse.json({ error: CREDENCIAL_INVALIDA }, { status: 401 });
+      }
+      if (!daLoja.ativo || !daLoja.loja.ativa) {
+        registrarFalha(chave);
+        return NextResponse.json(
+          { error: "Este acesso foi desligado. Fale com quem cuida da equipe da loja." },
+          { status: 403 }
+        );
+      }
+      // Com o Peça Peça no endereço dele, o cookie da loja precisa nascer lá.
+      const enderecoDoPecaPeca = urlPecaPeca();
+      if (enderecoDoPecaPeca && produtoDoHost(hostDaRequisicao(request.headers)) !== "peca-peca") {
+        return NextResponse.json(
+          { error: `O painel da loja fica no endereço do Peça Peça: ${enderecoDoPecaPeca}/login` },
+          { status: 400 }
+        );
+      }
+      limparFalhas(chave);
+      esquecer(chaveIp);
+      await abrirSessaoLoja(daLoja, request);
+      return NextResponse.json({ id: daLoja.id, nome: daLoja.nome, email: daLoja.email, tipo: "loja" });
+    }
 
-    if (!usuario || !senhaConfere) {
+    const senhaConfere = await conferirSenha(senha, usuario.senhaHash);
+
+    if (!senhaConfere) {
       registrarFalha(chave);
       return NextResponse.json({ error: CREDENCIAL_INVALIDA }, { status: 401 });
     }
@@ -95,6 +127,7 @@ export async function POST(request: Request) {
       nome: usuario.nome,
       email: usuario.email,
       papel: usuario.papel,
+      tipo: "oficina",
     });
   } catch (err) {
     // Corpo grande demais ou JSON quebrado é erro de quem chamou, não do servidor.

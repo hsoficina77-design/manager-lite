@@ -100,6 +100,42 @@ export const lojaAlterarSchema = z
   .extend({ ativa: z.boolean().optional() })
   .refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
 
+// ─── Painel da loja (equipe e dados) ────────────────────────────────────────
+
+const emailOpcional = nulavel("E-mail", LIMITES.email).refine(
+  (v) => v === null || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v),
+  "Informe um e-mail válido"
+);
+
+/** Convite para alguém entrar na equipe da loja. O nome e o e-mail são só sugestão. */
+export const conviteLojaSchema = z.object({
+  nome: nulavel("Nome", LIMITES.nome).optional(),
+  email: emailOpcional.optional(),
+  perfil: z.enum(["DONO", "VENDEDOR"], { errorMap: () => ({ message: "Escolha Dono ou Vendedor" }) }),
+});
+
+/** Mudar os acessos de alguém, ou ligar e desligar. As chaves passam pelo catálogo no servidor. */
+export const pessoaDaLojaSchema = z.object({
+  permissoes: z.array(z.string().max(60)).max(30).optional(),
+  ativo: z.boolean().optional(),
+});
+
+/** O que o dono da loja edita: telefone e prazo do motoboy. A região é da plataforma. */
+export const dadosDaLojaSchema = z
+  .object({
+    telefone: nulavel("Telefone", LIMITES.telefone),
+    entregaMin: inteiro("Entrega mais rápida", 0, 600),
+    entregaMax: inteiro("Entrega mais demorada", 0, 600),
+  })
+  .refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
+
+/** Aceitar o convite (ou o "novo acesso"): nome, e-mail e a senha. */
+export const acessoLojaSchema = z.object({
+  nome: obrigatorio("Seu nome", LIMITES.nome),
+  email: emailOpcional.optional(),
+  senha: z.string().max(200),
+});
+
 export const respostaDoBalcaoSchema = z.object({
   /** Peça → ofertas da loja. Lista vazia é "não tenho". */
   itens: z.record(

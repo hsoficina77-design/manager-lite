@@ -113,12 +113,16 @@ export type EnvioNoBalcao = {
   entrega: EtapaEntrega | null;
   /** A oficina confirmou que as peças chegaram. */
   oficinaRecebeuEm: string | null;
-  /** A oficina já gerou o orçamento: a resposta não muda mais. */
+  /** A oficina já gerou o orçamento ou fez o pedido: a resposta não muda mais. */
   travada: boolean;
   veiculo: VeiculoCotado;
   observacao: string;
   pecas: PecaNoBalcao[];
 };
+
+/** O que o link antigo do balcão responde depois que a loja passou a ter login. */
+export const MENSAGEM_BALCAO_COM_LOGIN =
+  "O balcão desta loja agora é com login. Entre com o seu e-mail e senha no Peça Peça.";
 
 export type CaixaDoBalcao = {
   loja: { nome: string; cidade: string | null; entregaMin: number; entregaMax: number };
@@ -165,6 +169,21 @@ export const ETAPAS: Record<Etapa, { rotulo: string; cor: string }> = {
 /** As lojas do pedido: as que receberam o pedido (só elas ganham etapa de entrega). */
 export function enviosDoPedido(c: CotacaoVista): EnvioVista[] {
   return c.envios.filter((e) => e.entrega);
+}
+
+/**
+ * O pedido como ele sai (ou saiu): cada loja de quem se escolheu alguma peça, as peças
+ * dela e quanto fica nela. É o que a confirmação do pedido e o resumo mostram.
+ */
+export function pedidoPorLoja(c: CotacaoVista) {
+  return c.envios.flatMap((envio) => {
+    const pecas = c.pecas.flatMap((peca) => {
+      const oferta = envio.ofertas.find((o) => o.id === peca.ofertaId);
+      return oferta ? [{ peca, oferta }] : [];
+    });
+    if (pecas.length === 0) return [];
+    return [{ envio, pecas, total: pecas.reduce((s, { peca, oferta }) => s + oferta.preco * peca.quantidade, 0) }];
+  });
 }
 
 /** A loja marcou "entregue" e a oficina ainda não confirmou que as peças chegaram. */

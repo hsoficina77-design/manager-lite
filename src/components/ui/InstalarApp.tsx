@@ -5,6 +5,7 @@ import { EVENTO_INSTALAR } from "@/lib/instalar-app";
 import { ModalDeAjuda, type TextoDeAjuda } from "./Ajuda";
 import { Botao } from "./Botao";
 import { Instalar } from "./Icones";
+import { useProduto } from "@/components/ProdutoProvider";
 
 /**
  * Instalar o boxOS no aparelho: um ícone na tela do celular ou na área de trabalho, que
@@ -90,27 +91,28 @@ function assinar(aviso: () => void) {
   return () => window.removeEventListener(EVENTO_INSTALAR, aviso);
 }
 
-const NO_IPHONE: TextoDeAjuda = {
-  titulo: "Instalar o boxOS",
+// O mesmo passo a passo serve aos dois produtos; muda só o nome do app.
+const noIphone = (app: string): TextoDeAjuda => ({
+  titulo: `Instalar o ${app}`,
   texto: "No iPhone e no iPad, quem coloca o ícone na tela é você, em três toques:",
   passos: [
     "Toque em Compartilhar: o quadrado com uma seta para cima. Se não achar, ele fica dentro do botão ⋯.",
     "Na lista que abrir, toque em Adicionar à Tela de Início. Se não aparecer, role a lista para baixo.",
-    "Toque em Adicionar. O ícone do boxOS aparece junto com os outros apps.",
+    `Toque em Adicionar. O ícone do ${app} aparece junto com os outros apps.`,
   ],
-  dica: "Se o boxOS pedir o login ao abrir pelo ícone, entre de novo uma vez. Depois ele lembra.",
-};
+  dica: `Se o ${app} pedir o login ao abrir pelo ícone, entre de novo uma vez. Depois ele lembra.`,
+});
 
-const NO_ANDROID: TextoDeAjuda = {
-  titulo: "Instalar o boxOS",
+const noAndroid = (app: string): TextoDeAjuda => ({
+  titulo: `Instalar o ${app}`,
   texto: "Pelo menu do Chrome, em três toques:",
   passos: [
     "Toque nos três pontinhos ⋮, no canto de cima, à direita.",
     "Toque em Instalar app. Se não aparecer, toque em Adicionar à tela inicial.",
-    "Toque em Instalar. O ícone do boxOS aparece junto com os outros apps.",
+    `Toque em Instalar. O ícone do ${app} aparece junto com os outros apps.`,
   ],
   dica: "Usa outro navegador? Procure no menu dele a opção Adicionar à tela inicial.",
-};
+});
 
 type Resultado = "aceitou" | "recusou" | "explicou";
 
@@ -123,11 +125,12 @@ type Resultado = "aceitou" | "recusou" | "explicou";
 export function useInstalarApp() {
   const situacao = useSyncExternalStore(assinar, situacaoAgora, () => "indisponivel" as const);
   const [explicando, setExplicando] = useState<TextoDeAjuda | null>(null);
+  const app = useProduto() === "peca-peca" ? "Peça Peça" : "boxOS";
 
   const instalar = useCallback(async (): Promise<Resultado> => {
     const pedido = window.__boxosInstalar;
     if (!pedido) {
-      setExplicando(ehIphone() ? NO_IPHONE : NO_ANDROID);
+      setExplicando(ehIphone() ? noIphone(app) : noAndroid(app));
       return "explicou";
     }
     // O aviso vale uma vez só. Se a pessoa recusar, o navegador avisa de novo outro dia.
@@ -141,7 +144,7 @@ export function useInstalarApp() {
     } finally {
       window.dispatchEvent(new Event(EVENTO_INSTALAR));
     }
-  }, []);
+  }, [app]);
 
   return {
     /** Dá para instalar de algum jeito: o item do menu aparece. */

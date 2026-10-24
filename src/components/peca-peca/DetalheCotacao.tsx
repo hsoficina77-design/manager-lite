@@ -9,6 +9,8 @@ import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Confere } from "@/components/ui/Icones";
+import { useUsaBoxOS } from "@/components/UsuarioProvider";
+import { useLinkDoBoxOS } from "@/components/ProdutoProvider";
 import {
   ETAPAS_ENTREGA,
   aConferir,
@@ -17,13 +19,16 @@ import {
   etapaDa,
   lojasSemAPeca,
   ofertasDa,
+  pedidoPorLoja,
   precoDaPeca,
   rotuloDaEntrega,
   totaisDa,
   type CotacaoVista,
+  type Etapa,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
+import { VitrineBoxOS } from "./VitrineBoxOS";
 
 type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 
@@ -96,8 +101,19 @@ function useAvisosDasLojas(c: CotacaoVista | null) {
   }, [c, avisar]);
 }
 
-const LINHA_DO_TEMPO = ["Enviada", "Lojas responderam", "Orçamento", "Pedido", "Entregue"];
-const POSICAO = { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, CONFERIR: 3, ENTREGUE: 4 } as const;
+// O caminho da cotação. O passo do orçamento é do boxOS: some para quem só tem o Peça
+// Peça, e para quem pediu direto sem gerar orçamento.
+const COM_ORCAMENTO = {
+  rotulos: ["Enviada", "Lojas responderam", "Orçamento", "Pedido", "Entregue"],
+  posicao: { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, CONFERIR: 3, ENTREGUE: 4 },
+} satisfies { rotulos: string[]; posicao: Record<Etapa, number> };
+const SEM_ORCAMENTO = {
+  rotulos: ["Enviada", "Lojas responderam", "Pedido", "Entregue"],
+  posicao: { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 1, PEDIDO: 2, CONFERIR: 2, ENTREGUE: 3 },
+} satisfies { rotulos: string[]; posicao: Record<Etapa, number> };
+
+/** Por que a escolha das peças não muda mais: o orçamento saiu, ou o pedido foi feito. */
+type Trava = "orcamento" | "pedido" | null;
 
 function Conteudo({
   c: doServidor,
@@ -115,7 +131,9 @@ function Conteudo({
   const router = useRouter();
   const confirmar = useConfirmar();
   const avisar = useAvisar();
+  const usaBoxOS = useUsaBoxOS();
   const [gerando, setGerando] = useState(false);
+  const [pedindo, setPedindo] = useState(false);
 
   // O que a pessoa está digitando (margem, preço de venda) entra na conta da tela na
   // hora, e só vai para o servidor quando ela sai do campo.
@@ -129,12 +147,30 @@ function Conteudo({
     ),
   };
 
-  const posicao = POSICAO[etapaDa(c)];
+  const linha = usaBoxOS && !(c.pedidoEm && !c.orcamento) ? COM_ORCAMENTO : SEM_ORCAMENTO;
+  const posicao = linha.posicao[etapaDa(c)];
   const pendentes = c.envios.filter((e) => !e.respondidaEm);
   const respondeu = pendentes.length < c.envios.length;
   // Depois do orçamento, mudar a escolha faria a cotação contar uma história e o
-  // orçamento outra.
-  const travado = Boolean(c.orcamento);
+  // orçamento outra; depois do pedido, as lojas já estão separando aquelas peças.
+  const trava: Trava = c.orcamento ? "orcamento" : c.pedidoEm ? "pedido" : null;
+
+  async function pedir() {
+    const lojas = pedidoPorLoja(c).map(
+      ({ envio, pecas }) => `${envio.lojaNome} (${pecas.length === 1 ? "1 peça" : `${pecas.length} peças`})`
+    );
+    const ok = await confirmar({
+      titulo: c.orcamento ? `O cliente aprovou o orçamento #${c.orcamento.numero}?` : "Fazer o pedido?",
+      texto: `O pedido vai para o balcão de ${lojas.join(" e ")}. Depois dele, a escolha das peças não muda mais.`,
+      acao: "Fazer o pedido",
+    });
+    if (!ok) return;
+    setPedindo(true);
+    const r = await gravar(enviarJson(`${url}/pedido`, "POST"), { devolveDado: true });
+    setPedindo(false);
+    if (!r.ok) return avisar(r.erro, "erro");
+    avisar(lojas.length === 1 ? "Pedido enviado à loja" : "Pedido enviado às lojas");
+  }
 
   async function alterar(corpo: object, otimista?: (d: CotacaoVista) => CotacaoVista) {
     const r = await gravar(enviarJson(url, "PATCH", corpo), { otimista, devolveDado: true });
@@ -204,9 +240,9 @@ function Conteudo({
         acao={<PilulaEtapa cotacao={c} />}
       />
 
-      {/* Onde a cotação está no caminho até virar OS. */}
-      <ol className="grid grid-cols-5 gap-1">
-        {LINHA_DO_TEMPO.map((rotulo, i) => (
+      {/* Onde a cotação está no caminho até as peças chegarem. */}
+      <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${linha.rotulos.length}, minmax(0, 1fr))` }}>
+        {linha.rotulos.map((rotulo, i) => (
           <li key={rotulo} className="min-w-0">
             <div className={cn("h-1.5 rounded-full", i <= posicao ? "bg-brand-600" : "bg-superficie-3")} />
             <p
@@ -232,15 +268,18 @@ function Conteudo({
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          {/* Com o orçamento feito, o que importa agora é o pedido: ele sobe. */}
-          {c.orcamento && <PainelPedido c={c} url={url} gravar={gravar} />}
+          {/* Com o pedido feito, o que importa agora é a entrega: ela sobe. */}
+          {c.pedidoEm && (
+            <PainelEntrega c={{ ...c, pedidoEm: c.pedidoEm }} url={url} gravar={gravar} onGerar={() => setGerando(true)} />
+          )}
 
           <PainelLojas c={c} />
 
           {respondeu ? (
             <PainelEscolha
               c={c}
-              travado={travado}
+              trava={trava}
+              usaBoxOS={usaBoxOS}
               aguardando={pendentes.length > 0}
               onEscolher={(pecaId, ofertaId) =>
                 alterar({ escolha: { pecaId, ofertaId } }, (d) => ({
@@ -260,7 +299,8 @@ function Conteudo({
             />
           )}
 
-          {!travado && (
+          {/* Preço para o cliente: é o orçamento, coisa do boxOS. */}
+          {usaBoxOS && !c.orcamento && (
             <PainelPrecos
               c={c}
               rascunho={rascunhoVenda}
@@ -279,11 +319,13 @@ function Conteudo({
         <aside className="space-y-3 lg:sticky lg:top-6">
           <Resumo
             c={c}
-            travado={travado}
+            usaBoxOS={usaBoxOS}
+            pedindo={pedindo}
             margemDigitada={rascunhoMargem}
             onDigitarMargem={setRascunhoMargem}
             onSalvarMargem={salvarMargem}
             onGerar={() => setGerando(true)}
+            onPedir={pedir}
           />
           <Botao variante="fantasma" tamanho="denso" onClick={excluir} className="w-full text-perigo">
             Excluir cotação
@@ -341,24 +383,29 @@ function PainelLojas({ c }: { c: CotacaoVista }) {
 
 function PainelEscolha({
   c,
-  travado,
+  trava,
+  usaBoxOS,
   aguardando,
   onEscolher,
   onMenorPreco,
 }: {
   c: CotacaoVista;
-  travado: boolean;
+  trava: Trava;
+  usaBoxOS: boolean;
   aguardando: boolean;
   onEscolher: (pecaId: string, ofertaId: string) => void;
   onMenorPreco: () => void;
 }) {
+  const travado = trava !== null;
   return (
     <Painel
       titulo={travado ? "Peças escolhidas" : "Escolha as peças"}
       ajuda={
-        travado
+        trava === "orcamento"
           ? "O orçamento já saiu com estas escolhas."
-          : "Pode misturar: cada peça da loja que for melhor. A marca é só para você; o cliente não vê."
+          : trava === "pedido"
+            ? "O pedido já foi feito com estas escolhas."
+            : `Pode misturar: cada peça da loja que for melhor.${usaBoxOS ? " A marca é só para você; o cliente não vê." : ""}`
       }
       acao={
         !travado && (
@@ -371,7 +418,7 @@ function PainelEscolha({
       <div className="space-y-4">
         {c.pecas.map((p) => {
           const escolhida = escolhaDa(c, p);
-          // Depois do orçamento, as ofertas não escolhidas só alongariam a tela.
+          // Depois do orçamento ou do pedido, as ofertas não escolhidas só alongariam a tela.
           const ofertas = travado ? (escolhida ? [escolhida] : []) : ofertasDa(c, p.id);
           const semAPeca = travado ? [] : lojasSemAPeca(c, p.id);
           const maisRapido = ofertas.length > 1 ? Math.min(...ofertas.map((o) => o.prazoMin)) : null;
@@ -391,7 +438,9 @@ function PainelEscolha({
               {ofertas.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-linha-forte px-3 py-2 text-xs text-tinta-3">
                   {travado
-                    ? "Ficou fora do orçamento."
+                    ? trava === "orcamento"
+                      ? "Ficou fora do orçamento."
+                      : "Ficou fora do pedido."
                     : aguardando
                       ? "Ainda sem preço. Falta loja responder."
                       : "Nenhuma das lojas tem esta peça."}
@@ -559,22 +608,29 @@ function PainelPrecos({
 
 function Resumo({
   c,
-  travado,
+  usaBoxOS,
+  pedindo,
   margemDigitada,
   onDigitarMargem,
   onSalvarMargem,
   onGerar,
+  onPedir,
 }: {
   c: CotacaoVista;
-  travado: boolean;
+  usaBoxOS: boolean;
+  pedindo: boolean;
   margemDigitada: string | null;
   onDigitarMargem: (v: string) => void;
   onSalvarMargem: () => void;
   onGerar: () => void;
+  onPedir: () => void;
 }) {
+  const linkDoBoxOS = useLinkDoBoxOS();
   const t = totaisDa(c);
+  const porLoja = pedidoPorLoja(c);
   // Só conta preço digitado de peça que está escolhida.
   const comPrecoProprio = c.pecas.filter((p) => p.ofertaId && p.vendaUnit !== null).length;
+  const semEscolha = t.escolhidas === 0;
 
   return (
     <div className="space-y-4 rounded-xl border border-linha bg-superficie p-4 sm:p-5">
@@ -586,65 +642,112 @@ function Resumo({
       </div>
 
       <div className="space-y-1.5 text-sm">
-        <div className="flex justify-between text-tinta-3">
-          <span>Custo nas lojas</span>
+        {/* Quanto fica em cada loja: é o que se paga a cada uma. */}
+        {porLoja.map(({ envio, total }) => (
+          <div key={envio.id} className="flex justify-between text-tinta-3">
+            <span className="min-w-0 truncate">{envio.lojaNome}</span>
+            <span className="tabular-nums">{formatCurrency(total)}</span>
+          </div>
+        ))}
+        <div
+          className={cn(
+            "flex justify-between",
+            usaBoxOS ? "text-tinta-3" : "mt-1 border-t border-linha pt-2 text-lg font-bold text-tinta"
+          )}
+        >
+          <span>{usaBoxOS ? "Custo nas lojas" : "Total das peças"}</span>
           <span className="tabular-nums">{formatCurrency(t.custo)}</span>
         </div>
-        <div className="flex items-center justify-between gap-3 text-tinta-3">
-          <label htmlFor="margem-cotacao">
-            Sua margem
-            {comPrecoProprio > 0 && (
-              <span className="block text-xs">
-                {comPrecoProprio === 1 ? "1 peça com preço seu" : `${comPrecoProprio} peças com preço seu`}
+
+        {usaBoxOS && (
+          <>
+            <div className="flex items-center justify-between gap-3 text-tinta-3">
+              <label htmlFor="margem-cotacao">
+                Sua margem
+                {comPrecoProprio > 0 && (
+                  <span className="block text-xs">
+                    {comPrecoProprio === 1 ? "1 peça com preço seu" : `${comPrecoProprio} peças com preço seu`}
+                  </span>
+                )}
+              </label>
+              <span className="flex items-center gap-1">
+                <Entrada
+                  id="margem-cotacao"
+                  value={margemDigitada ?? String(c.margem)}
+                  onChange={(e) => onDigitarMargem(e.target.value.replace(/\D/g, ""))}
+                  onBlur={onSalvarMargem}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), onSalvarMargem())}
+                  disabled={Boolean(c.orcamento)}
+                  inputMode="numeric"
+                  className="w-16 text-right tabular-nums"
+                />
+                %
               </span>
-            )}
-          </label>
-          <span className="flex items-center gap-1">
-            <Entrada
-              id="margem-cotacao"
-              value={margemDigitada ?? String(c.margem)}
-              onChange={(e) => onDigitarMargem(e.target.value.replace(/\D/g, ""))}
-              onBlur={onSalvarMargem}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), onSalvarMargem())}
-              disabled={travado}
-              inputMode="numeric"
-              className="w-16 text-right tabular-nums"
-            />
-            %
-          </span>
-        </div>
-        <div className="mt-1 flex justify-between border-t border-linha pt-2 text-lg font-bold text-tinta">
-          <span>Cliente paga</span>
-          <span className="tabular-nums">{formatCurrency(t.venda)}</span>
-        </div>
-        <div className="flex justify-between font-semibold text-ok">
-          <span>Você ganha nas peças</span>
-          <span className="tabular-nums">{formatCurrency(t.ganho)}</span>
-        </div>
+            </div>
+            <div className="mt-1 flex justify-between border-t border-linha pt-2 text-lg font-bold text-tinta">
+              <span>Cliente paga</span>
+              <span className="tabular-nums">{formatCurrency(t.venda)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-ok">
+              <span>Você ganha nas peças</span>
+              <span className="tabular-nums">{formatCurrency(t.ganho)}</span>
+            </div>
+          </>
+        )}
       </div>
 
-      {c.orcamento ? (
+      {c.orcamento && (
         <div className="space-y-2 rounded-lg border border-ok-linha bg-ok-fraco p-3">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-ok">
             <Confere tamanho={16} />
             Orçamento #{c.orcamento.numero} criado
           </p>
-          <BotaoLink href={`/orcamentos/${c.orcamento.id}`} variante="secundario" tamanho="denso" className="w-full">
+          <BotaoLink
+            href={linkDoBoxOS(`/orcamentos/${c.orcamento.id}`)}
+            variante="secundario"
+            tamanho="denso"
+            className="w-full"
+          >
             Abrir orçamento
           </BotaoLink>
         </div>
-      ) : (
-        <>
-          <Botao onClick={onGerar} disabled={t.escolhidas === 0} className="w-full">
-            Gerar orçamento
-          </Botao>
-          <p className="text-xs text-tinta-3">
-            {t.escolhidas === 0
-              ? "Escolha ao menos uma peça para montar o orçamento."
-              : "Sai pronto no boxOS, com os preços acima. Só falta o nome do cliente."}
-          </p>
-        </>
       )}
+
+      {!c.pedidoEm && (
+        <div className="space-y-2">
+          {/* Com o boxOS, o caminho de sempre é orçamento → cliente aprova → pedido; o
+              pedido direto fica como segunda opção. Sem ele, pedir é a ação. */}
+          {usaBoxOS && !c.orcamento ? (
+            <>
+              <Botao onClick={onGerar} disabled={semEscolha} className="w-full">
+                Gerar orçamento
+              </Botao>
+              <Botao variante="secundario" onClick={onPedir} disabled={semEscolha || pedindo} className="w-full">
+                {pedindo ? "Pedindo..." : "Pedir sem orçamento"}
+              </Botao>
+            </>
+          ) : (
+            <Botao
+              variante={c.orcamento ? "sucesso" : "primario"}
+              onClick={onPedir}
+              disabled={semEscolha || pedindo}
+              className="w-full"
+            >
+              {pedindo ? "Pedindo..." : c.orcamento ? "O cliente aprovou: pedir as peças" : "Fazer o pedido"}
+            </Botao>
+          )}
+          <p className="text-xs text-tinta-3">
+            {semEscolha
+              ? "Escolha ao menos uma peça."
+              : usaBoxOS && !c.orcamento
+                ? "O orçamento sai pronto no boxOS, com os preços acima. Só falta o nome do cliente."
+                : `O pedido vai direto para o balcão de ${porLoja.map((l) => l.envio.lojaNome).join(" e ")}.`}
+          </p>
+        </div>
+      )}
+
+      {/* O orçamento para o cliente é do boxOS, vendido à parte. */}
+      {!usaBoxOS && <VitrineBoxOS compacta={Boolean(c.pedidoEm)} />}
     </div>
   );
 }
@@ -776,25 +879,25 @@ function ModalOrcamento({
 
 // ─── Pedido e entrega ───────────────────────────────────────────────────────
 
-function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar: Gravar }) {
+function PainelEntrega({
+  c,
+  url,
+  gravar,
+  onGerar,
+}: {
+  c: CotacaoVista & { pedidoEm: string };
+  url: string;
+  gravar: Gravar;
+  onGerar: () => void;
+}) {
   const avisar = useAvisar();
   const confirmar = useConfirmar();
-  const [pedindo, setPedindo] = useState(false);
+  const usaBoxOS = useUsaBoxOS();
+  const linkDoBoxOS = useLinkDoBoxOS();
   const [confirmando, setConfirmando] = useState<string | null>(null);
-  const [erro, setErro] = useState("");
-  const orcamento = c.orcamento!;
 
   // Só entra no pedido a loja de quem se escolheu alguma peça.
   const doPedido = c.envios.filter((e) => c.pecas.some((p) => e.ofertas.some((o) => o.id === p.ofertaId)));
-
-  async function pedir() {
-    setErro("");
-    setPedindo(true);
-    const r = await gravar(enviarJson(`${url}/pedido`, "POST"), { devolveDado: true });
-    setPedindo(false);
-    if (!r.ok) return setErro(r.erro);
-    avisar(doPedido.length === 1 ? "Pedido enviado à loja" : "Pedido enviado às lojas");
-  }
 
   /**
    * Só a oficina fecha a entrega. Antes de a loja marcar "entregue" pede confirmação:
@@ -816,31 +919,12 @@ function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar
     avisar(`Recebimento das peças da ${envio.lojaNome} confirmado`);
   }
 
-  if (!c.pedidoEm) {
-    return (
-      <Painel titulo="Pedido das peças">
-        <p className="text-sm text-tinta-2">
-          Mandou o orçamento #{orcamento.numero} para o cliente? Quando ele aprovar, o pedido sai daqui direto para o
-          balcão de {doPedido.map((e) => e.lojaNome).join(" e ")}.
-        </p>
-        {erro && (
-          <div className="mt-3">
-            <Aviso>{erro}</Aviso>
-          </div>
-        )}
-        <Botao onClick={pedir} disabled={pedindo} variante="sucesso" className="mt-3 w-full sm:w-auto">
-          {pedindo ? "Pedindo..." : "O cliente aprovou: pedir as peças"}
-        </Botao>
-      </Painel>
-    );
-  }
-
   const tudoEntregue = etapaDa(c) === "ENTREGUE";
 
   return (
     <Painel
       titulo="Pedido das peças"
-      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. O balconista avança a entrega do balcão dele, e aqui atualiza sozinho. Quando as peças chegarem, confirme o recebimento.`}
+      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. O balconista avança a entrega do painel dele, e aqui atualiza sozinho. Quando as peças chegarem, confirme o recebimento.`}
     >
       <div className="space-y-4">
         {doPedido.map((e) => {
@@ -914,10 +998,21 @@ function PainelPedido({ c, url, gravar }: { c: CotacaoVista; url: string; gravar
         {tudoEntregue && (
           <div className="space-y-2 rounded-lg border border-ok-linha bg-ok-fraco p-3">
             <p className="text-sm font-semibold text-ok">Peças na oficina.</p>
-            <p className="text-sm text-tinta-2">Agora é converter o orçamento em OS. Só falta o telefone do cliente.</p>
-            <BotaoLink href={`/orcamentos/${orcamento.id}`} variante="sucesso" tamanho="denso">
-              Abrir o orçamento #{orcamento.numero} e converter em OS
-            </BotaoLink>
+            {c.orcamento ? (
+              <>
+                <p className="text-sm text-tinta-2">Agora é converter o orçamento em OS. Só falta o telefone do cliente.</p>
+                <BotaoLink href={linkDoBoxOS(`/orcamentos/${c.orcamento.id}`)} variante="sucesso" tamanho="denso">
+                  Abrir o orçamento #{c.orcamento.numero} e converter em OS
+                </BotaoLink>
+              </>
+            ) : usaBoxOS ? (
+              <>
+                <p className="text-sm text-tinta-2">Quer passar para o cliente? O orçamento sai destas peças, no boxOS.</p>
+                <Botao variante="sucesso" tamanho="denso" onClick={onGerar}>
+                  Gerar orçamento
+                </Botao>
+              </>
+            ) : null}
           </div>
         )}
       </div>

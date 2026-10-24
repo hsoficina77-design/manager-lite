@@ -20,6 +20,9 @@ const PERMITIDOS = new Set([
   // Balcão do Peça Peça: a loja não é de oficina nenhuma e atende várias. Só chega às
   // cotações pelos envios para ela, e só com os campos de balcão.
   "src/lib/balcao.ts",
+  // Contas de quem trabalha nas autopeças: login, sessão, convite e equipe — tabelas do
+  // sistema, como a própria loja. Não lê nada de oficina.
+  "src/lib/conta-loja.ts",
 ]);
 
 const RAIZ = process.cwd();

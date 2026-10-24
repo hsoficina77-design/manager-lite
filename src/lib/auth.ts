@@ -9,7 +9,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { COOKIE_SESSAO, lerToken } from "@/lib/sessao";
-import { HEADER_METODO, HEADER_ROTA, ehPapelValido, type Papel } from "@/lib/permissoes";
+import {
+  CODIGO_SEM_BOXOS,
+  HEADER_METODO,
+  HEADER_ROTA,
+  apiLiberadaSemBoxOS,
+  ehPapelValido,
+  type Papel,
+} from "@/lib/permissoes";
 import {
   CODIGO_SOMENTE_LEITURA,
   MENSAGEM_SOMENTE_LEITURA,
@@ -43,6 +50,11 @@ export type UsuarioSessao = {
   somenteLeitura: boolean;
   /** Assinatura no cartão, que renova sozinha (Pix é mês a mês). */
   assinaturaAutomatica: boolean;
+  /**
+   * A oficina tem o boxOS. Sem ele (cadastro grátis do Peça Peça), só o Peça Peça
+   * funciona: `guardaApi` recusa o resto, e o layout leva para a oferta do boxOS.
+   */
+  usaBoxOS: boolean;
 };
 
 /**
@@ -82,7 +94,7 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
             administraPlataforma: true,
             ultimoAcesso: true,
             oficina: {
-              select: { ativa: true, testeAte: true, pagoAte: true, gatewayAssinaturaId: true },
+              select: { ativa: true, testeAte: true, pagoAte: true, gatewayAssinaturaId: true, boxosDesde: true },
             },
           },
         },
@@ -130,6 +142,7 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
       pagoAte,
       somenteLeitura: situacao === "SOMENTE_LEITURA",
       assinaturaAutomatica: Boolean(usuario.oficina.gatewayAssinaturaId),
+      usaBoxOS: usuario.oficina.boxosDesde !== null,
     };
   } catch (err) {
     console.error("Falha ao ler a sessão:", err);
@@ -243,6 +256,19 @@ export async function guardaApi(
   }
   if (opcoes.plataforma && !usuario.administraPlataforma) {
     return { resposta: NextResponse.json({ error: "Acesso restrito à plataforma" }, { status: 403 }) };
+  }
+  if (!usuario.usaBoxOS) {
+    // Oficina só do Peça Peça: o boxOS é vendido à parte. A rota vem do proxy, como no
+    // modo só leitura logo abaixo; sem ela, fecha.
+    const rota = (await headers()).get(HEADER_ROTA) ?? "";
+    if (!apiLiberadaSemBoxOS(rota)) {
+      return {
+        resposta: NextResponse.json(
+          { error: "Esta parte é do boxOS, que ainda não está ativo na sua oficina.", codigo: CODIGO_SEM_BOXOS },
+          { status: 403 }
+        ),
+      };
+    }
   }
   if (usuario.somenteLeitura) {
     // Método e rota vêm do proxy, que sobrescreve o que o navegador mandar nesses

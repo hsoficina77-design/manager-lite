@@ -97,6 +97,7 @@ const TABELAS = [
   "ItemOrdem", "Produto", "MovimentoEstoque", "PagamentoOS", "DividaAvulsa", "PagamentoDivida",
   "FotoOS", "Sequencia", "Usuario", "RegistroExclusao", "Configuracao", "Notificacao",
   "CategoriaDespesa", "DespesaRecorrente", "Despesa",
+  "Cotacao", "CotacaoPeca", "CotacaoLoja", "Oferta",
 ];
 
 async function impressao(oficinaId) {
@@ -225,6 +226,19 @@ async function main() {
     data: { oficinaId: OFICINA_A, tipo: "SISTEMA", titulo: MARCA, mensagem: MARCA, publico: "TODOS" },
   });
   const operadorA = await prisma.usuario.findFirst({ where: { oficinaId: OFICINA_A, id: { not: donoA.id } } });
+  // Peça Peça: uma cotação da A para as lojas que atendem a cidade dela.
+  const lojasA = (await exigir2xx(await chamar(A, "GET", "/api/peca-peca/lojas"), "lojas da A")).lojas;
+  if (lojasA.length === 0) throw new Error("Nenhuma loja do Peça Peça atende a oficina A — cadastre uma em /admin/lojas");
+  const cot = await exigir2xx(
+    await chamar(A, "POST", "/api/peca-peca/cotacoes", {
+      veiculo: { placa: "", marca: "Fiat", modelo: "Uno", ano: "2015", motor: "1.0" },
+      observacao: MARCA,
+      pecas: [{ descricao: `${MARCA} peça`, quantidade: 1 }],
+      lojas: lojasA.map((l) => l.id),
+    }),
+    "cotação A"
+  );
+  const envioA = await prisma.cotacaoLoja.findFirst({ where: { cotacaoId: cot.id } });
 
   // ── Oficina B: entra por convite ──────────────────────────────────────────
   console.log("Criando a oficina B por convite…");
@@ -236,6 +250,9 @@ async function main() {
   const emailB = `${MARCA.toLowerCase()}@b.local`;
   const cadastroB = await chamar(null, "POST", `/api/convite/${token}`, {
     nomeOficina: `${MARCA} Oficina B`,
+    // Obrigatória desde o Peça Peça; a mesma da A, para a B enxergar as mesmas lojas.
+    cidade: "Suzano",
+    estado: "SP",
     nome: "Dono B",
     email: emailB,
     senha: "senhaforte-b-123",
@@ -248,6 +265,8 @@ async function main() {
   checar(OFICINA_B !== OFICINA_A, "B nasceu numa oficina diferente da A");
   const reuso = await chamar(null, "POST", `/api/convite/${token}`, {
     nomeOficina: "de novo",
+    cidade: "Suzano",
+    estado: "SP",
     nome: "x",
     email: `outro-${emailB}`,
     senha: "senhaforte-b-123",
@@ -316,6 +335,14 @@ async function main() {
     ["PUT", `/api/usuarios/${donoA.id}`, { senha: "senha-trocada-hack" }],
     ["DELETE", `/api/usuarios/${donoA.id}`],
     ...(operadorA ? [["DELETE", `/api/usuarios/${operadorA.id}`]] : []),
+    // Peça Peça: a cotação da A, pelas rotas da oficina.
+    ["GET", `/api/peca-peca/cotacoes/${cot.id}`],
+    ["PATCH", `/api/peca-peca/cotacoes/${cot.id}`, { margem: 99 }],
+    ["PATCH", `/api/peca-peca/cotacoes/${cot.id}`, { menorPreco: true }],
+    ["DELETE", `/api/peca-peca/cotacoes/${cot.id}`],
+    ["POST", `/api/peca-peca/cotacoes/${cot.id}/pedido`],
+    ["POST", `/api/peca-peca/cotacoes/${cot.id}/orcamento`, { clienteNome: "HACK" }],
+    ["POST", `/api/peca-peca/cotacoes/${cot.id}/recebido`, { envioId: envioA.id }],
     // Plataforma: a B é dona da oficina dela, mas não da plataforma.
     ["GET", `/api/plataforma/oficinas`],
     ["PATCH", `/api/plataforma/oficinas/${OFICINA_A}`, { ativa: false }],
@@ -342,7 +369,8 @@ async function main() {
     "/api/produtos?q=ISO", "/api/produtos/resumo", "/api/mecanicos", "/api/metas", "/api/dividas",
     "/api/despesas", "/api/despesas/categorias", "/api/despesas/recorrentes", "/api/caixa",
     "/api/contas-receber", "/api/exclusoes", "/api/notificacoes", "/api/produtividade", "/api/usuarios",
-    "/api/configuracao", "/api/configuracao/armazenamento",
+    "/api/configuracao", "/api/configuracao/armazenamento", "/api/peca-peca/cotacoes", "/api/peca-peca/lojas",
+    "/peca-peca", `/peca-peca/${cot.id}`,
     "/", "/?aba=operacao", "/clientes", "/os", "/orcamentos", "/estoque", "/mecanicos", "/caixa",
     "/contas-receber", "/despesas", "/produtividade", "/configuracoes", "/configuracoes/usuarios",
     `/os/${os.id}`, `/clientes/${cli.id}`, `/orcamentos/${orc.id}`, `/mecanicos/${mec.id}`,
@@ -424,13 +452,14 @@ async function main() {
   checar(loginSuspensa.status === 403, `oficina suspensa não entra de novo (veio ${loginSuspensa.status})`);
 
   // ── Faxina ────────────────────────────────────────────────────────────────
-  await limpar(OFICINA_A, OFICINA_B, { mec, prod, cli, os, orc, div, cat, desp, rec, foto, notif });
+  await limpar(OFICINA_A, OFICINA_B, { mec, prod, cli, os, orc, div, cat, desp, rec, foto, notif, cot });
 }
 
 async function limpar(OFICINA_A, OFICINA_B, a) {
   console.log("\nLimpando…");
   const apagarDaOficina = async (oficinaId) => {
     const ordem = [
+      "Oferta", "CotacaoPeca", "CotacaoLoja", "Cotacao",
       "PagamentoDivida", "DividaAvulsa", "PagamentoOS", "FotoOS", "MovimentoEstoque", "ItemOrdem",
       "ItemOrcamento", "Orcamento", "OrdemServico", "Veiculo", "Cliente", "Meta", "Mecanico", "Produto",
       "Despesa", "DespesaRecorrente", "CategoriaDespesa", "Notificacao", "RegistroExclusao", "Sequencia",
@@ -444,7 +473,8 @@ async function limpar(OFICINA_A, OFICINA_B, a) {
   };
   if (OFICINA_B) await apagarDaOficina(OFICINA_B);
 
-  // Na A, só o que o teste criou.
+  // Na A, só o que o teste criou. A cotação leva junto peças, envios e ofertas.
+  await prisma.cotacao.deleteMany({ where: { id: a.cot.id } });
   await prisma.pagamentoDivida.deleteMany({ where: { dividaId: a.div.id } });
   await prisma.dividaAvulsa.deleteMany({ where: { id: a.div.id } });
   await prisma.fotoOS.deleteMany({ where: { id: a.foto.id } });
@@ -469,6 +499,11 @@ async function limpar(OFICINA_A, OFICINA_B, a) {
   await prisma.$executeRawUnsafe(
     `UPDATE "Sequencia" SET ultimo = (SELECT coalesce(max(numero), 0) FROM "Orcamento" WHERE "oficinaId" = $1)
      WHERE "oficinaId" = $1 AND id = 'orcamento'`,
+    OFICINA_A
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Sequencia" SET ultimo = (SELECT coalesce(max(numero), 0) FROM "Cotacao" WHERE "oficinaId" = $1)
+     WHERE "oficinaId" = $1 AND id = 'cotacao'`,
     OFICINA_A
   );
 }

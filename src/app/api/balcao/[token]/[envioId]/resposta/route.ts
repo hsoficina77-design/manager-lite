@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { envioDaLoja, lojaPeloToken, responderEnvio } from "@/lib/balcao";
+import { MENSAGEM_BALCAO_COM_LOGIN, envioDaLoja, lojaPeloToken, responderEnvio } from "@/lib/balcao";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { respostaDoBalcaoSchema } from "@/lib/schemas-peca-peca";
 
@@ -10,6 +10,7 @@ export async function POST(request: Request, { params }: Params) {
   const { token, envioId } = await params;
   const loja = await lojaPeloToken(token);
   if (!loja) return NextResponse.json({ error: "Balcão não encontrado" }, { status: 404 });
+  if (loja.comLogin) return NextResponse.json({ error: MENSAGEM_BALCAO_COM_LOGIN }, { status: 410 });
 
   try {
     const { itens } = await lerJson(request, respostaDoBalcaoSchema);

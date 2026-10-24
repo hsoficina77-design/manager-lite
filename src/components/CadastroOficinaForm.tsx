@@ -15,16 +15,21 @@ const inputCls =
  *
  *   - instalação (`/primeiro-acesso`): sistema vazio, cria a primeira oficina;
  *   - convite (`/convite/<token>`): o link que o dono da plataforma mandou;
- *   - teste grátis (`/teste`): o link aberto da bio, que pede também o WhatsApp.
+ *   - teste grátis (`/teste`): o link aberto da bio, que pede também o WhatsApp;
+ *   - conta grátis do Peça Peça (`/cadastro`): aberta como o teste, mas sem o boxOS.
  */
 export default function CadastroOficinaForm({
   convite,
   teste,
+  pecaPeca,
 }: {
-  /** Sem convite nem teste, é a instalação. */
+  /** Sem convite, teste nem Peça Peça, é a instalação. */
   convite?: { token: string; nomeOficina: string | null };
   teste?: { origem: string | null };
+  pecaPeca?: { origem: string | null };
 }) {
+  // Os dois cadastros abertos pedem o mesmo: WhatsApp, aceite dos termos e o campo-armadilha.
+  const aberto = teste ?? pecaPeca;
   const router = useRouter();
   const [form, setForm] = useState({
     nomeOficina: convite?.nomeOficina ?? "",
@@ -42,11 +47,13 @@ export default function CadastroOficinaForm({
   const [municipio, setMunicipio] = useState<Municipio | null>(null);
   // Instalação protegida por código (SETUP_TOKEN no servidor) pede mais um campo.
   const [exigeToken, setExigeToken] = useState(false);
-  const endpoint = teste
-    ? "/api/teste"
-    : convite
-      ? `/api/convite/${encodeURIComponent(convite.token)}`
-      : "/api/auth/primeiro-acesso";
+  const endpoint = pecaPeca
+    ? "/api/cadastro"
+    : teste
+      ? "/api/teste"
+      : convite
+        ? `/api/convite/${encodeURIComponent(convite.token)}`
+        : "/api/auth/primeiro-acesso";
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -55,12 +62,12 @@ export default function CadastroOficinaForm({
     setForm((f) => ({ ...f, [campo]: valor }));
 
   useEffect(() => {
-    if (convite || teste) return;
+    if (convite || aberto) return;
     fetch("/api/auth/primeiro-acesso")
       .then((r) => r.json())
       .then((d) => setExigeToken(Boolean(d.exigeToken)))
       .catch(() => {});
-  }, [convite, teste]);
+  }, [convite, aberto]);
 
   const senhaCurta = form.senha.length > 0 && form.senha.length < SENHA_MIN;
   const naoConfere = form.confirmacao.length > 0 && form.senha !== form.confirmacao;
@@ -89,7 +96,7 @@ export default function CadastroOficinaForm({
           email: form.email,
           senha: form.senha,
           ...(exigeToken ? { token: form.token } : {}),
-          ...(teste ? { whatsapp: form.whatsapp, site: form.site, aceite, origem: teste.origem } : {}),
+          ...(aberto ? { whatsapp: form.whatsapp, site: form.site, aceite, origem: aberto.origem } : {}),
         }),
       });
       const json = await res.json();
@@ -97,7 +104,7 @@ export default function CadastroOficinaForm({
         setErro(json.error || "Não foi possível criar o acesso");
         return;
       }
-      router.replace("/");
+      router.replace(pecaPeca ? "/peca-peca/nova" : "/");
       router.refresh();
     } catch {
       setErro("Sem conexão com o servidor. Verifique a internet e tente de novo.");
@@ -145,7 +152,9 @@ export default function CadastroOficinaForm({
           onChange={(e) => setCampo("nomeOficina", e.target.value)}
           className={inputCls}
         />
-        <p className="mt-1 text-xs text-tinta-3">Sai no menu e nos documentos. Dá para mudar depois.</p>
+        <p className="mt-1 text-xs text-tinta-3">
+          {pecaPeca ? "É o nome que as autopeças veem nas suas cotações." : "Sai no menu e nos documentos. Dá para mudar depois."}
+        </p>
       </div>
 
       {/* Obrigatória: é por ela que a oficina recebe as autopeças da região no Peça Peça. */}
@@ -190,7 +199,7 @@ export default function CadastroOficinaForm({
         <p className="mt-1 text-xs text-tinta-3">É com ele que você vai entrar daqui em diante.</p>
       </div>
 
-      {teste && (
+      {aberto && (
         <div>
           <label htmlFor="whatsapp" className="mb-1 block text-sm font-medium text-tinta-2">
             WhatsApp
@@ -206,7 +215,9 @@ export default function CadastroOficinaForm({
             onChange={(e) => setCampo("whatsapp", mascaraTelefone(e.target.value))}
             className={inputCls}
           />
-          <p className="mt-1 text-xs text-tinta-3">Para te ajudarmos durante o teste, se precisar.</p>
+          <p className="mt-1 text-xs text-tinta-3">
+            {pecaPeca ? "Para te ajudarmos, se precisar." : "Para te ajudarmos durante o teste, se precisar."}
+          </p>
         </div>
       )}
 
@@ -254,7 +265,7 @@ export default function CadastroOficinaForm({
         {naoConfere && <p className="mt-1 text-xs text-perigo">As duas senhas não são iguais.</p>}
       </div>
 
-      {teste && (
+      {aberto && (
         <>
           {/* Fora da tela e fora do Tab: só robô chega aqui. */}
           <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
@@ -293,10 +304,16 @@ export default function CadastroOficinaForm({
 
       <button
         type="submit"
-        disabled={salvando || senhaCurta || naoConfere || (Boolean(teste) && !aceite)}
+        disabled={salvando || senhaCurta || naoConfere || (Boolean(aberto) && !aceite)}
         className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-medium text-brand-fg hover:bg-brand-700 disabled:opacity-50"
       >
-        {salvando ? "Criando..." : teste ? "Começar meu teste grátis" : "Criar oficina e entrar"}
+        {salvando
+          ? "Criando..."
+          : pecaPeca
+            ? "Criar minha conta grátis"
+            : teste
+              ? "Começar meu teste grátis"
+              : "Criar oficina e entrar"}
       </button>
     </form>
   );

@@ -46,6 +46,13 @@ model Oficina {
   /// Ids no gateway de pagamento (Asaas: `cus_…` e `sub_…`).
   gatewayClienteId    String?
   gatewayAssinaturaId String?
+  /// Desde quando a oficina tem o boxOS. Nula = só Peça Peça (cadastro grátis do
+  /// domínio do Peça Peça): o boxOS é vendido à parte, e `guardaApi` recusa as rotas
+  /// dele. O default faz convite, `/teste` e instalação nascerem com boxOS.
+  boxosDesde          DateTime? @default(now())
+  /// Nasceu pelo cadastro grátis do Peça Peça — continua verdadeiro depois de ativar o
+  /// boxOS: é o que mede quanto o Peça Peça traz de cliente para o boxOS.
+  veioDoPecaPeca      Boolean   @default(false)
 
   configuracao       Configuracao?
   usuarios           Usuario[]
@@ -828,7 +835,76 @@ model Loja {
   ativa       Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  envios CotacaoLoja[]
+  envios   CotacaoLoja[]
+  usuarios UsuarioLoja[]
+  convites ConviteLoja[]
+}
+
+// ─── Quem trabalha nas autopeças ─────────────────────────────────────────────
+//
+// Contas do painel da loja no Peça Peça, separadas das contas de oficina de propósito:
+// o login do boxOS não muda, e uma conta de loja não alcança nada de oficina (cookie,
+// sessão e guarda próprios — `lib/conta-loja.ts`). Tabelas do sistema, como `Loja`.
+//
+// O e-mail é único também entre as duas tabelas (`emailEmUso` em sistema.ts): a tela
+// de login é uma só e procura nas duas.
+
+model UsuarioLoja {
+  id           String    @id @default(cuid())
+  lojaId       String
+  nome         String
+  email        String    @unique
+  senhaHash    String
+  /// Ponto de partida dos acessos ("DONO" | "VENDEDOR"). Quem vale são as `permissoes`.
+  perfil       String    @default("VENDEDOR")
+  /// Chaves do catálogo em `lib/acessos-loja.ts`. Chave desconhecida é ignorada.
+  permissoes   String[]  @default([])
+  ativo        Boolean   @default(true)
+  ultimoAcesso DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  loja    Loja          @relation(fields: [lojaId], references: [id])
+  sessoes SessaoLoja[]
+
+  @@index([lojaId])
+}
+
+model SessaoLoja {
+  /// O segredo do cookie `pp_loja`, como `Sessao.id`.
+  id            String   @id
+  usuarioLojaId String
+  expiraEm      DateTime
+  criadaEm      DateTime @default(now())
+  userAgent     String?
+
+  usuario UsuarioLoja @relation(fields: [usuarioLojaId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioLojaId])
+  @@index([expiraEm])
+}
+
+// Convite para entrar no painel da loja — ou "novo acesso" (trocar a senha esquecida),
+// quando aponta para quem já existe. Uso único; guarda só o hash do segredo do link.
+model ConviteLoja {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  lojaId        String
+  /// Preenchido no "novo acesso": o link troca a senha desta pessoa.
+  usuarioLojaId String?
+  nome          String?
+  email         String?
+  perfil        String    @default("VENDEDOR")
+  permissoes    String[]  @default([])
+  expiraEm      DateTime
+  usadoEm       DateTime?
+  /// Quem gerou: "plataforma" ou o id de quem trabalha na loja.
+  criadoPor     String
+  createdAt     DateTime  @default(now())
+
+  loja Loja @relation(fields: [lojaId], references: [id])
+
+  @@index([lojaId, createdAt])
 }
 
 model Cotacao {
@@ -900,6 +976,9 @@ model CotacaoLoja {
   /// A oficina conferiu as peças. É isto que fecha a entrega: a loja marcar
   /// "entregue" só avisa a oficina, que confirma do lado dela.
   oficinaRecebeuEm DateTime?
+  /// Id do `UsuarioLoja` que respondeu (nulo no balcão antigo, por link). Sem chave
+  /// estrangeira: é só para o resumo do dono da loja.
+  respondidoPor String?
   createdAt    DateTime  @default(now())
 
   cotacao Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
