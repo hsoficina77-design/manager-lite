@@ -23,8 +23,8 @@ export type LojaVista = {
   uf: string | null;
   /** Cidades que a loja atende — a região dela —, como "Suzano - SP". */
   atende: string[];
-  entregaMin: number;
-  entregaMax: number;
+  /** Tempo real de entrega, em minutos. Nulo enquanto vale a faixa padrão. */
+  entregaMedia: number | null;
 };
 
 /** O que `/api/peca-peca/lojas` devolve: a cidade da oficina e as lojas que a atendem. */
@@ -125,9 +125,33 @@ export const MENSAGEM_BALCAO_COM_LOGIN =
   "O balcão desta loja agora é com login. Entre com o seu e-mail e senha no Peça Peça.";
 
 export type CaixaDoBalcao = {
-  loja: { nome: string; cidade: string | null; entregaMin: number; entregaMax: number };
+  loja: { nome: string; cidade: string | null; entregaMedia: number | null };
   envios: EnvioNoBalcao[];
 };
+
+// ─── Tempo de entrega da loja ───────────────────────────────────────────────
+//
+// Ninguém digita o tempo de entrega: toda loja começa com a faixa padrão e, depois de
+// algumas entregas, passa a mostrar o tempo real dela — do pedido até as peças chegarem
+// na oficina (`medirEntregasDaLoja` em lib/balcao.ts).
+
+/** Faixa que vale para a loja enquanto ela não tem entregas suficientes. */
+export const ENTREGA_PADRAO = { min: 20, max: 40 } as const;
+
+/** Com menos entregas que isto, uma só fora da curva pesaria demais: vale a faixa padrão. */
+export const ENTREGAS_PARA_MEDIA = 3;
+
+/** "28 min (média real)", ou a faixa padrão "20–40 min". */
+export function prazoDaLoja(loja: { entregaMedia: number | null }): string {
+  return loja.entregaMedia === null
+    ? `${ENTREGA_PADRAO.min}–${ENTREGA_PADRAO.max} min`
+    : `${loja.entregaMedia} min (média real)`;
+}
+
+/** Prazo que vem preenchido em cada oferta do balcão: o tempo real, ou o da faixa padrão. */
+export function prazoSugerido(loja: { entregaMedia: number | null }): number {
+  return loja.entregaMedia ?? ENTREGA_PADRAO.min;
+}
 
 // ─── Entrega ────────────────────────────────────────────────────────────────
 

@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
-import { atualizarDadosDaLoja, guardaLoja } from "@/lib/conta-loja";
+import { guardaLoja } from "@/lib/conta-loja";
+import { atualizarLoja } from "@/lib/balcao";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { dadosDaLojaSchema } from "@/lib/schemas-peca-peca";
 
-/** Telefone e prazo do motoboy. A região (cidades atendidas) é da plataforma. */
+/**
+ * Telefone e cidades atendidas, um bloco por vez. As cidades passam pela mesma
+ * conferência do cadastro da plataforma: cada uma na lista do IBGE, e a cidade onde a
+ * loja fica sempre junto.
+ */
 export async function PATCH(request: Request) {
   const guarda = await guardaLoja("loja.dados");
   if (guarda.resposta) return guarda.resposta;
   try {
     const dados = await lerJson(request, dadosDaLojaSchema);
-    await atualizarDadosDaLoja(guarda.conta.loja.id, dados);
+    await atualizarLoja(guarda.conta.loja.id, dados);
     return NextResponse.json({ ok: true });
   } catch (err) {
     const invalido = respostaDeValidacao(err);

@@ -8,6 +8,7 @@ import {
   aConferir,
   descricaoDoVeiculo,
   etapaDa,
+  prazoDaLoja,
   type CotacaoVista,
   type LojaVista,
   type LojasDaOficina,
@@ -163,7 +164,7 @@ function PainelLojas({ lojas, cidade }: { lojas: LojaVista[] | null; cidade: str
             <li key={l.id} className="py-2.5 first:pt-0 last:pb-0">
               <p className="text-sm font-semibold text-tinta">{l.nome}</p>
               <p className="text-xs text-tinta-3">
-                {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
+                {l.cidade ?? "—"} · entrega em {prazoDaLoja(l)}
               </p>
               <p className="text-xs text-tinta-3">Atende: {l.atende.join(", ") || "—"}</p>
             </li>

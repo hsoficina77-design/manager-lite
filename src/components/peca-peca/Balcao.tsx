@@ -13,6 +13,7 @@ import {
   ETAPAS_ENTREGA,
   SITUACOES_NO_BALCAO,
   descricaoDoVeiculo,
+  prazoSugerido,
   proximaEtapa,
   rotuloDaEntrega,
   type CaixaDoBalcao,
@@ -28,7 +29,7 @@ import { AvisoSemConexao, haQuanto, horaCurta } from "./ui";
 // dentro da moldura do painel) e no link antigo (`/balcao/<token>`, sem conta e com
 // cabeçalho próprio), que só vale enquanto a loja não tem ninguém com login.
 
-export type LojaDoBalcao = { nome: string; cidade: string | null; entregaMin: number; entregaMax: number };
+export type LojaDoBalcao = { nome: string; cidade: string | null; entregaMedia: number | null };
 
 /** Onde o balcão está servido: as telas e a API de cada um dos dois lugares. */
 export type CaminhosDoBalcao = {
@@ -419,7 +420,7 @@ function FormResposta({
   inicio: string;
 }) {
   const avisar = useAvisar();
-  const prazoPadrao = String(loja.entregaMin);
+  const prazoPadrao = String(prazoSugerido(loja));
   const vazia = (): OfertaEmEdicao => ({ chave: chaveNova(), marca: "", preco: "", prazo: prazoPadrao });
 
   const [rascunho, setRascunho] = useState<Rascunho>(() =>

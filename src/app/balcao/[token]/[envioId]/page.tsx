@@ -19,12 +19,12 @@ export default async function EnvioDoBalcaoPage({
   const loja = await lojaPeloToken(token);
   if (!loja) notFound();
   if (loja.comLogin) return <BalcaoComLogin />;
-  const { nome, cidade, entregaMin, entregaMax } = loja;
+  const { nome, cidade, entregaMedia } = loja;
   return (
     <EnvioDoBalcaoTela
       caminhos={{ inicio: `/balcao/${token}`, telas: `/balcao/${token}`, api: `/api/balcao/${token}`, comCabecalho: true }}
       envioId={envioId}
-      loja={{ nome, cidade, entregaMin, entregaMax }}
+      loja={{ nome, cidade, entregaMedia }}
       // O link antigo era o balcão inteiro: responder e entregar.
       pode={{ responder: true, entrega: true }}
     />

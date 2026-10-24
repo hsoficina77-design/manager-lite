@@ -20,6 +20,7 @@ import { ErroDeEntrada } from "@/lib/validacao";
 import { mesmaCidade, rotuloDoMunicipio } from "@/lib/municipios";
 import { municipioOficial } from "@/lib/municipios-servidor";
 import {
+  ENTREGAS_PARA_MEDIA,
   ehEtapaEntrega,
   proximaEtapa,
   type CaixaDoBalcao,
@@ -33,7 +34,8 @@ import {
 // ─── Lojas ──────────────────────────────────────────────────────────────────
 //
 // O cadastro é do painel admin (/admin/lojas): o dono da plataforma cria cada loja à
-// mão, com a cidade onde ela fica e as cidades que atende — a região dela.
+// mão, com a cidade onde ela fica e as cidades que atende — a região dela. Depois, o
+// dono da loja mexe na região e no telefone pela tela "Loja" do painel dele.
 
 function novoToken() {
   return randomBytes(24).toString("base64url");
@@ -45,8 +47,7 @@ const CAMPOS_DA_LOJA = {
   cidade: true,
   uf: true,
   atende: true,
-  entregaMin: true,
-  entregaMax: true,
+  entregaMedia: true,
 } as const;
 
 /**
@@ -79,12 +80,12 @@ export type DadosDaLoja = {
   /** Rótulos "Nome - UF" escolhidos da lista do IBGE. */
   atende: string[];
   telefone: string | null;
-  entregaMin: number;
-  entregaMax: number;
 };
 
 export type LojaDoPainel = LojaVista & {
   telefone: string | null;
+  /** Entregas que entraram no tempo real da loja. */
+  entregasMedidas: number;
   ativa: boolean;
   /** Link antigo do balcão. Só vale enquanto a loja não tem conta (`contas` zero). */
   link: string;
@@ -121,6 +122,7 @@ export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
       select: {
         ...CAMPOS_DA_LOJA,
         telefone: true,
+        entregasMedidas: true,
         ativa: true,
         tokenBalcao: true,
         createdAt: true,
@@ -152,8 +154,8 @@ export async function criarLoja(dados: DadosDaLoja) {
 }
 
 /**
- * Edita o cadastro (a tela manda ele inteiro) ou só liga e desliga a loja. Loja
- * inexistente devolve `null`.
+ * Edita o cadastro — inteiro, do painel admin, ou só o telefone e as cidades, da tela
+ * do dono da loja — ou liga e desliga a loja. Loja inexistente devolve `null`.
  */
 export async function atualizarLoja(id: string, dados: Partial<DadosDaLoja> & { ativa?: boolean }) {
   const atual = await prisma.loja.findUnique({ where: { id }, select: { cidade: true, uf: true, atende: true } });
@@ -288,12 +290,12 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
 }
 
 export async function caixaDaLoja(
-  loja: Pick<LojaVista, "id" | "nome" | "cidade" | "entregaMin" | "entregaMax">
+  loja: Pick<LojaVista, "id" | "nome" | "cidade" | "entregaMedia">
 ): Promise<CaixaDoBalcao> {
   const envios = await lerEnvios({ lojaId: loja.id });
   const nomes = await nomesDasOficinas([...new Set(envios.map((e) => e.oficinaId))]);
   return {
-    loja: { nome: loja.nome, cidade: loja.cidade, entregaMin: loja.entregaMin, entregaMax: loja.entregaMax },
+    loja: { nome: loja.nome, cidade: loja.cidade, entregaMedia: loja.entregaMedia },
     envios: envios.map((e) => paraOBalcao(e, nomes.get(e.oficinaId) ?? "Oficina")),
   };
 }
@@ -408,8 +410,14 @@ export async function avancarEntrega(
   // A condição na etapa atual impede que dois cliques pulem uma etapa.
   const { count } = await prisma.cotacaoLoja.updateMany({
     where: { id: envio.id, entrega: envio.entrega },
-    data: { entrega: proxima },
+    data: proxima === "ENTREGUE" ? { entrega: proxima, entregueEm: new Date() } : { entrega: proxima },
   });
+
+  if (count > 0 && proxima === "ENTREGUE") {
+    await medirEntregasDaLoja(lojaId).catch((err: unknown) =>
+      console.error("Falha ao medir o tempo de entrega da loja:", err)
+    );
+  }
 
   if (count > 0 && proxima === "ENTREGUE" && !envio.oficinaRecebeuEm) {
     // Cliente cru, com o `oficinaId` do envio: a loja não está logada em oficina nenhuma.
@@ -428,6 +436,42 @@ export async function avancarEntrega(
       .catch((err: unknown) => console.error("Falha ao avisar a oficina da entrega:", err));
   }
   return proxima;
+}
+
+// ─── Tempo de entrega ───────────────────────────────────────────────────────
+//
+// Medido, não digitado: do pedido (`Cotacao.pedidoEm`) até as peças chegarem
+// (`CotacaoLoja.entregueEm` — o primeiro entre a loja marcar "entregue" e a oficina
+// confirmar). Vale a mediana das últimas entregas, e não a média simples: uma entrega
+// esquecida aberta até o dia seguinte não desfigura o tempo da loja. Fica gravado na
+// loja, refeito a cada entrega — as telas da oficina leem a toda hora.
+
+/** Quantas entregas, das mais recentes para trás, entram no tempo da loja. */
+const ENTREGAS_NA_CONTA = 20;
+
+/** O valor do meio (com quantidade par, o de cima). Lista vazia não tem. */
+function mediana(valores: number[]): number | null {
+  if (valores.length === 0) return null;
+  const ordenados = [...valores].sort((a, b) => a - b);
+  return ordenados[Math.floor(ordenados.length / 2)];
+}
+
+/** Refaz o tempo de entrega da loja. Chamado quando uma entrega dela fecha. */
+export async function medirEntregasDaLoja(lojaId: string) {
+  const entregas = await prisma.cotacaoLoja.findMany({
+    where: { lojaId, entregueEm: { not: null }, cotacao: { pedidoEm: { not: null } } },
+    orderBy: { entregueEm: "desc" },
+    take: ENTREGAS_NA_CONTA,
+    select: { entregueEm: true, cotacao: { select: { pedidoEm: true } } },
+  });
+  const minutos = entregas.flatMap(({ entregueEm, cotacao }) =>
+    entregueEm && cotacao.pedidoEm ? [Math.max(0, (entregueEm.getTime() - cotacao.pedidoEm.getTime()) / 60000)] : []
+  );
+  const meio = minutos.length >= ENTREGAS_PARA_MEDIA ? mediana(minutos) : null;
+  await prisma.loja.update({
+    where: { id: lojaId },
+    data: { entregasMedidas: minutos.length, entregaMedia: meio === null ? null : Math.max(1, Math.round(meio)) },
+  });
 }
 
 // ─── Resumo da loja ─────────────────────────────────────────────────────────
@@ -521,14 +565,14 @@ export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
     if (e.respondidoPor) respostasPorPessoa.set(e.respondidoPor, (respostasPorPessoa.get(e.respondidoPor) ?? 0) + 1);
   }
 
-  tempos.sort((a, b) => a - b);
   const nomes = new Map(pessoas.map((p) => [p.id, p.nome]));
+  const meio = mediana(tempos);
   return {
     recebidas,
     respondidas,
     pedidos,
     valor,
-    minutosParaResponder: tempos.length ? Math.round(tempos[Math.floor(tempos.length / 2)]) : null,
+    minutosParaResponder: meio === null ? null : Math.round(meio),
     meses: [...meses.values()],
     quemRespondeu: [...respostasPorPessoa.entries()]
       .map(([id, respostas]) => ({ nome: nomes.get(id) ?? "Alguém da loja", respostas }))

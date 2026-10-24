@@ -18,7 +18,7 @@ export const PERMISSOES_DA_LOJA = [
   { chave: "balcao.entrega", rotulo: "Avançar a entrega", ajuda: "Separando, saiu com o motoboy, entregue." },
   { chave: "loja.resumo", rotulo: "Ver o resumo de vendas", ajuda: "Cotações, pedidos e valores da loja." },
   { chave: "loja.equipe", rotulo: "Cuidar da equipe", ajuda: "Convidar pessoas, mudar acessos e dar novo acesso." },
-  { chave: "loja.dados", rotulo: "Editar os dados da loja", ajuda: "Telefone e prazo do motoboy." },
+  { chave: "loja.dados", rotulo: "Editar os dados da loja", ajuda: "Telefone e cidades atendidas." },
 ] as const;
 
 export type PermissaoLoja = (typeof PERMISSOES_DA_LOJA)[number]["chave"];

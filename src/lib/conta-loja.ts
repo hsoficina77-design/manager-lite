@@ -53,8 +53,9 @@ export type ContaLoja = {
     uf: string | null;
     atende: string[];
     telefone: string | null;
-    entregaMin: number;
-    entregaMax: number;
+    /** Tempo real de entrega (ver lib/balcao.ts). Nulo enquanto vale a faixa padrão. */
+    entregaMedia: number | null;
+    entregasMedidas: number;
   };
 };
 
@@ -86,8 +87,8 @@ async function lerContaDaSessao(): Promise<ContaLoja | null> {
                 uf: true,
                 atende: true,
                 telefone: true,
-                entregaMin: true,
-                entregaMax: true,
+                entregaMedia: true,
+                entregasMedidas: true,
                 ativa: true,
               },
             },
@@ -123,8 +124,8 @@ async function lerContaDaSessao(): Promise<ContaLoja | null> {
         uf: loja.uf,
         atende: loja.atende,
         telefone: loja.telefone,
-        entregaMin: loja.entregaMin,
-        entregaMax: loja.entregaMax,
+        entregaMedia: loja.entregaMedia,
+        entregasMedidas: loja.entregasMedidas,
       },
     };
   } catch (err) {
@@ -474,17 +475,4 @@ export async function pessoaDaLoja(lojaId: string, usuarioLojaId: string) {
     where: { id: usuarioLojaId, lojaId, ativo: true },
     select: { id: true, nome: true, email: true },
   });
-}
-
-// ─── Dados da loja ───────────────────────────────────────────────────────────
-
-/**
- * O que o dono da loja edita: telefone e prazo do motoboy. A região (cidades
- * atendidas) fica com a plataforma — é ela que decide quais oficinas alcançam a loja.
- */
-export async function atualizarDadosDaLoja(
-  lojaId: string,
-  dados: { telefone: string | null; entregaMin: number; entregaMax: number }
-) {
-  return prisma.loja.update({ where: { id: lojaId }, data: dados, select: { id: true } });
 }

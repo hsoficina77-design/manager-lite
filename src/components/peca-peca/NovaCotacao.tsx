@@ -11,7 +11,7 @@ import { useConfirmar } from "@/components/ui/Avisos";
 import { Busca, Confere, Fechar, Lapis, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
-import { normalizarPlaca, type LojasDaOficina, type VeiculoCotado } from "./regras";
+import { normalizarPlaca, prazoDaLoja, type LojasDaOficina, type VeiculoCotado } from "./regras";
 import { enviarJson, useAoVivo } from "./aoVivo";
 import { Cabecalho, InformarCidade } from "./ui";
 
@@ -400,7 +400,7 @@ export function NovaCotacao() {
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-tinta">{l.nome}</span>
                   <span className="block text-xs text-tinta-3">
-                    {l.cidade ?? "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
+                    {l.cidade ?? "—"} · entrega em {prazoDaLoja(l)}
                   </span>
                 </span>
               </label>

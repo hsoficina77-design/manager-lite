@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn, normalizarBusca } from "@/lib/utils";
-import { mesmaCidade, rotuloDoMunicipio, type Municipio } from "@/lib/municipios";
+import { rotuloDoMunicipio, type Municipio } from "@/lib/municipios";
 import { CampoCidade } from "@/components/ui/CampoCidade";
 import type { LojaDoPainel } from "@/lib/balcao";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
@@ -11,8 +11,10 @@ import { Botao, classesBotao } from "@/components/ui/Botao";
 import { Aviso, Campo, Entrada } from "@/components/ui/Campos";
 import { Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
-import { Fechar, Mais } from "@/components/ui/Icones";
+import { Mais } from "@/components/ui/Icones";
 import { Equipe } from "@/components/peca-peca/Equipe";
+import { CidadesAtendidas, outrasCidades } from "@/components/peca-peca/CidadesAtendidas";
+import { ENTREGAS_PARA_MEDIA, prazoDaLoja } from "@/components/peca-peca/regras";
 import { ACESSOS_DA_PLATAFORMA } from "@/lib/acessos-loja";
 
 // Cadastro das autopeças do Peça Peça — manual, do dono da plataforma.
@@ -23,7 +25,9 @@ import { ACESSOS_DA_PLATAFORMA } from "@/lib/acessos-loja";
 //
 // Quem trabalha na loja entra com login, pela equipe: a plataforma convida o dono, e
 // ele convida os vendedores. O link antigo do balcão só aparece para loja que ainda não
-// tem ninguém com conta.
+// tem ninguém com conta. O dono também mexe nas cidades, pela tela "Loja" dele.
+//
+// O tempo de entrega não se digita: é medido nas entregas (ver regras.ts).
 
 const chave = (cidade: string) => normalizarBusca(cidade);
 
@@ -34,11 +38,9 @@ type Formulario = {
   /** As outras cidades da região, como "Suzano - SP". */
   atende: string[];
   telefone: string;
-  entregaMin: string;
-  entregaMax: string;
 };
 
-const FORM_VAZIO: Formulario = { nome: "", sede: null, atende: [], telefone: "", entregaMin: "20", entregaMax: "40" };
+const FORM_VAZIO: Formulario = { nome: "", sede: null, atende: [], telefone: "" };
 
 export function Lojas({
   lojas,
@@ -187,7 +189,10 @@ export function Lojas({
                 <div className="min-w-0">
                   <h2 className="font-semibold text-tinta">{l.nome}</h2>
                   <p className="text-xs text-tinta-3">
-                    Fica em {l.cidade ? (l.uf ? `${l.cidade} - ${l.uf}` : l.cidade) : "—"} · entrega em {l.entregaMin}–{l.entregaMax} min
+                    Fica em {l.cidade ? (l.uf ? `${l.cidade} - ${l.uf}` : l.cidade) : "—"} · entrega em {prazoDaLoja(l)}
+                    {l.entregaMedia === null &&
+                      l.entregasMedidas > 0 &&
+                      ` (${l.entregasMedidas} de ${ENTREGAS_PARA_MEDIA} entregas medidas)`}
                     {l.telefone && ` · ${l.telefone}`}
                   </p>
                 </div>
@@ -295,8 +300,6 @@ type CorpoDaLoja = {
   uf: string;
   atende: string[];
   telefone: string | null;
-  entregaMin: number;
-  entregaMax: number;
 };
 
 function FormLoja({
@@ -318,32 +321,17 @@ function FormLoja({
           nome: loja.nome,
           sede: sedeDaLoja,
           // A cidade da própria loja aparece fixa; aqui ficam as outras.
-          atende: loja.atende.filter((c) => !rotuloDaSede || !mesmaCidade(c, rotuloDaSede)),
+          atende: outrasCidades(loja.atende, rotuloDaSede),
           telefone: loja.telefone ?? "",
-          entregaMin: String(loja.entregaMin),
-          entregaMax: String(loja.entregaMax),
         }
       : FORM_VAZIO
   );
-  // Troca a chave para limpar o campo de busca depois de cada cidade adicionada.
-  const [campoNovo, setCampoNovo] = useState(0);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-
-  const jaTem = (rotulo: string) =>
-    Boolean(f.sede && mesmaCidade(rotulo, rotuloDoMunicipio(f.sede))) || f.atende.some((x) => mesmaCidade(x, rotulo));
-
-  function adicionarCidade(rotulo: string) {
-    if (!jaTem(rotulo)) setF((x) => ({ ...x, atende: [...x.atende, rotulo] }));
-    setCampoNovo((n) => n + 1);
-  }
 
   async function salvar() {
     if (!f.nome.trim()) return setErro("Escreva o nome da loja.");
     if (!f.sede) return setErro("Escolha na lista a cidade onde a loja fica.");
-    const min = Number(f.entregaMin);
-    const max = Number(f.entregaMax);
-    if (!(max >= min)) return setErro("O prazo mais demorado não pode ser menor que o mais rápido.");
     setErro("");
     setSalvando(true);
     await onSalvar({
@@ -352,13 +340,9 @@ function FormLoja({
       uf: f.sede.uf,
       atende: f.atende,
       telefone: f.telefone.trim() || null,
-      entregaMin: min,
-      entregaMax: max,
     });
     setSalvando(false);
   }
-
-  const outrasSugestoes = sugestoes.filter((c) => !jaTem(c));
 
   return (
     <Modal
@@ -397,47 +381,12 @@ function FormLoja({
 
         <div>
           <p className="mb-1 block text-xs font-medium text-tinta-2">Cidades que atende</p>
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {f.sede && (
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-tinta" title="A cidade da loja entra sempre">
-                {rotuloDoMunicipio(f.sede)}
-              </span>
-            )}
-            {f.atende.map((c) => (
-              <span key={c} className="inline-flex items-center gap-1 rounded-full bg-superficie-2 py-1 pl-2.5 pr-1 text-xs text-tinta-2">
-                {c}
-                <button
-                  type="button"
-                  onClick={() => setF((x) => ({ ...x, atende: x.atende.filter((y) => y !== c) }))}
-                  aria-label={`Tirar ${c}`}
-                  className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-superficie-3"
-                >
-                  <Fechar tamanho={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-          <CampoCidade
-            key={campoNovo}
-            valor={null}
-            onChange={(m) => m && adicionarCidade(rotuloDoMunicipio(m))}
-            placeholder="Mais uma cidade: comece a digitar"
-            aria-label="Cidade atendida"
+          <CidadesAtendidas
+            sede={f.sede}
+            outras={f.atende}
+            onChange={(atende) => setF((x) => ({ ...x, atende }))}
+            sugestoes={sugestoes}
           />
-          {outrasSugestoes.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {outrasSugestoes.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => adicionarCidade(c)}
-                  className="min-h-8 rounded-full border border-linha px-2.5 text-xs text-tinta-3 hover:border-brand-500 hover:text-tinta"
-                >
-                  + {c}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         <Campo rotulo="Telefone ou WhatsApp do balcão" ajuda="Opcional. Só para você falar com a loja.">
@@ -448,30 +397,6 @@ function FormLoja({
             placeholder="(11) 90000-0000"
           />
         </Campo>
-
-        <div>
-          <p className="mb-1 text-xs font-medium text-tinta-2">Entrega do motoboy</p>
-          <div className="flex items-center gap-2 text-sm text-tinta-2">
-            de
-            <Entrada
-              value={f.entregaMin}
-              onChange={(e) => setF({ ...f, entregaMin: e.target.value.replace(/\D/g, "") })}
-              inputMode="numeric"
-              aria-label="Entrega mais rápida, em minutos"
-              className="w-20 text-right tabular-nums"
-            />
-            a
-            <Entrada
-              value={f.entregaMax}
-              onChange={(e) => setF({ ...f, entregaMax: e.target.value.replace(/\D/g, "") })}
-              inputMode="numeric"
-              aria-label="Entrega mais demorada, em minutos"
-              className="w-20 text-right tabular-nums"
-            />
-            min
-          </div>
-          <p className="mt-1 text-xs text-tinta-3">Vira a sugestão de prazo no balcão da loja.</p>
-        </div>
 
         {erro && <Aviso>{erro}</Aviso>}
       </div>

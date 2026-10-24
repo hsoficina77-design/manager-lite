@@ -79,26 +79,15 @@ const camposDaLoja = {
     .array(obrigatorio("Cidade atendida", LIMITES.cidade + 5))
     .max(30, "No máximo 30 cidades por loja"),
   telefone: nulavel("Telefone", LIMITES.telefone),
-  entregaMin: inteiro("Entrega mais rápida", 0, 600),
-  entregaMax: inteiro("Entrega mais demorada", 0, 600),
 };
 
-const entregaEmOrdem = (d: { entregaMin?: number; entregaMax?: number }) =>
-  d.entregaMin === undefined || d.entregaMax === undefined || d.entregaMax >= d.entregaMin;
-
-const ENTREGA_FORA_DE_ORDEM = {
-  message: "O prazo mais demorado não pode ser menor que o mais rápido",
-  path: ["entregaMax"],
-};
-
-export const lojaCriarSchema = z.object(camposDaLoja).refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
+export const lojaCriarSchema = z.object(camposDaLoja);
 
 /** Editar manda o cadastro inteiro; ligar e desligar manda só `ativa`. */
 export const lojaAlterarSchema = z
   .object(camposDaLoja)
   .partial()
-  .extend({ ativa: z.boolean().optional() })
-  .refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
+  .extend({ ativa: z.boolean().optional() });
 
 // ─── Painel da loja (equipe e dados) ────────────────────────────────────────
 
@@ -120,14 +109,14 @@ export const pessoaDaLojaSchema = z.object({
   ativo: z.boolean().optional(),
 });
 
-/** O que o dono da loja edita: telefone e prazo do motoboy. A região é da plataforma. */
-export const dadosDaLojaSchema = z
-  .object({
-    telefone: nulavel("Telefone", LIMITES.telefone),
-    entregaMin: inteiro("Entrega mais rápida", 0, 600),
-    entregaMax: inteiro("Entrega mais demorada", 0, 600),
-  })
-  .refine(entregaEmOrdem, ENTREGA_FORA_DE_ORDEM);
+/**
+ * O que o dono da loja edita, um bloco por vez: o telefone ou as cidades que atende. A
+ * cidade onde a loja fica é da plataforma, e o tempo de entrega é medido, não digitado.
+ */
+export const dadosDaLojaSchema = z.object({
+  telefone: camposDaLoja.telefone.optional(),
+  atende: camposDaLoja.atende.optional(),
+});
 
 /** Aceitar o convite (ou o "novo acesso"): nome, e-mail e a senha. */
 export const acessoLojaSchema = z.object({

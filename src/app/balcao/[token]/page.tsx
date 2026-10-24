@@ -19,11 +19,11 @@ export default async function BalcaoPage({ params }: { params: Promise<{ token: 
   const loja = await lojaPeloToken(token);
   if (!loja) notFound();
   if (loja.comLogin) return <BalcaoComLogin />;
-  const { nome, cidade, entregaMin, entregaMax } = loja;
+  const { nome, cidade, entregaMedia } = loja;
   return (
     <CaixaDoBalcaoTela
       caminhos={{ inicio: `/balcao/${token}`, telas: `/balcao/${token}`, api: `/api/balcao/${token}`, comCabecalho: true }}
-      loja={{ nome, cidade, entregaMin, entregaMax }}
+      loja={{ nome, cidade, entregaMedia }}
     />
   );
 }
