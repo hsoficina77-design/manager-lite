@@ -33,6 +33,13 @@ export const COOKIE_SESSAO = COOKIE;
 export const COOKIE_SESSAO_LOJA = "pp_loja";
 export const PAPEL_LOJA = "LOJA";
 
+/**
+ * Com que conta a aba do painel da loja nasceu. O cookie é um só por navegador — entrar
+ * noutra conta numa aba troca o de todas —, e é este cabeçalho que impede a aba antiga
+ * de ler e gravar como a conta que entrou depois (ver `guardaLoja` e `buscar`).
+ */
+export const CABECALHO_CONTA_DA_ABA = "x-conta-loja";
+
 function segredo(): string {
   const valor = process.env.AUTH_SECRET;
   if (!valor || valor.length < 32) {

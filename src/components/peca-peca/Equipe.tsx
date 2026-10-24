@@ -16,6 +16,7 @@ import {
   type PermissaoLoja,
 } from "@/lib/acessos-loja";
 import type { EquipeDaLoja } from "@/lib/conta-loja";
+import { buscar } from "./aoVivo";
 
 // A equipe de uma autopeça: quem entra no painel e o que cada um pode. A mesma tela
 // serve a quem cuida da equipe no painel da loja e à plataforma no painel admin — muda
@@ -50,7 +51,7 @@ export function Equipe({
 
   const carregar = useCallback(async () => {
     try {
-      const r = await fetch(api);
+      const r = await buscar(api);
       const corpo = await r.json().catch(() => ({}));
       if (!r.ok) return setErro(corpo.error ?? "Não consegui carregar a equipe.");
       setErro("");
@@ -65,7 +66,7 @@ export function Equipe({
   }, [carregar]);
 
   async function enviar(url: string, metodo: string, corpo?: object) {
-    const r = await fetch(url, {
+    const r = await buscar(url, {
       method: metodo,
       headers: corpo ? { "Content-Type": "application/json" } : undefined,
       body: corpo ? JSON.stringify(corpo) : undefined,
@@ -314,7 +315,7 @@ function ModalConvite({
     setErro("");
     setSalvando(true);
     try {
-      const r = await fetch(api, {
+      const r = await buscar(api, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome: nome.trim() || null, email: email.trim() || null, perfil }),

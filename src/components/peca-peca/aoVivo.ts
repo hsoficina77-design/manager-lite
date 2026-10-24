@@ -1,6 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CABECALHO_CONTA_DA_ABA } from "@/lib/sessao";
+
+/**
+ * O `fetch` das telas do Peça Peça.
+ *
+ * O navegador guarda um login de loja só (o cookie `pp_loja`): entrar noutra conta numa
+ * aba troca a conta de todas. Sem cuidado, a aba antiga seguiria com o nome da loja de
+ * antes, mas lendo e gravando como a nova — o balcão de uma mostrava as cotações da
+ * outra. Por isso a aba do painel da loja manda em cada pedido a conta com que nasceu
+ * (o `<html>` a traz); o servidor recusa quando não bate (`guardaLoja`), e a aba
+ * recarrega já na conta que o navegador tem agora — ou cai no login, se a pessoa saiu.
+ */
+export async function buscar(url: string, init: RequestInit = {}) {
+  const conta = document.documentElement.dataset.contaLoja;
+  if (!conta) return fetch(url, init);
+  const cabecalhos = new Headers(init.headers);
+  cabecalhos.set(CABECALHO_CONTA_DA_ABA, conta);
+  const r = await fetch(url, { ...init, headers: cabecalhos });
+  if (r.status === 401) window.location.reload();
+  return r;
+}
 
 /**
  * Dado do servidor que se atualiza sozinho — é o que faz a oficina ver a resposta da
@@ -21,7 +42,7 @@ export function useAoVivo<T>(url: string, intervaloMs = 4000) {
   const carregar = useCallback(async () => {
     const minha = ++ultimaLeitura.current;
     try {
-      const r = await fetch(url, { cache: "no-store" });
+      const r = await buscar(url, { cache: "no-store" });
       if (minha !== ultimaLeitura.current || gravando.current > 0) return;
       if (r.status === 404) {
         setNaoEncontrado(true);
@@ -90,7 +111,7 @@ export function useAoVivo<T>(url: string, intervaloMs = 4000) {
 /** JSON para as rotas do Peça Peça. */
 export function enviarJson(url: string, metodo: "POST" | "PATCH" | "DELETE", corpo?: unknown) {
   return () =>
-    fetch(url, {
+    buscar(url, {
       method: metodo,
       headers: corpo === undefined ? undefined : { "Content-Type": "application/json" },
       body: corpo === undefined ? undefined : JSON.stringify(corpo),

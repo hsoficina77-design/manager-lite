@@ -14,11 +14,12 @@
 
 import { cache } from "react";
 import { createHash, randomBytes } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  CABECALHO_CONTA_DA_ABA,
   COOKIE_SESSAO_LOJA,
   DURACAO_MS,
   PAPEL_LOJA,
@@ -152,6 +153,17 @@ export async function guardaLoja(
 ): Promise<{ conta: ContaLoja; resposta?: never } | { conta?: never; resposta: NextResponse }> {
   const conta = await getContaLojaAtual();
   if (!conta) return { resposta: NextResponse.json({ error: "Não autenticado" }, { status: 401 }) };
+  // A aba que nasceu noutra conta não lê nem grava como esta: para ela, a sessão acabou
+  // — e ela recarrega já na conta que o navegador tem agora.
+  const daAba = (await headers()).get(CABECALHO_CONTA_DA_ABA);
+  if (daAba && daAba !== conta.id) {
+    return {
+      resposta: NextResponse.json(
+        { error: "Este navegador entrou em outra conta de loja. A tela vai recarregar." },
+        { status: 401 }
+      ),
+    };
+  }
   if (permissao && !conta.permissoes.includes(permissao)) {
     return {
       resposta: NextResponse.json(
