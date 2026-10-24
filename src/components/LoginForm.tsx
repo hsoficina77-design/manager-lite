@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 // 16px no celular: abaixo disso o iPhone dá zoom ao focar o campo.
 const inputCls =
   "w-full rounded-lg border border-linha-forte px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 export default function LoginForm({ destino }: { destino: string }) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -29,17 +27,21 @@ export default function LoginForm({ destino }: { destino: string }) {
       if (!res.ok) {
         setErro(json.error || "Não foi possível entrar");
         setSenha("");
+        setEntrando(false);
         return;
       }
       // Quem trabalha numa autopeça vai para o painel da loja — a não ser que já viesse
       // para uma tela dele.
       const para = json.tipo === "loja" && !destino.startsWith("/loja") ? "/loja" : destino;
-      // `refresh` antes do `push` para o layout já vir com o usuário carregado.
-      router.replace(para);
-      router.refresh();
+      // Carregamento completo, e não `router.replace` + `refresh`: entrar troca a moldura
+      // inteira (menu da oficina, painel admin, painel da loja), que mora no layout raiz.
+      // E o layout raiz redireciona — a conta da plataforma vai de "/" para "/admin". Numa
+      // navegação do Next esse redirect é pego acima do layout, a página toda vira nada e
+      // a tela fica preta até a pessoa recarregar. Assim quem redireciona é o servidor.
+      // O botão segue em "Entrando..." até a próxima tela abrir.
+      window.location.replace(para);
     } catch {
       setErro("Sem conexão com o servidor. Verifique a internet e tente de novo.");
-    } finally {
       setEntrando(false);
     }
   }
