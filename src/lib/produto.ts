@@ -101,6 +101,19 @@ export function ehTelaDoPecaPeca(pathname: string): boolean {
 }
 
 /**
+ * O login de quem sai do Peça Peça, ou chega nele sem ter entrado. No endereço do boxOS
+ * o `/login` é um só, e é o `?next=` que diz de que produto a pessoa vem (ver
+ * `loginDoPecaPeca`). As boas-vindas levam cada conta à sua tela depois de entrar:
+ * oficina às cotações, loja ao balcão.
+ */
+export const LOGIN_DO_PECA_PECA = "/login?next=/bem-vindo";
+
+/** O `next` do login aponta para uma tela do Peça Peça: o login ganha a cara dele. */
+export function loginDoPecaPeca(next: string | null | undefined): boolean {
+  return Boolean(next) && ehTelaDoPecaPeca(next!.split("?")[0]);
+}
+
+/**
  * Endereço para onde a tela deve ir, quando foi aberta no produto errado. `null` = fica.
  * Só desvia quando o outro endereço está configurado — sem `PECA_PECA_URL`, o boxOS
  * serve tudo.

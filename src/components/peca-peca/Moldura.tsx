@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { LOGIN_DO_PECA_PECA } from "@/lib/produto";
 import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
-import { NotificacaoSino } from "@/components/ui/Notificacoes";
 import { useInstalarApp } from "@/components/ui/InstalarApp";
 import { usePedirSaida } from "@/components/ui/SaidaSegura";
 import { SeletorTema } from "@/components/ui/Tema";
@@ -41,11 +41,12 @@ export type ItemDaMoldura = {
 
 export type LinkDaGaveta = { href: string; label: string; externo?: boolean };
 
+// Sem o sino de avisos: os avisos da oficina são do boxOS (espaço das fotos, plano), e o
+// Peça Peça não cria nenhum. Na oficina só do Peça Peça ele ficava sempre vazio.
 export function Moldura({
   nome,
   pessoa,
   itens,
-  sino,
   links = [],
   children,
 }: {
@@ -53,13 +54,10 @@ export function Moldura({
   nome: string;
   pessoa: { nome: string; papel: string };
   itens: ItemDaMoldura[];
-  /** O sino de avisos da oficina; a loja não tem. */
-  sino?: Papel;
   links?: LinkDaGaveta[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const pedirSaida = usePedirSaida();
   const instalacao = useInstalarApp("Peça Peça");
   const [aberta, setAberta] = useState(false);
@@ -94,9 +92,11 @@ export function Moldura({
     setSaindo(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.replace("/login");
-      router.refresh();
-    } finally {
+      // Carregamento completo, como depois de entrar (LoginForm): sair troca a moldura
+      // inteira, que mora no layout raiz. E o login é o do Peça Peça, também no endereço
+      // do boxOS. O botão fica desligado até a próxima tela abrir.
+      window.location.replace(LOGIN_DO_PECA_PECA);
+    } catch {
       setSaindo(false);
     }
   }
@@ -128,7 +128,6 @@ export function Moldura({
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
-            {sino && <NotificacaoSino papel={sino} />}
             <button
               type="button"
               onClick={() => setAberta(true)}
@@ -288,7 +287,6 @@ export function MolduraDaOficina({
       nome={nome}
       pessoa={{ nome: usuario.nome, papel: labelPapel(usuario.papel) }}
       itens={itens}
-      sino={usuario.papel}
       links={links}
     >
       {children}

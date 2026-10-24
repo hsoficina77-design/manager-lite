@@ -15,8 +15,8 @@ import { bancoDaOficina } from "@/lib/db-oficina";
 import { contarPendencias } from "@/lib/pendencias";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { nomeDoMenu } from "@/lib/configuracao";
-import { HEADER_ROTA, ehRotaDaLoja, ehRotaDoBalcao, ehRotaPublica } from "@/lib/permissoes";
-import { ehTelaDoPecaPeca, urlBoxOS, type Produto } from "@/lib/produto";
+import { HEADER_BUSCA, HEADER_ROTA, ehRotaDaLoja, ehRotaDoBalcao, ehRotaPublica } from "@/lib/permissoes";
+import { ehTelaDoPecaPeca, loginDoPecaPeca, urlBoxOS, type Produto } from "@/lib/produto";
 import { produtoDaRequisicao } from "@/lib/produto-servidor";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
@@ -71,14 +71,18 @@ function icones(pasta: "/brand" | "/brand-pecapeca"): Metadata["icons"] {
  * A cara da tela: a do produto do endereço — e a do Peça Peça, em qualquer endereço,
  * nas telas que só existem nele e para quem só tem o Peça Peça. Enquanto o Peça Peça
  * não tem domínio próprio, é o que impede o convite da loja de sair laranja — e a loja
- * de instalar o boxOS no lugar do Peça Peça.
+ * de instalar o boxOS no lugar do Peça Peça. O login, que é um só, é do Peça Peça quando
+ * a pessoa vem dele (`?next=` numa tela dele).
  */
 function caraDaTela(
   produto: Produto,
-  rota: string,
+  cabecalhos: Pick<Headers, "get">,
   usuario: Awaited<ReturnType<typeof getUsuarioAtual>>
 ): Produto {
+  const rota = cabecalhos.get(HEADER_ROTA) ?? "";
   if (produto === "peca-peca" || ehTelaDoPecaPeca(rota)) return "peca-peca";
+  const next = new URLSearchParams(cabecalhos.get(HEADER_BUSCA) ?? "").get("next");
+  if (rota === "/login" && loginDoPecaPeca(next)) return "peca-peca";
   return usuario && !usuario.usaBoxOS ? "peca-peca" : "boxos";
 }
 
@@ -88,7 +92,7 @@ function caraDaTela(
 export async function generateMetadata(): Promise<Metadata> {
   const [usuario, produto, cabecalhos] = await Promise.all([getUsuarioAtual(), produtoDaRequisicao(), headers()]);
   const config = usuario ? await configuracaoDaSessao(usuario) : null;
-  if (caraDaTela(produto, cabecalhos.get(HEADER_ROTA) ?? "", usuario) === "peca-peca") {
+  if (caraDaTela(produto, cabecalhos, usuario) === "peca-peca") {
     return {
       title: config ? `${nomeDoMenu(config)} · Peça Peça` : "Peça Peça",
       applicationName: "Peça Peça",
@@ -120,7 +124,7 @@ export default async function RootLayout({
   // produto para todo mundo (globals.css).
   const config = await configuracaoDaSessao(usuario);
   const rota = cabecalhos.get(HEADER_ROTA) ?? "";
-  const cara = caraDaTela(produto, rota, usuario);
+  const cara = caraDaTela(produto, cabecalhos, usuario);
 
   // Painel da autopeça: conta própria, separada da oficina (lib/conta-loja.ts).
   const daLoja = ehRotaDaLoja(rota);

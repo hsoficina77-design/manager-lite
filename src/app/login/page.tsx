@@ -5,6 +5,7 @@ import { getContaLojaAtual } from "@/lib/conta-loja";
 import { cadastroPecaPecaAberto, cadastroTesteAberto } from "@/lib/sistema";
 import { DIAS_TESTE } from "@/lib/plano";
 import { produtoDaRequisicao } from "@/lib/produto-servidor";
+import { loginDoPecaPeca } from "@/lib/produto";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import LoginForm from "@/components/LoginForm";
 
@@ -18,18 +19,20 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  const { next } = await searchParams;
+  // No endereço do boxOS o login é um só: quem vem de uma tela do Peça Peça vê o dele.
+  const pecaPeca = (await produtoDaRequisicao()) === "peca-peca" || loginDoPecaPeca(next);
+
   // Sistema recém-instalado não tem ninguém para logar — manda criar o dono.
   if (await precisaPrimeiroAcesso()) redirect("/primeiro-acesso");
-  if (await getUsuarioAtual()) redirect("/");
+  if (await getUsuarioAtual()) redirect(pecaPeca ? "/bem-vindo" : "/");
   if (await getContaLojaAtual()) redirect("/loja");
 
-  const { next } = await searchParams;
   // Só caminho interno: um `next` apontando para fora viraria redirecionamento aberto,
   // que é como se monta phishing com o domínio da oficina.
   const destino = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-  const produto = await produtoDaRequisicao();
 
-  if (produto === "peca-peca") {
+  if (pecaPeca) {
     return (
       <TelaDeEntrada
         produto="peca-peca"

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUsuarioAtual } from "@/lib/auth";
 import { cadastroPecaPecaAberto } from "@/lib/sistema";
-import { urlPecaPeca } from "@/lib/produto";
+import { LOGIN_DO_PECA_PECA, urlPecaPeca } from "@/lib/produto";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import CadastroOficinaForm from "@/components/CadastroOficinaForm";
 
@@ -46,7 +46,7 @@ export default async function CadastroPage({
         descricao="No momento não estamos abrindo contas novas. Tente de novo em breve."
       >
         <Link
-          href="/login"
+          href={LOGIN_DO_PECA_PECA}
           className="block w-full rounded-lg bg-brand-600 py-2.5 text-center text-sm font-medium text-brand-fg hover:bg-brand-700"
         >
           Já tenho conta
@@ -65,7 +65,7 @@ export default async function CadastroPage({
       rodape={
         <>
           Já tem conta?{" "}
-          <Link href="/login" className="font-medium text-brand-texto hover:underline">
+          <Link href={LOGIN_DO_PECA_PECA} className="font-medium text-brand-texto hover:underline">
             Entrar
           </Link>
         </>

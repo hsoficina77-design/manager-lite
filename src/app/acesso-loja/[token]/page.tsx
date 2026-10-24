@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { lerConviteLoja } from "@/lib/conta-loja";
+import { LOGIN_DO_PECA_PECA } from "@/lib/produto";
 import TelaDeEntrada from "@/components/TelaDeEntrada";
 import { AcessoLojaForm } from "@/components/peca-peca/AcessoLojaForm";
 
@@ -31,7 +32,7 @@ export default async function AcessoLojaPage({ params }: { params: Promise<{ tok
     return (
       <TelaDeEntrada produto="peca-peca" titulo="Link indisponível" descricao={FORA_DO_AR[motivo]}>
         <Link
-          href="/login"
+          href={LOGIN_DO_PECA_PECA}
           className="block w-full rounded-lg border border-linha-forte py-2.5 text-center text-sm font-medium text-tinta hover:bg-superficie-2"
         >
           Já tenho acesso

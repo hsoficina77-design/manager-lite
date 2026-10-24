@@ -5,7 +5,7 @@ import { getUsuarioAtual } from "@/lib/auth";
 import { getContaLojaAtual } from "@/lib/conta-loja";
 import { cadastroPecaPecaAberto } from "@/lib/sistema";
 import { linkWhatsappBoxOS } from "@/lib/plano";
-import { urlPecaPeca } from "@/lib/produto";
+import { LOGIN_DO_PECA_PECA, urlPecaPeca } from "@/lib/produto";
 import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 
 // A porta de entrada do Peça Peça: o "/" do endereço dele para quem ainda não entrou
@@ -82,7 +82,7 @@ export default async function BemVindoPage() {
             </Link>
           )}
           <Link
-            href="/login"
+            href={LOGIN_DO_PECA_PECA}
             className="block w-full rounded-lg border border-linha-forte bg-superficie py-3 text-center text-base font-medium text-tinta hover:bg-superficie-2"
           >
             Já tenho conta

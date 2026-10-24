@@ -40,9 +40,11 @@ const TEMPO_FORA_MS = 5 * 60_000;
  * Telas que não se trocam sozinhas: formulário (uma OS pela metade não pode sumir
  * porque o cliente ligou; reaberta do zero, ela mostra o rascunho para restaurar),
  * configurações, e a assinatura — quem paga o Pix sai para o app do banco e precisa
- * voltar na tela que confirma o pagamento.
+ * voltar na tela que confirma o pagamento. E as do Peça Peça, que é outro produto: a
+ * cotação fica aberta esperando as lojas, e é nela que abre o app instalado do Peça
+ * Peça — sem isto, quem também tem o boxOS tocava no ícone e caía no Início do boxOS.
  */
-const FICA_ONDE_ESTA = /\/(nova|novo|editar)(\/|$)|^\/(configuracoes|assinatura)(\/|$)/;
+const FICA_ONDE_ESTA = /\/(nova|novo|editar)(\/|$)|^\/(configuracoes|assinatura|peca-peca)(\/|$)/;
 
 // Por aba (`sessionStorage`): sobrevivem à aba recarregada e à restaurada pelo
 // navegador, e somem quando a aba (ou o app) é aberta do zero.

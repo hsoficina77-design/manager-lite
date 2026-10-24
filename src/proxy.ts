@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESSAO, COOKIE_SESSAO_LOJA, PAPEL_LOJA, lerToken, lerTokenDeLoja } from "@/lib/sessao";
 import {
+  HEADER_BUSCA,
   HEADER_METODO,
   HEADER_ROTA,
   ehRotaDaLoja,
@@ -170,6 +171,7 @@ function paraOLogin(request: NextRequest, ehApi: boolean, cookie: string) {
 function comRota(request: NextRequest, rota: string, produto: Produto) {
   const headers = new Headers(request.headers);
   headers.set(HEADER_ROTA, rota);
+  headers.set(HEADER_BUSCA, request.nextUrl.search);
   headers.set(HEADER_METODO, request.method);
   headers.set(HEADER_PRODUTO, produto);
   return headers;

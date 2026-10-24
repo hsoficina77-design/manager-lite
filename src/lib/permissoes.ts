@@ -152,6 +152,9 @@ export const CODIGO_SEM_BOXOS = "SEM_BOXOS";
 /** Cabeçalho com a rota atual, escrito pelo proxy e lido pelo layout raiz. */
 export const HEADER_ROTA = "x-rota-atual";
 
+/** A busca (`?next=...`) da rota atual: o layout não recebe `searchParams`. */
+export const HEADER_BUSCA = "x-busca-atual";
+
 /**
  * Método da requisição, escrito pelo proxy. `guardaApi` precisa dele para o modo só
  * leitura (leitura passa, gravação não), e o route handler não o expõe por `headers()`.
