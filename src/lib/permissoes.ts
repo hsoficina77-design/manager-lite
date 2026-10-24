@@ -94,6 +94,10 @@ export const ROTAS_PUBLICAS = [
   "/primeiro-acesso",
   "/convite",
   "/api/auth/login",
+  // Sair encerra a sessão que o navegador tiver — da oficina ou da loja (cookie
+  // `pp_loja`). Exigir a da oficina barrava a autopeça: o "Sair" não saía. Sem cookie
+  // nenhum, a rota não faz nada.
+  "/api/auth/logout",
   "/api/auth/primeiro-acesso",
   "/api/convite",
   // Teste grátis: o link da bio do Instagram. Quem chega ainda não tem conta.
