@@ -1,6 +1,6 @@
 import { exigirPlataforma } from "@/lib/auth";
-import { listarOficinas } from "@/lib/sistema";
-import { resumoDaPlataforma, DIAS_ATIVA } from "@/lib/admin";
+import { listarOficinas, pessoasEUsoDoApp } from "@/lib/sistema";
+import { resumoDaPlataforma, usoPeloApp, DIAS_ATIVA, DIAS_USO_APP } from "@/lib/admin";
 import { FaixaMetricas, MetricaLink, Metrica, Painel } from "@/components/ui/Dados";
 import { Barras } from "@/components/admin/Barras";
 import { Atencao } from "@/components/admin/Atencao";
@@ -19,8 +19,14 @@ function pct(parte: number, todo: number) {
 export default async function AdminPage() {
   await exigirPlataforma();
   // Só as oficinas do boxOS: as contas grátis do Peça Peça têm a página delas.
-  const oficinas = (await listarOficinas()).filter((o) => o.usaBoxOS);
+  const [todas, pessoas] = await Promise.all([listarOficinas(), pessoasEUsoDoApp()]);
+  const oficinas = todas.filter((o) => o.usaBoxOS);
   const r = resumoDaPlataforma(oficinas);
+  const usoDoApp = [
+    { rotulo: "Oficinas do boxOS", ...usoPeloApp(pessoas.boxos) },
+    { rotulo: "Oficinas só do Peça Peça", ...usoPeloApp(pessoas.soPecaPeca) },
+    { rotulo: "Autopeças", ...usoPeloApp(pessoas.lojas) },
+  ];
 
   const barrasSemana = r.porSemana.map((s, i) => ({
     rotulo: diaMes(s.inicio),
@@ -51,6 +57,36 @@ export default async function AdminPage() {
 
       <Painel titulo="Precisa de atenção" ajuda="Teste acabando, oficinas paradas e quem caiu em só consulta — bom momento para um contato.">
         <Atencao itens={r.atencao} />
+      </Painel>
+
+      <Painel
+        titulo="Uso pelo app instalado"
+        ajuda={`Das pessoas que entraram nos últimos ${DIAS_USO_APP} dias, quantas abriram pelo ícone na tela ou na área de trabalho, e não pelo site. Conta desde a versão que mede (27/10).`}
+      >
+        <ul className="space-y-4">
+          {usoDoApp.map((g) => (
+            <li key={g.rotulo}>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-tinta-2">{g.rotulo}</span>
+                <span className="tabular-nums font-semibold text-tinta">
+                  {g.peloApp} de {g.entraram}
+                  <span className="ml-1.5 text-xs font-normal text-tinta-3">{pct(g.peloApp, g.entraram)}</span>
+                </span>
+              </div>
+              <div className="mt-1 h-2 rounded-full bg-superficie-3">
+                <div
+                  className="h-2 rounded-full bg-brand-600"
+                  style={{ width: `${g.entraram ? Math.max(g.peloApp ? 2 : 0, (g.peloApp / g.entraram) * 100) : 0}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-tinta-3">
+                {g.jaUsaram === 0
+                  ? "Ninguém abriu pelo app ainda."
+                  : `${g.jaUsaram} ${g.jaUsaram === 1 ? "pessoa já usou" : "pessoas já usaram"} o app alguma vez.`}
+              </p>
+            </li>
+          ))}
+        </ul>
       </Painel>
 
       <div className="grid gap-6 lg:grid-cols-2">

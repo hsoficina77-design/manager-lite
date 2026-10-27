@@ -574,9 +574,19 @@
   to   { transform: translateX(0); }
 }
 
+@keyframes subir {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
 @layer utilities {
   .animate-in {
     animation: drawer-in 0.2s ease-out;
+  }
+
+  /* Folha que sobe do pé da tela (o convite para instalar). */
+  .animate-subir {
+    animation: subir 0.25s ease-out;
   }
 
   /* Área segura do iPhone: barras coladas no rodapé precisam do respiro do

@@ -23,6 +23,7 @@ import { AZUL_NOITE_PECA_PECA } from "@/components/marca/LogoPecaPeca";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
 import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
 import { VoltaAoInicio } from "@/components/VoltaAoInicio";
+import { ConviteInstalar, RegistroDoApp } from "@/components/ui/InstalarApp";
 import { ProdutoProvider } from "@/components/ProdutoProvider";
 import { MolduraDaLoja, MolduraDaOficina } from "@/components/peca-peca/Moldura";
 import { vePecaPeca } from "@/lib/peca-peca";
@@ -250,6 +251,17 @@ export default async function RootLayout({
             <AvisosProvider>
               {/* Por dentro do menu: o "Sair" da conta também passa pela pergunta. */}
               <SaidaSeguraProvider>{conteudo}</SaidaSeguraProvider>
+              {/* O convite para instalar o app da tela, em qualquer uma — menos o balcão
+                  antigo por link, que não vira app (o app instalado abre nas boas-vindas,
+                  não no balcão). No cadastro, formulário de uma vez só, ele só tira a
+                  pessoa do navegador do Instagram; o de instalar vem depois de entrar. */}
+              {!ehRotaDoBalcao(rota) && (
+                <ConviteInstalar
+                  app={cara === "peca-peca" ? "Peça Peça" : "boxOS"}
+                  soParaSairDeOutroApp={ehTelaDeCadastro(rota)}
+                />
+              )}
+              {(usuario || contaLoja) && <RegistroDoApp />}
             </AvisosProvider>
           </ProdutoProvider>
         </UsuarioProvider>
@@ -301,6 +313,13 @@ async function AppComMenu({
 
 function ehRotaDoAdmin(rota: string) {
   return rota === "/admin" || rota.startsWith("/admin/");
+}
+
+/** Criar conta e primeiro acesso: quem está aqui ainda vai entrar no app. */
+function ehTelaDeCadastro(rota: string) {
+  return ["/teste", "/cadastro", "/convite", "/primeiro-acesso", "/acesso-loja"].some(
+    (tela) => rota === tela || rota.startsWith(`${tela}/`)
+  );
 }
 
 /** Telas que a oficina só do Peça Peça abre: as dele, a oferta do boxOS e as públicas. */

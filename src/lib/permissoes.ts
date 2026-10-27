@@ -119,6 +119,9 @@ export const ROTAS_PUBLICAS = [
   // Primeiro acesso de quem trabalha numa autopeça: o convite é o segredo.
   "/acesso-loja",
   "/api/acesso-loja",
+  // "Abri pelo app instalado": como o "Sair", vale para a sessão da oficina e para a da
+  // loja, e a rota confere cada uma (app/api/uso-app).
+  "/api/uso-app",
 ];
 
 /** Telas do balcão antigo (por link): abrem sem menu nenhum, mesmo com alguém logado. */

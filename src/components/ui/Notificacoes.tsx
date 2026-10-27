@@ -9,6 +9,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { Papel } from "@/lib/permissoes";
 import { Sino } from "./Icones";
+import { marcarNoIcone } from "./InstalarApp";
 
 type Notificacao = {
   id: string;
@@ -58,6 +59,8 @@ export function NotificacaoSino({
       const json = await res.json();
       setNotificacoes(json.notificacoes);
       setNaoLidas(json.naoLidas);
+      // O mesmo número no ícone do app instalado (barra de tarefas, Dock, tela do iPhone).
+      marcarNoIcone(json.naoLidas);
     } catch {
       // Falha de rede não deve travar a tela — o sino só fica sem atualizar.
     }

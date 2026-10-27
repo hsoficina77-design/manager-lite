@@ -95,9 +95,9 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
   const devolucoes = envios.flatMap((e) => e.devolucoes.filter(lojaPrecisaAgir).map((d) => ({ envio: e, d })));
   const devolucoesNovas = devolucoes.filter(({ d }) => situacaoDaDevolucao(d) === "PEDIDA");
 
-  // O que pede ação vai para a aba do navegador; quando aumenta, toca.
+  // O que pede ação vai para a aba do navegador e para o ícone do app; quando aumenta, toca.
   const pendentes = responder.length + pedidosNovos.length + devolucoesNovas.length;
-  useTituloComContador(`Balcão · ${loja.nome}`, pendentes);
+  useTituloComContador(`Balcão · ${loja.nome}`, pendentes, true);
   const antes = useRef<{ cotacoes: Set<string>; pedidos: Set<string>; devolucoes: Set<string> } | null>(null);
   useEffect(() => {
     if (!dados) return;

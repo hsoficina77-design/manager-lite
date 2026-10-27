@@ -212,6 +212,23 @@ export async function abrirSessaoLoja(usuario: { id: string }, request: Request)
     .catch((err: unknown) => console.error("Falha ao limpar sessões de loja vencidas:", err));
 }
 
+/** O uso pelo app instalado, como `registrarUsoDoApp` (auth.ts) faz na oficina. Não lança. */
+export async function registrarUsoDoAppNaLoja(usuarioLojaId: string) {
+  const agora = new Date();
+  try {
+    await prisma.usuarioLoja.updateMany({ where: { id: usuarioLojaId, appDesde: null }, data: { appDesde: agora } });
+    await prisma.usuarioLoja.updateMany({
+      where: {
+        id: usuarioLojaId,
+        OR: [{ ultimoAcessoApp: null }, { ultimoAcessoApp: { lt: new Date(agora.getTime() - INTERVALO_ACESSO_MS) } }],
+      },
+      data: { ultimoAcessoApp: agora },
+    });
+  } catch (err) {
+    console.error("Falha ao registrar o uso pelo app da loja:", err);
+  }
+}
+
 /** Apaga uma sessão de loja (sair, acesso desligado). Não lança. */
 export async function encerrarSessaoLoja(sessaoId: string) {
   try {

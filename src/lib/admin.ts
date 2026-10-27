@@ -157,6 +157,27 @@ function precisamDeAtencao(ativas: OficinaResumo[], agora: Date) {
   return lista.sort((a, b) => ordem.indexOf(a.motivo) - ordem.indexOf(b.motivo));
 }
 
+// ─── Uso pelo app instalado ──────────────────────────────────────────────────
+
+/** Janela do "usa pelo app": quem entrou nestes dias, e quantos deles pelo ícone. */
+export const DIAS_USO_APP = 30;
+
+export type PessoaComUso = { ultimoAcesso: Data | null; ultimoAcessoApp: Data | null; appDesde: Data | null };
+
+/**
+ * Das pessoas que entraram nos últimos 30 dias, quantas abriram pelo app instalado — o
+ * número que diz se o convite para instalar funciona. E quantas já usaram o app alguma vez.
+ */
+export function usoPeloApp(pessoas: PessoaComUso[], agora = new Date()) {
+  const desde = agora.getTime() - DIAS_USO_APP * DIA_MS;
+  const recentes = pessoas.filter((p) => p.ultimoAcesso && ms(p.ultimoAcesso) >= desde);
+  return {
+    entraram: recentes.length,
+    peloApp: recentes.filter((p) => p.ultimoAcessoApp && ms(p.ultimoAcessoApp) >= desde).length,
+    jaUsaram: pessoas.filter((p) => p.appDesde).length,
+  };
+}
+
 // ─── Receita ─────────────────────────────────────────────────────────────────
 
 /** Eventos que significam "este pagamento entrou" (o mesmo conjunto de `lib/asaas.ts`). */

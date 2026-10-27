@@ -574,6 +574,11 @@ model Usuario {
   podeExcluir          Boolean   @default(false)
   ativo                Boolean   @default(true)
   ultimoAcesso         DateTime?
+  /// Uso pelo app instalado (aberto pelo ícone), à parte do uso pelo navegador: a
+  /// primeira vez e a mais recente (renovada no máximo uma vez por hora). É o que diz,
+  /// no /admin, se o convite para instalar funciona. Ver `registrarUsoDoApp`.
+  appDesde             DateTime?
+  ultimoAcessoApp      DateTime?
   /// Dono da plataforma: gera convites e vê a lista de oficinas. Não abre os dados de
   /// outras oficinas — isso não existe para ninguém.
   administraPlataforma Boolean   @default(false)
@@ -868,6 +873,9 @@ model UsuarioLoja {
   permissoes   String[]  @default([])
   ativo        Boolean   @default(true)
   ultimoAcesso DateTime?
+  /// Uso pelo app instalado, como em `Usuario`.
+  appDesde        DateTime?
+  ultimoAcessoApp DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

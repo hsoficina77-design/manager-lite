@@ -150,6 +150,26 @@ async function lerUsuarioDaSessao(): Promise<UsuarioSessao | null> {
   }
 }
 
+/**
+ * A pessoa abriu pelo app instalado (`/api/uso-app`): carimba a primeira vez e, no máximo
+ * uma vez por hora, a mais recente — como o `ultimoAcesso`. Não lança.
+ */
+export async function registrarUsoDoApp(usuarioId: string) {
+  const agora = new Date();
+  try {
+    await prisma.usuario.updateMany({ where: { id: usuarioId, appDesde: null }, data: { appDesde: agora } });
+    await prisma.usuario.updateMany({
+      where: {
+        id: usuarioId,
+        OR: [{ ultimoAcessoApp: null }, { ultimoAcessoApp: { lt: new Date(agora.getTime() - INTERVALO_ACESSO_MS) } }],
+      },
+      data: { ultimoAcessoApp: agora },
+    });
+  } catch (err) {
+    console.error("Falha ao registrar o uso pelo app:", err);
+  }
+}
+
 /** Apaga uma sessão (logout, desativação, troca de papel). Não lança. */
 export async function encerrarSessao(sessaoId: string) {
   try {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CABECALHO_CONTA_DA_ABA } from "@/lib/sessao";
+import { marcarNoIcone } from "@/components/ui/InstalarApp";
 
 /**
  * O `fetch` das telas do Peça Peça.
@@ -145,9 +146,14 @@ export function tocarAviso() {
   }
 }
 
-/** Quantas novidades na aba do navegador: "(2) Balcão · Yoshio". */
-export function useTituloComContador(base: string, contador: number) {
+/**
+ * Quantas novidades na aba do navegador: "(2) Balcão · Yoshio". Com `noIcone`, o número
+ * vai também para o ícone do app instalado — só a tela que conta tudo o que pede ação
+ * (a caixa do balcão) passa; uma tela de detalhe com zero apagaria o número de verdade.
+ */
+export function useTituloComContador(base: string, contador: number, noIcone = false) {
   useEffect(() => {
     document.title = contador > 0 ? `(${contador}) ${base}` : base;
-  }, [base, contador]);
+    if (noIcone) marcarNoIcone(contador);
+  }, [base, contador, noIcone]);
 }

@@ -75,6 +75,11 @@ export function FichaOficina({ oficina: o }: { oficina: FichaDaOficina }) {
                   <p className="text-xs text-tinta-3">
                     Último acesso: {u.ultimoAcesso ? `${quando(u.ultimoAcesso)} (${haQuanto(u.ultimoAcesso)})` : "nunca entrou"}
                   </p>
+                  <p className="text-xs text-tinta-3">
+                    {u.ultimoAcessoApp
+                      ? `Pelo app instalado desde ${dia(u.appDesde ?? u.ultimoAcessoApp)} · última vez ${haQuanto(u.ultimoAcessoApp)}`
+                      : "Só pelo site, por enquanto"}
+                  </p>
                   {u.sessaoAberta && (
                     <p className="text-xs text-tinta-3">
                       Conectado em {dispositivo(u.sessaoAberta.userAgent)} desde {dia(u.sessaoAberta.criadaEm)}

@@ -482,6 +482,27 @@ export async function listarOficinas() {
 export type OficinaDaLista = Awaited<ReturnType<typeof listarOficinas>>[number];
 
 /**
+ * Quem usa pelo app instalado e quem pelo navegador: as pessoas das oficinas do boxOS,
+ * das contas só do Peça Peça e das autopeças. Só datas de acesso — continua a casca.
+ * As contas vão para `usoPeloApp` (admin.ts).
+ */
+export async function pessoasEUsoDoApp() {
+  const campos = { ultimoAcesso: true, ultimoAcessoApp: true, appDesde: true } as const;
+  const [usuarios, daLoja] = await Promise.all([
+    prisma.usuario.findMany({
+      where: { ativo: true, administraPlataforma: false, oficina: { ...SO_OFICINAS, ativa: true } },
+      select: { ...campos, oficina: { select: { boxosDesde: true } } },
+    }),
+    prisma.usuarioLoja.findMany({ where: { ativo: true, loja: { ativa: true } }, select: campos }),
+  ]);
+  return {
+    boxos: usuarios.filter((u) => u.oficina.boxosDesde !== null),
+    soPecaPeca: usuarios.filter((u) => u.oficina.boxosDesde === null),
+    lojas: daLoja,
+  };
+}
+
+/**
  * Ficha de uma oficina para o painel admin. Continua sendo a casca: quem tem acesso,
  * quanto usa e o que pagou ao boxOS — nada de clientes, OS ou valores de dentro dela.
  * `null` para id inexistente ou para a oficina da própria plataforma.
@@ -509,6 +530,8 @@ export async function fichaDaOficina(id: string) {
           papel: true,
           ativo: true,
           ultimoAcesso: true,
+          appDesde: true,
+          ultimoAcessoApp: true,
           createdAt: true,
           // Sessão mais recente ainda aberta: de onde a pessoa está entrando.
           sessoes: {

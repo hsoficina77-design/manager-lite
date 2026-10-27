@@ -8,7 +8,6 @@ import {
   DestinosDoInicio,
   type Contagens,
 } from "@/components/inicio/Atalhos";
-import { ConviteInstalar } from "@/components/ui/InstalarApp";
 
 // Tela inicial: é onde o app abre, no celular e no computador.
 //
@@ -78,8 +77,6 @@ export default async function Inicio() {
         </div>
         <DestinosDoInicio podeFinanceiro={podeFinanceiro} ehDono={ehDono} contagens={contagens} />
       </section>
-
-      <ConviteInstalar />
     </div>
   );
 }
