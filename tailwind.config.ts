@@ -54,6 +54,9 @@ const config: Config = {
           borda: cor("menu-borda"),
           hover: cor("menu-hover"),
         },
+        // O primeiro "Peça" da logo do Peça Peça: o Azul Peça, um tom mais claro no
+        // tema escuro. Vale nos dois produtos — a logo aparece também dentro do boxOS.
+        "pp-nome": cor("pp-nome"),
 
         // --- neutros semânticos ------------------------------------------------
         // Trocam de valor no tema escuro sem que o componente saiba disso.
@@ -109,6 +112,9 @@ const config: Config = {
         // corrido, tabelas e valores continuam na fonte do sistema, que lê melhor
         // número pequeno. A variável é declarada pelo `next/font` no layout raiz.
         marca: ["var(--fonte-marca)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Baloo 2 ExtraBold, a fonte da marca Peça Peça: a logo e, nas telas dele, os
+        // títulos (globals.css). O texto do Peça Peça é Inter, também por lá.
+        pecapeca: ["var(--fonte-pecapeca)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },

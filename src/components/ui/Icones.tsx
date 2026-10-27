@@ -173,11 +173,11 @@ export const Mais = (p: Props) => (
   </Base>
 );
 
-/** Porca sextavada — o Peça Peça. */
+/** Porca-balão — o Peça Peça: a porca da frente do símbolo, em traço. */
 export const PecaPeca = (p: Props) => (
   <Base {...p}>
-    <path d="M12 2.5 20.2 7.25v9.5L12 21.5l-8.2-4.75v-9.5Z" />
-    <circle cx="12" cy="12" r="3.5" />
+    <path d="M2.5 10.2 7.25 2h9.5l4.75 8.2-4.75 8.25H12L4.5 22l2.75-3.55Z" />
+    <circle cx="12" cy="10.2" r="3.5" />
   </Base>
 );
 

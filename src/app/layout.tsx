@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins } from "next/font/google";
+import { Baloo_2, Inter, Poppins } from "next/font/google";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
@@ -19,6 +19,7 @@ import { HEADER_BUSCA, HEADER_ROTA, ehRotaDaLoja, ehRotaDoBalcao, ehRotaPublica 
 import { ehTelaDoPecaPeca, loginDoPecaPeca, urlBoxOS, type Produto } from "@/lib/produto";
 import { produtoDaRequisicao } from "@/lib/produto-servidor";
 import { GRAFITE_BOXOS } from "@/components/marca/LogoBoxOS";
+import { AZUL_NOITE_PECA_PECA } from "@/components/marca/LogoPecaPeca";
 import { AvisoDePlano } from "@/components/plano/AvisoDePlano";
 import { BloqueioDeAcao } from "@/components/plano/Bloqueio";
 import { VoltaAoInicio } from "@/components/VoltaAoInicio";
@@ -35,20 +36,40 @@ const poppins = Poppins({
   variable: "--fonte-marca",
 });
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 5,
-  // `cover` é o que faz `env(safe-area-inset-*)` valer alguma coisa. Sem isto a
-  // barra colada no rodapé fica sob o indicador de home do iPhone.
-  viewportFit: "cover",
-  // Barra do navegador no Android na cor do menu: branca no tema claro, grafite no
-  // escuro. Segue a preferência do aparelho — a escolha manual de tema não chega aqui.
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-    { media: "(prefers-color-scheme: dark)", color: GRAFITE_BOXOS },
-  ],
-};
+// As do Peça Peça: Baloo 2 ExtraBold na logo e nos títulos, Inter no texto. Sem preload:
+// declaradas aqui valeriam para todo endereço, e quem só usa o boxOS baixaria as duas à
+// toa. O navegador busca o arquivo quando a tela do Peça Peça usa a fonte.
+const baloo = Baloo_2({
+  weight: "800",
+  subsets: ["latin"],
+  variable: "--fonte-pecapeca",
+  preload: false,
+});
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--fonte-texto-pecapeca",
+  preload: false,
+});
+
+// Barra do navegador no Android na cor do menu: branca no tema claro e, no escuro,
+// grafite no boxOS e Azul Noite no Peça Peça. Segue a preferência do aparelho — a
+// escolha manual de tema não chega aqui.
+export async function generateViewport(): Promise<Viewport> {
+  const [usuario, produto, cabecalhos] = await Promise.all([getUsuarioAtual(), produtoDaRequisicao(), headers()]);
+  const escuro = caraDaTela(produto, cabecalhos, usuario) === "peca-peca" ? AZUL_NOITE_PECA_PECA : GRAFITE_BOXOS;
+  return {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    // `cover` é o que faz `env(safe-area-inset-*)` valer alguma coisa. Sem isto a
+    // barra colada no rodapé fica sob o indicador de home do iPhone.
+    viewportFit: "cover",
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+      { media: "(prefers-color-scheme: dark)", color: escuro },
+    ],
+  };
+}
 
 /** Configuração da oficina de quem está logado; o padrão para quem não está. */
 async function configuracaoDaSessao(usuario: Awaited<ReturnType<typeof getUsuarioAtual>>) {
@@ -186,7 +207,12 @@ export default async function RootLayout({
 
   return (
     // `data-conta-loja`: com que conta a aba do painel da loja nasceu (ver `buscar`).
-    <html lang="pt-BR" className={poppins.variable} data-produto={cara} data-conta-loja={contaLoja?.id}>
+    <html
+      lang="pt-BR"
+      className={`${poppins.variable} ${baloo.variable} ${inter.variable}`}
+      data-produto={cara}
+      data-conta-loja={contaLoja?.id}
+    >
       <head>
         {/* Claro ou escuro antes da primeira pintura — senão a tela nasce
             branca e pisca para escura no primeiro render. */}

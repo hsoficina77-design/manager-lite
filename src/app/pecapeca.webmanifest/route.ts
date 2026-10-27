@@ -30,6 +30,10 @@ export async function GET() {
       { src: "/brand-pecapeca/favicon_180.png", sizes: "180x180", type: "image/png" },
       { src: "/brand-pecapeca/favicon_192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/brand-pecapeca/favicon_512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      // Android recorta o ícone no formato do aparelho (círculo, gota...): este é o
+      // quadrado azul cheio, com o símbolo dentro da área que nenhum recorte alcança.
+      // Sem ele, o quadrado arredondado iria encolhido sobre um círculo branco.
+      { src: "/brand-pecapeca/icone_maskable_512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       { src: "/brand-pecapeca/pecapeca_icone_app.svg", sizes: "any", type: "image/svg+xml" },
     ],
   };

@@ -116,6 +116,16 @@
     --st-inerte-fg: 119 129 140;
     --st-inerte-anel: 220 224 229;
 
+    /* "Chegou", do Peça Peça: o Verde Chegou (#A3E635) da marca para resposta das
+       lojas, oferta aceita e peça a caminho. Ele não lê como texto no branco; aqui é
+       o anel, e o texto é o mesmo verde escurecido (6,5:1 sobre o fundo). Fica no
+       :root, e não no bloco do Peça Peça, porque as cotações abrem também dentro do
+       boxOS. Pelo mesmo motivo o azul do nome da logo (`text-pp-nome`). */
+    --st-chegou-bg: 236 252 203;
+    --st-chegou-fg: 63 98 18;
+    --st-chegou-anel: 163 230 53;
+    --pp-nome: 37 99 235;
+
     /* --- tempo em aberto ---------------------------------------------------
        O aging é uma rampa de quatro passos, e o semáforo de três não dava conta:
        colapsar "16-30 dias" e "31-60 dias" na mesma cor apagaria a faixa que
@@ -199,6 +209,11 @@
       --st-inerte-fg: 125 136 148;
       --st-inerte-anel: 44 53 62;
 
+      --st-chegou-bg: 33 48 12;
+      --st-chegou-fg: 163 230 53;
+      --st-chegou-anel: 72 110 22;
+      --pp-nome: 96 165 250;
+
       --idade-0-bg: 35 44 53;  --idade-0-fg: 155 168 181; --idade-0-ponto: 106 121 136;
       --idade-1-bg: 19 48 36;  --idade-1-fg: 111 208 155; --idade-1-ponto: 52 178 114;
       --idade-2-bg: 52 44 12;  --idade-2-fg: 226 195 88;  --idade-2-ponto: 190 158 40;
@@ -277,6 +292,11 @@
     --st-inerte-fg: 125 136 148;
     --st-inerte-anel: 44 53 62;
 
+    --st-chegou-bg: 33 48 12;
+    --st-chegou-fg: 163 230 53;
+    --st-chegou-anel: 72 110 22;
+    --pp-nome: 96 165 250;
+
     --idade-0-bg: 35 44 53;  --idade-0-fg: 155 168 181; --idade-0-ponto: 106 121 136;
     --idade-1-bg: 19 48 36;  --idade-1-fg: 111 208 155; --idade-1-ponto: 52 178 114;
     --idade-2-bg: 52 44 12;  --idade-2-fg: 226 195 88;  --idade-2-ponto: 190 158 40;
@@ -286,11 +306,19 @@
 
   /* --- identidade Peça Peça ------------------------------------------------
      O mesmo app serve o Peça Peça num endereço próprio; o layout marca o <html>
-     com `data-produto="peca-peca"` e só a escala da marca muda — azul em vez do
-     laranja do boxOS (AZUL_PECA_PECA em marca/LogoPecaPeca.tsx). Provisória até
-     chegar o pacote de identidade. Sobre o 600 o texto é branco (5,2:1). */
+     com `data-produto="peca-peca"` e a paleta troca para a do pacote de identidade
+     (constantes em marca/LogoPecaPeca.tsx):
+
+       Azul Peça   #2563EB  a marca: botões, item ativo (o 600 da escala)
+       Azul Noite  #0B1F4D  texto e menu escuro
+       Azul Névoa  #EAF1FE  áreas de apoio: o fundo atrás dos cartões
+       Cinza Graxa #475569  texto secundário e legendas
+       Branco               os cartões
+
+     O semáforo e as pílulas de status não mudam: são significado, não marca. Sobre
+     o 600 o texto é branco (5,2:1). */
   :root[data-produto="peca-peca"] {
-    --brand-50: 239 246 255;
+    --brand-50: 234 241 254;
     --brand-100: 219 234 254;
     --brand-200: 191 219 254;
     --brand-300: 147 197 253;
@@ -303,24 +331,97 @@
     --brand-950: 23 37 84;
     --brand-fg: 255 255 255;
     --brand-texto: 29 78 216;
+
+    --menu-bg: 255 255 255;
+    --menu-fg: 11 31 77;
+    --menu-borda: 226 232 240;
+    --menu-hover: 234 241 254;
+    --menu-texto: 71 85 105;
+
+    --fundo: 234 241 254;
+    --superficie: 255 255 255;
+    --superficie-2: 244 247 254;
+    --superficie-3: 226 234 248;
+
+    --tinta: 11 31 77;
+    --tinta-2: 51 65 85;
+    --tinta-3: 71 85 105;
+
+    --linha: 226 232 240;
+    --linha-forte: 203 213 225;
+
+    --contraste: 11 31 77;
+    --contraste-fg: 255 255 255;
   }
 
+  /* Escuro: os fundos saem do Azul Noite, e o texto é o Azul Névoa. */
   @media (prefers-color-scheme: dark) {
     :root[data-produto="peca-peca"]:not([data-tema="claro"]) {
-      --brand-50: 20 31 54;
-      --brand-100: 24 39 70;
-      --brand-200: 30 52 98;
+      --brand-50: 20 33 64;
+      --brand-100: 24 41 80;
+      --brand-200: 30 54 106;
       --brand-300: 39 74 145;
       --brand-texto: 96 165 250;
+
+      --menu-bg: 11 31 77;
+      --menu-fg: 255 255 255;
+      --menu-borda: 30 52 102;
+      --menu-hover: 27 48 98;
+      --menu-texto: 176 190 216;
+
+      --fundo: 7 16 38;
+      --superficie: 13 27 58;
+      --superficie-2: 18 34 70;
+      --superficie-3: 27 46 88;
+
+      --tinta: 234 241 254;
+      --tinta-2: 186 199 222;
+      --tinta-3: 143 160 192;
+
+      --linha: 31 48 86;
+      --linha-forte: 47 68 112;
+
+      --contraste: 234 241 254;
+      --contraste-fg: 11 31 77;
     }
   }
 
   :root[data-produto="peca-peca"][data-tema="escuro"] {
-    --brand-50: 20 31 54;
-    --brand-100: 24 39 70;
-    --brand-200: 30 52 98;
+    --brand-50: 20 33 64;
+    --brand-100: 24 41 80;
+    --brand-200: 30 54 106;
     --brand-300: 39 74 145;
     --brand-texto: 96 165 250;
+
+    --menu-bg: 11 31 77;
+    --menu-fg: 255 255 255;
+    --menu-borda: 30 52 102;
+    --menu-hover: 27 48 98;
+    --menu-texto: 176 190 216;
+
+    --fundo: 7 16 38;
+    --superficie: 13 27 58;
+    --superficie-2: 18 34 70;
+    --superficie-3: 27 46 88;
+
+    --tinta: 234 241 254;
+    --tinta-2: 186 199 222;
+    --tinta-3: 143 160 192;
+
+    --linha: 31 48 86;
+    --linha-forte: 47 68 112;
+
+    --contraste: 234 241 254;
+    --contraste-fg: 11 31 77;
+  }
+
+  /* Fontes do pacote: Inter no texto, preços e botões; Baloo 2 ExtraBold nos títulos.
+     Os campos e botões herdam a do body (preflight do Tailwind). */
+  :root[data-produto="peca-peca"] body {
+    font-family: var(--fonte-texto-pecapeca), ui-sans-serif, system-ui, sans-serif;
+  }
+  :root[data-produto="peca-peca"] h1 {
+    font-family: var(--fonte-pecapeca), ui-sans-serif, system-ui, sans-serif;
   }
 
   /* Folha do documento (OS e orçamento na tela). É o único lugar com a cor da
@@ -433,6 +534,7 @@
   .status-peca      { --bg: rgb(var(--st-peca-bg));      --fg: rgb(var(--st-peca-fg));      --anel: rgb(var(--st-peca-anel)); }
   .status-entregue  { --bg: rgb(var(--st-entregue-bg));  --fg: rgb(var(--st-entregue-fg));  --anel: rgb(var(--st-entregue-anel)); }
   .status-inerte    { --bg: rgb(var(--st-inerte-bg));    --fg: rgb(var(--st-inerte-fg));    --anel: rgb(var(--st-inerte-anel)); }
+  .status-chegou    { --bg: rgb(var(--st-chegou-bg));    --fg: rgb(var(--st-chegou-fg));    --anel: rgb(var(--st-chegou-anel)); }
 
   /* Faixa de tempo em aberto. `--ponto` colore a bolinha que antecede o rótulo. */
   .idade {

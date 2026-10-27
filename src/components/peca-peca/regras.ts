@@ -85,11 +85,13 @@ export type SituacaoNoBalcao =
   | "OUTRA_LOJA"
   | "ENCERRADA";
 
+// O verde "chegou" é o da marca: oferta aceita (aqui) e resposta e peça a caminho (nas
+// etapas da oficina).
 export const SITUACOES_NO_BALCAO: Record<SituacaoNoBalcao, { rotulo: string; cor: string }> = {
   RESPONDER: { rotulo: "Responder", cor: "status status-peca" },
   OFICINA_DECIDINDO: { rotulo: "Oficina decidindo", cor: "status status-andamento" },
   COM_O_CLIENTE: { rotulo: "Com o cliente da oficina", cor: "status status-andamento" },
-  PEDIDO: { rotulo: "Pedido fechado", cor: "status status-entregue" },
+  PEDIDO: { rotulo: "Pedido fechado", cor: "status status-chegou" },
   OUTRA_LOJA: { rotulo: "Fechou com outra loja", cor: "status status-inerte" },
   ENCERRADA: { rotulo: "Encerrada sem resposta", cor: "status status-inerte" },
 };
@@ -183,9 +185,9 @@ export type Etapa = "AGUARDANDO" | "RESPONDIDA" | "ORCAMENTO" | "PEDIDO" | "CONF
 
 export const ETAPAS: Record<Etapa, { rotulo: string; cor: string }> = {
   AGUARDANDO: { rotulo: "Aguardando as lojas", cor: "status status-aberta" },
-  RESPONDIDA: { rotulo: "Lojas responderam", cor: "status status-andamento" },
+  RESPONDIDA: { rotulo: "Lojas responderam", cor: "status status-chegou" },
   ORCAMENTO: { rotulo: "Com o cliente", cor: "status status-peca" },
-  PEDIDO: { rotulo: "Peças a caminho", cor: "status status-andamento" },
+  PEDIDO: { rotulo: "Peças a caminho", cor: "status status-chegou" },
   CONFERIR: { rotulo: "Confirmar recebimento", cor: "status status-peca" },
   ENTREGUE: { rotulo: "Peças entregues", cor: "status status-entregue" },
 };
