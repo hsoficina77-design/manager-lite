@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
-import { Aviso, CampoDinheiro, Entrada } from "@/components/ui/Campos";
+import { Area, Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { useAvisar } from "@/components/ui/Avisos";
 import { Confere, Lixeira, Mais, Voltar } from "@/components/ui/Icones";
@@ -13,10 +13,16 @@ import {
   ETAPAS_ENTREGA,
   SITUACOES_NO_BALCAO,
   descricaoDoVeiculo,
+  diferencaDaTroca,
+  ehTroca,
+  lojaPrecisaAgir,
   prazoSugerido,
   proximaEtapa,
   rotuloDaEntrega,
+  rotuloDoMotivo,
+  situacaoDaDevolucao,
   type CaixaDoBalcao,
+  type DevolucaoVista,
   type EnvioNoBalcao,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo, useTituloComContador } from "./aoVivo";
@@ -44,7 +50,7 @@ export type CaminhosDoBalcao = {
 };
 
 /** O que a pessoa pode no balcão. No link antigo, tudo; no painel, o acesso dela. */
-export type PodeNoBalcao = { responder: boolean; entrega: boolean };
+export type PodeNoBalcao = { responder: boolean; entrega: boolean; devolucao: boolean };
 
 function Moldura({
   loja,
@@ -85,22 +91,31 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
   const pedidosNovos = pedidos.filter((e) => e.entrega === "ENVIADO");
   const outras = envios.filter((e) => e.situacao !== "RESPONDER" && e.situacao !== "PEDIDO");
   const decididas = envios.filter((e) => e.situacao === "PEDIDO" || e.situacao === "OUTRA_LOJA");
+  // Devolução que espera a loja: responder, mandar a troca ou confirmar a peça que voltou.
+  const devolucoes = envios.flatMap((e) => e.devolucoes.filter(lojaPrecisaAgir).map((d) => ({ envio: e, d })));
+  const devolucoesNovas = devolucoes.filter(({ d }) => situacaoDaDevolucao(d) === "PEDIDA");
 
   // O que pede ação vai para a aba do navegador; quando aumenta, toca.
-  const pendentes = responder.length + pedidosNovos.length;
+  const pendentes = responder.length + pedidosNovos.length + devolucoesNovas.length;
   useTituloComContador(`Balcão · ${loja.nome}`, pendentes);
-  const antes = useRef<{ cotacoes: Set<string>; pedidos: Set<string> } | null>(null);
+  const antes = useRef<{ cotacoes: Set<string>; pedidos: Set<string>; devolucoes: Set<string> } | null>(null);
   useEffect(() => {
     if (!dados) return;
-    const agora = { cotacoes: new Set(responder.map((e) => e.id)), pedidos: new Set(pedidosNovos.map((e) => e.id)) };
+    const agora = {
+      cotacoes: new Set(responder.map((e) => e.id)),
+      pedidos: new Set(pedidosNovos.map((e) => e.id)),
+      devolucoes: new Set(devolucoesNovas.map(({ d }) => d.id)),
+    };
     const anterior = antes.current;
     antes.current = agora;
     if (!anterior) return;
     const novasCotacoes = responder.filter((e) => !anterior.cotacoes.has(e.id));
     const novosPedidos = pedidosNovos.filter((e) => !anterior.pedidos.has(e.id));
+    const novasDevolucoes = devolucoesNovas.filter(({ d }) => !anterior.devolucoes.has(d.id));
     novasCotacoes.forEach((e) => avisar(`Nova cotação de ${e.oficina}`));
     novosPedidos.forEach((e) => avisar(`Pedido fechado por ${e.oficina}!`));
-    if (novasCotacoes.length + novosPedidos.length > 0) tocarAviso();
+    novasDevolucoes.forEach(({ envio }) => avisar(`${envio.oficina} quer devolver uma peça`));
+    if (novasCotacoes.length + novosPedidos.length + novasDevolucoes.length > 0) tocarAviso();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dados]);
 
@@ -110,8 +125,8 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
         {/* O nome sozinho: "da Yoshio", mas "do Bom Preço" — o artigo muda de loja para loja. */}
         <h1 className="text-xl font-bold text-tinta">{loja.nome}</h1>
         <p className="mt-0.5 text-sm text-tinta-3">
-          Balcão da loja. Deixe esta tela aberta: ela se atualiza sozinha e avisa com som quando chega cotação ou
-          pedido.
+          Balcão da loja. Deixe esta tela aberta: ela se atualiza sozinha e avisa com som quando chega cotação,
+          pedido ou devolução.
         </p>
       </div>
 
@@ -131,6 +146,33 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
               A loja fechou <strong className="text-tinta">{pedidos.length}</strong> de {decididas.length}{" "}
               {decididas.length === 1 ? "cotação decidida" : "cotações decididas"}.
             </p>
+          )}
+
+          {devolucoes.length > 0 && (
+            <Secao titulo="Devoluções">
+              <div className="divide-y divide-linha overflow-hidden rounded-xl border border-atencao-linha bg-superficie">
+                {devolucoes.map(({ envio, d }) => {
+                  const situacao = situacaoNoBalcao(d);
+                  return (
+                    <Link
+                      key={d.id}
+                      href={`${caminhos.telas}/${envio.id}`}
+                      className="flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-superficie-2 sm:flex-row sm:items-center sm:gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-tinta">
+                          {envio.oficina} · {d.quantidade}× {envio.pecas.find((p) => p.id === d.pecaId)?.descricao ?? "peça"}
+                        </p>
+                        <p className="truncate text-xs text-tinta-3">
+                          {rotuloDoMotivo(d.motivo)} · {descricaoDoVeiculo(envio.veiculo)} · pedida {haQuanto(d.pedidaEm)}
+                        </p>
+                      </div>
+                      <span className={cn(situacao.cor, "self-start sm:self-auto")}>{situacao.rotulo}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </Secao>
           )}
 
           {pedidosAbertos.length > 0 && (
@@ -253,6 +295,10 @@ export function EnvioDoBalcaoTela({
 
       <AvisoSemConexao ativo={semConexao} />
 
+      {envio.devolucoes.length > 0 && (
+        <DevolucoesNoBalcao envio={envio} url={url} gravar={gravar} podeCuidar={pode.devolucao} />
+      )}
+
       {envio.situacao === "PEDIDO" && (
         <PedidoNoBalcao envio={envio} url={url} gravar={gravar} podeAvancar={pode.entrega} />
       )}
@@ -360,6 +406,326 @@ function PedidoNoBalcao({
         ))}
       </ol>
     </section>
+  );
+}
+
+// ─── Devolução ──────────────────────────────────────────────────────────────
+
+/** A devolução dita do lado da loja: o que o balconista tem de fazer agora. */
+function situacaoNoBalcao(d: DevolucaoVista): { rotulo: string; cor: string } {
+  switch (situacaoDaDevolucao(d)) {
+    case "PEDIDA":
+      return { rotulo: "Responder devolução", cor: "status status-peca" };
+    case "PRECO_NOVO":
+      return { rotulo: "Oficina vendo o preço", cor: "status status-andamento" };
+    case "ACEITA":
+      if (ehTroca(d) && !d.trocaSaiuEm) return { rotulo: "Mandar a troca", cor: "status status-peca" };
+      if (!d.lojaRecebeuEm) return { rotulo: "Esperando a peça voltar", cor: "status status-andamento" };
+      return { rotulo: "Oficina vai receber a troca", cor: "status status-andamento" };
+    case "TROCA_A_CAMINHO":
+      return { rotulo: "Troca a caminho", cor: "status status-chegou" };
+    case "CONCLUIDA":
+      return { rotulo: "Devolução concluída", cor: "status status-entregue" };
+    case "RECUSADA":
+      return { rotulo: "Recusada", cor: "status status-inerte" };
+    case "CANCELADA":
+      return { rotulo: "Cancelada pela oficina", cor: "status status-inerte" };
+  }
+}
+
+/** Os motivos de recusa de sempre: um toque e o texto vem pronto. */
+const RECUSAS_COMUNS = ["A peça já foi montada", "Passou do prazo", "Sem a caixa ou a embalagem", "A peça voltou danificada"];
+
+function DevolucoesNoBalcao({
+  envio,
+  url,
+  gravar,
+  podeCuidar,
+}: {
+  envio: EnvioNoBalcao;
+  url: string;
+  gravar: GravarEnvio;
+  podeCuidar: boolean;
+}) {
+  // O que espera a loja vem primeiro; as já resolvidas ficam embaixo, como histórico.
+  const esperando = envio.devolucoes.filter(lojaPrecisaAgir);
+  const resto = envio.devolucoes.filter((d) => !lojaPrecisaAgir(d));
+  return (
+    <section
+      className={cn(
+        "space-y-3 rounded-xl p-4",
+        esperando.length > 0 ? "border-2 border-atencao-linha bg-atencao-fraco" : "border border-linha bg-superficie-2"
+      )}
+    >
+      <div>
+        <p className={cn("font-semibold", esperando.length > 0 ? "text-atencao" : "text-tinta")}>Devolução</p>
+        <p className="text-sm text-tinta-2">
+          {esperando.length > 0
+            ? `${envio.oficina} quer devolver ${esperando.length === 1 ? "uma peça" : "peças"} deste pedido.`
+            : "Nada esperando a loja. As devoluções deste pedido ficam aqui."}
+        </p>
+      </div>
+      {[...esperando, ...resto].map((d) => (
+        <DevolucaoNoBalcao key={d.id} envio={envio} d={d} url={url} gravar={gravar} podeCuidar={podeCuidar} />
+      ))}
+    </section>
+  );
+}
+
+function DevolucaoNoBalcao({
+  envio,
+  d,
+  url,
+  gravar,
+  podeCuidar,
+}: {
+  envio: EnvioNoBalcao;
+  d: DevolucaoVista;
+  url: string;
+  gravar: GravarEnvio;
+  podeCuidar: boolean;
+}) {
+  const avisar = useAvisar();
+  const peca = envio.pecas.find((p) => p.id === d.pecaId);
+  const unitario = Math.round((d.valor / d.quantidade) * 100) / 100;
+  const s = situacaoDaDevolucao(d);
+  const situacao = situacaoNoBalcao(d);
+  const troca = ehTroca(d);
+
+  const [modo, setModo] = useState<"aceitar" | "recusar" | "voltou" | null>(null);
+  const [marca, setMarca] = useState("");
+  const [preco, setPreco] = useState(String(unitario));
+  const [motivoRecusa, setMotivoRecusa] = useState("");
+  const [devolvido, setDevolvido] = useState(String(d.valor));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  async function enviar(corpo: Record<string, unknown>, aviso: string) {
+    setErro("");
+    setSalvando(true);
+    const r = await gravar(enviarJson(`${url}/devolucao`, "POST", { devolucaoId: d.id, ...corpo }), { devolveDado: true });
+    setSalvando(false);
+    if (!r.ok) return setErro(r.erro);
+    setModo(null);
+    avisar(aviso);
+  }
+
+  function aceitar() {
+    if (!d.querTroca) return enviar({ acao: "aceitar" }, "Devolução aceita");
+    const novo = Number(preco);
+    if (!(novo > 0)) return setErro("Informe o preço da peça da troca.");
+    return enviar(
+      {
+        acao: "aceitar",
+        trocaMarca: marca.trim() || null,
+        // Preço igual ao do pedido não é preço novo.
+        trocaPreco: Math.abs(novo - unitario) < 0.005 ? null : novo,
+      },
+      novo > unitario + 0.005 ? "Troca aceita. A oficina vai confirmar o preço novo." : "Troca aceita"
+    );
+  }
+
+  const pedido =
+    d.motivo === "NAO_USADA" || !d.querTroca
+      ? "A oficina quer devolver e receber o valor."
+      : d.motivo === "ERRADA"
+        ? "A oficina quer a peça certa no lugar."
+        : "A oficina quer outra peça, sem defeito, no lugar.";
+
+  const fechada = s === "CONCLUIDA" || s === "RECUSADA" || s === "CANCELADA";
+  const podeRecusar = !fechada && !d.lojaRecebeuEm && !d.trocaSaiuEm;
+  const diferenca = diferencaDaTroca(d);
+
+  return (
+    <div className="space-y-2 rounded-lg bg-superficie p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="min-w-0 text-sm font-semibold text-tinta">
+          {d.quantidade}× {peca?.descricao ?? "peça"} {peca?.pedida && <span className="font-normal text-tinta-3">({peca.pedida})</span>}
+        </p>
+        <span className={cn(situacao.cor, "shrink-0")}>{situacao.rotulo}</span>
+      </div>
+      <p className="text-sm text-tinta">
+        <strong>{rotuloDoMotivo(d.motivo)}</strong>
+        {d.detalhe && <span className="text-tinta-2">: &ldquo;{d.detalhe}&rdquo;</span>}
+      </p>
+      <p className="text-sm text-tinta-2">
+        {pedido} Valor no pedido: {formatCurrency(d.valor)}
+        {d.quantidade > 1 && ` (${formatCurrency(unitario)} cada)`}.
+      </p>
+
+      {/* Onde a devolução está, dito para o balconista. */}
+      {s === "PRECO_NOVO" && (
+        <p className="text-sm text-tinta-2">
+          A peça da troca ficou {formatCurrency(diferenca)} mais cara. Esperando a oficina dizer se pode mandar.
+        </p>
+      )}
+      {s === "ACEITA" && !troca && !d.lojaRecebeuEm && (
+        <p className="text-sm text-tinta-2">Mande o motoboy buscar a peça. Quando ela chegar, confirme aqui.</p>
+      )}
+      {s === "ACEITA" && troca && !d.trocaSaiuEm && (
+        <p className="text-sm text-tinta-2">
+          Mande a peça nova{d.trocaMarca && ` (${d.trocaMarca})`} e traga a outra de volta.
+          {diferenca > 0 && ` A oficina paga ${formatCurrency(diferenca)} a mais na entrega.`}
+          {diferenca < 0 && ` Devolva ${formatCurrency(-diferenca)} de diferença à oficina.`}
+        </p>
+      )}
+      {s === "TROCA_A_CAMINHO" && (
+        <p className="text-sm text-tinta-2">A peça nova está a caminho. A oficina confirma quando ela chegar.</p>
+      )}
+      {d.lojaRecebeuEm && s !== "CONCLUIDA" && (
+        <p className="text-sm text-tinta-2">A peça devolvida já voltou para a loja às {horaCurta(d.lojaRecebeuEm)}.</p>
+      )}
+      {s === "CONCLUIDA" && (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-ok">
+          <Confere tamanho={16} className="shrink-0" />
+          {troca
+            ? "Troca feita."
+            : `Peça de volta na loja. Devolvido à oficina: ${formatCurrency(d.valorDevolvido ?? 0)}.`}
+        </p>
+      )}
+      {s === "RECUSADA" && <p className="text-sm text-tinta-2">Recusada: {d.motivoRecusa}</p>}
+      {s === "CANCELADA" && <p className="text-sm text-tinta-2">A oficina desistiu da devolução.</p>}
+
+      {!podeCuidar
+        ? !fechada && <p className="text-xs text-tinta-3">Quem cuida das devoluções é outra pessoa da loja.</p>
+        : !fechada && (
+            <>
+              {modo === "aceitar" && (
+                <div className="space-y-3 rounded-lg border border-linha p-3">
+                  <p className="text-sm text-tinta-2">
+                    Se a peça certa for de outra marca ou tiver outro preço, mude aqui. Se ficar mais cara, a oficina
+                    confirma antes de o motoboy sair.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Campo rotulo="Marca da peça nova">
+                      <Entrada value={marca} onChange={(e) => setMarca(e.target.value)} placeholder={peca?.pedida ?? "A mesma"} />
+                    </Campo>
+                    <Campo rotulo={d.quantidade > 1 ? "Preço de cada" : "Preço"}>
+                      <CampoDinheiro valor={preco} onChange={setPreco} />
+                    </Campo>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Botao variante="sucesso" onClick={aceitar} disabled={salvando}>
+                      {salvando ? "Salvando..." : "Aceitar a troca"}
+                    </Botao>
+                    <Botao variante="secundario" onClick={() => setModo(null)} disabled={salvando}>
+                      Voltar
+                    </Botao>
+                  </div>
+                </div>
+              )}
+
+              {modo === "recusar" && (
+                <div className="space-y-3 rounded-lg border border-linha p-3">
+                  <Campo rotulo="Por que a loja não aceita?" obrigatorio ajuda="A oficina lê este motivo.">
+                    <Area value={motivoRecusa} onChange={(e) => setMotivoRecusa(e.target.value)} rows={2} />
+                  </Campo>
+                  <div className="flex flex-wrap gap-1.5">
+                    {RECUSAS_COMUNS.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMotivoRecusa(m)}
+                        className="min-h-9 rounded-full border border-linha bg-superficie-2 px-3 text-xs font-medium text-tinta-2 transition-colors hover:border-brand-500 hover:text-tinta"
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Botao
+                      variante="perigo"
+                      onClick={() =>
+                        motivoRecusa.trim()
+                          ? enviar({ acao: "recusar", motivoRecusa: motivoRecusa.trim() }, "Devolução recusada")
+                          : setErro("Escreva por que a loja não aceita.")
+                      }
+                      disabled={salvando}
+                    >
+                      {salvando ? "Salvando..." : "Recusar a devolução"}
+                    </Botao>
+                    <Botao variante="secundario" onClick={() => setModo(null)} disabled={salvando}>
+                      Voltar
+                    </Botao>
+                  </div>
+                </div>
+              )}
+
+              {modo === "voltou" && (
+                <div className="space-y-3 rounded-lg border border-linha p-3">
+                  <Campo rotulo="Quanto a loja devolveu ou abateu?" ajuda="Vem com o valor da peça. Mude se descontou algo.">
+                    <CampoDinheiro valor={devolvido} onChange={setDevolvido} className="max-w-[10rem]" />
+                  </Campo>
+                  <div className="flex flex-wrap gap-2">
+                    <Botao
+                      variante="sucesso"
+                      onClick={() =>
+                        enviar({ acao: "voltou", valorDevolvido: Number(devolvido) || 0 }, "Peça devolvida confirmada")
+                      }
+                      disabled={salvando}
+                    >
+                      {salvando ? "Salvando..." : "Confirmar que a peça voltou"}
+                    </Botao>
+                    <Botao variante="secundario" onClick={() => setModo(null)} disabled={salvando}>
+                      Voltar
+                    </Botao>
+                  </div>
+                </div>
+              )}
+
+              {modo === null && (
+                <div className="flex flex-wrap gap-2">
+                  {s === "PEDIDA" &&
+                    (d.querTroca ? (
+                      <>
+                        <Botao variante="sucesso" onClick={() => setModo("aceitar")} disabled={salvando}>
+                          Tenho, vou trocar
+                        </Botao>
+                        <Botao
+                          variante="secundario"
+                          onClick={() => enviar({ acao: "sem-a-peca" }, "Combinado: o valor volta para a oficina")}
+                          disabled={salvando}
+                        >
+                          Não tenho a peça para trocar
+                        </Botao>
+                      </>
+                    ) : (
+                      <Botao variante="sucesso" onClick={aceitar} disabled={salvando}>
+                        {salvando ? "Salvando..." : "Aceitar: o motoboy busca"}
+                      </Botao>
+                    ))}
+                  {s === "ACEITA" && troca && !d.trocaSaiuEm && (
+                    <Botao
+                      variante="sucesso"
+                      onClick={() => enviar({ acao: "saiu" }, "Peça nova a caminho")}
+                      disabled={salvando}
+                    >
+                      {salvando ? "Salvando..." : "Marcar: peça nova saiu com o motoboy"}
+                    </Botao>
+                  )}
+                  {(s === "ACEITA" || s === "TROCA_A_CAMINHO") && !d.lojaRecebeuEm && (
+                    <Botao
+                      variante={troca ? "secundario" : "sucesso"}
+                      onClick={() =>
+                        troca ? enviar({ acao: "voltou" }, "Peça devolvida confirmada") : setModo("voltou")
+                      }
+                      disabled={salvando}
+                    >
+                      A peça devolvida voltou
+                    </Botao>
+                  )}
+                  {podeRecusar && (
+                    <Botao variante="fantasma" onClick={() => setModo("recusar")} disabled={salvando} className="text-perigo">
+                      Recusar
+                    </Botao>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+      {erro && <Aviso>{erro}</Aviso>}
+    </div>
   );
 }
 

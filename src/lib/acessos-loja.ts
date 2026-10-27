@@ -16,9 +16,14 @@
 export const PERMISSOES_DA_LOJA = [
   { chave: "balcao.responder", rotulo: "Responder cotações", ajuda: "Marca, preço e prazo de cada peça." },
   { chave: "balcao.entrega", rotulo: "Avançar a entrega", ajuda: "Separando, saiu com o motoboy, entregue." },
+  {
+    chave: "balcao.devolucao",
+    rotulo: "Cuidar das devoluções",
+    ajuda: "Aceitar ou recusar, mandar a troca e confirmar a peça que voltou.",
+  },
   { chave: "loja.resumo", rotulo: "Ver o resumo de vendas", ajuda: "Cotações, pedidos e valores da loja." },
   { chave: "loja.equipe", rotulo: "Cuidar da equipe", ajuda: "Convidar pessoas, mudar acessos e dar novo acesso." },
-  { chave: "loja.dados", rotulo: "Editar os dados da loja", ajuda: "Telefone e cidades atendidas." },
+  { chave: "loja.dados", rotulo: "Editar os dados da loja", ajuda: "Telefone, cidades atendidas e prazo de devolução." },
 ] as const;
 
 export type PermissaoLoja = (typeof PERMISSOES_DA_LOJA)[number]["chave"];
@@ -31,8 +36,8 @@ export const PERFIS_DA_LOJA: Record<PerfilLoja, { rotulo: string; ajuda: string;
   DONO: { rotulo: "Dono", ajuda: "Tudo, inclusive a equipe e o resumo de vendas.", permissoes: TODAS },
   VENDEDOR: {
     rotulo: "Vendedor",
-    ajuda: "Responde as cotações e cuida da entrega.",
-    permissoes: ["balcao.responder", "balcao.entrega"],
+    ajuda: "Responde as cotações e cuida da entrega e das devoluções.",
+    permissoes: ["balcao.responder", "balcao.entrega", "balcao.devolucao"],
   },
 };
 

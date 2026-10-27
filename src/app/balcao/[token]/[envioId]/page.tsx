@@ -25,8 +25,8 @@ export default async function EnvioDoBalcaoPage({
       caminhos={{ inicio: `/balcao/${token}`, telas: `/balcao/${token}`, api: `/api/balcao/${token}`, comCabecalho: true }}
       envioId={envioId}
       loja={{ nome, cidade, entregaMedia }}
-      // O link antigo era o balcão inteiro: responder e entregar.
-      pode={{ responder: true, entrega: true }}
+      // O link antigo era o balcão inteiro: responder, entregar e cuidar das devoluções.
+      pode={{ responder: true, entrega: true, devolucao: true }}
     />
   );
 }

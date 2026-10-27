@@ -8,6 +8,7 @@ import {
   aConferir,
   descricaoDoVeiculo,
   etapaDa,
+  oficinaPrecisaAgir,
   prazoDaLoja,
   type CotacaoVista,
   type LojaVista,
@@ -40,6 +41,7 @@ export function ListaCotacoes() {
   const { dados: daOficina, carregar: recarregarLojas } = useAoVivo<LojasDaOficina>("/api/peca-peca/lojas", 60_000);
   const lojas = daOficina?.lojas ?? null;
   const paraConferir = (cotacoes ?? []).filter((c) => etapaDa(c) === "CONFERIR");
+  const devolucoesParaVoce = (cotacoes ?? []).filter((c) => c.devolucoes.some(oficinaPrecisaAgir));
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -72,6 +74,26 @@ export function ListaCotacoes() {
                     .filter(aConferir)
                     .map((e) => e.lojaNome)
                     .join(" e ")}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* A loja respondeu à devolução e a oficina tem o que fazer: topar o preço ou receber a troca. */}
+      {devolucoesParaVoce.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-atencao-linha bg-atencao-fraco p-4">
+          <p className="text-sm font-semibold text-atencao">Devoluções esperando você</p>
+          <ul className="space-y-1">
+            {devolucoesParaVoce.map((c) => (
+              <li key={c.id}>
+                <Link href={`/peca-peca/${c.id}`} className="text-sm font-medium text-tinta underline-offset-2 hover:underline">
+                  #{c.numero} · {descricaoDoVeiculo(c.veiculo)} ·{" "}
+                  {c.devolucoes
+                    .filter(oficinaPrecisaAgir)
+                    .map((d) => c.pecas.find((p) => p.id === d.pecaId)?.descricao ?? "peça")
+                    .join(", ")}
                 </Link>
               </li>
             ))}

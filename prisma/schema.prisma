@@ -82,6 +82,7 @@ model Oficina {
   cotacaoPecas       CotacaoPeca[]
   cotacaoLojas       CotacaoLoja[]
   ofertas            Oferta[]
+  devolucoes         Devolucao[]
 }
 
 // Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
@@ -835,6 +836,9 @@ model Loja {
   entregaMedia    Int?
   /// Quantas entregas entraram na conta (das mais recentes para trás).
   entregasMedidas Int      @default(0)
+  /// Dias, contados da entrega, para a oficina devolver peça que não usou. Zero = a loja
+  /// não aceita devolução de peça sem uso. Defeito e peça errada não têm prazo no app.
+  prazoDevolucao  Int      @default(7)
   ativa           Boolean  @default(true)
   createdAt       DateTime @default(now())
 
@@ -957,9 +961,10 @@ model CotacaoPeca {
   /// Preço de venda unitário digitado pela oficina. Sem ele, vale a margem da cotação.
   vendaUnit  Float?
 
-  cotacao Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
-  oferta  Oferta?  @relation("OfertaEscolhida", fields: [ofertaId], references: [id], onDelete: SetNull)
-  ofertas Oferta[] @relation("OfertasDaPeca")
+  cotacao    Cotacao     @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  oferta     Oferta?     @relation("OfertaEscolhida", fields: [ofertaId], references: [id], onDelete: SetNull)
+  ofertas    Oferta[]    @relation("OfertasDaPeca")
+  devolucoes Devolucao[]
 
   @@index([oficinaId])
   @@index([cotacaoId])
@@ -987,9 +992,10 @@ model CotacaoLoja {
   respondidoPor String?
   createdAt    DateTime  @default(now())
 
-  cotacao Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
-  loja    Loja     @relation(fields: [lojaId], references: [id])
-  ofertas Oferta[]
+  cotacao    Cotacao     @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  loja       Loja        @relation(fields: [lojaId], references: [id])
+  ofertas    Oferta[]
+  devolucoes Devolucao[]
 
   @@unique([cotacaoId, lojaId])
   @@index([oficinaId])
@@ -1012,6 +1018,62 @@ model Oferta {
   envio       CotacaoLoja   @relation(fields: [envioId], references: [id], onDelete: Cascade)
   peca        CotacaoPeca   @relation("OfertasDaPeca", fields: [pecaId], references: [id], onDelete: Cascade)
   escolhidaEm CotacaoPeca[] @relation("OfertaEscolhida")
+
+  @@index([oficinaId])
+  @@index([envioId])
+  @@index([pecaId])
+}
+
+// Peça que volta para a loja depois de entregue: com defeito, sem uso (o diagnóstico
+// mudou) ou errada (o carro pedia outra versão). A situação não é gravada: sai das
+// datas (`situacaoDaDevolucao` em components/peca-peca/regras.ts). Cada lado confirma
+// o que recebe — a loja, a peça que voltou; a oficina, a peça nova da troca —, como na
+// entrega. O dinheiro se acerta fora do app (na entrega, como o pagamento): aqui fica
+// quanto, para os dois lados conferirem.
+model Devolucao {
+  id                    String    @id @default(cuid())
+  oficinaId             String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina               Oficina   @relation(fields: [oficinaId], references: [id])
+  /// O envio da loja que entregou a peça.
+  envioId               String
+  pecaId                String
+  quantidade            Int
+  /// DEFEITO | NAO_USADA | ERRADA
+  motivo                String
+  /// O que aconteceu, ou o que estava diferente. Vazio só em "não vou usar".
+  detalhe               String?
+  /// A oficina quer outra peça no lugar (a certa, ou uma sem defeito), e não o dinheiro.
+  querTroca             Boolean   @default(false)
+  /// Preço da loja × quantidade, no momento em que a devolução foi pedida.
+  valor                 Float
+  // ── Lado da loja
+  aceitaEm              DateTime?
+  recusadaEm            DateTime?
+  motivoRecusa          String?
+  /// A loja aceitou, mas não tem peça para trocar: vira devolução do dinheiro.
+  semAPeca              Boolean   @default(false)
+  /// A peça da troca, quando muda de marca ou de preço (preço por unidade).
+  trocaMarca            String?
+  trocaPreco            Float?
+  trocaSaiuEm           DateTime?
+  /// A peça devolvida chegou na loja: fecha o lado da loja.
+  lojaRecebeuEm         DateTime?
+  /// Quanto a loja devolveu ou abateu (pode descontar uma taxa). Nulo na troca.
+  valorDevolvido        Float?
+  /// Id do `UsuarioLoja` que respondeu por último (nulo no link antigo). Sem chave
+  /// estrangeira: é só para o resumo do dono da loja.
+  respondidoPor         String?
+  // ── Lado da oficina
+  /// A troca ficou mais cara e a oficina topou.
+  precoAceitoEm         DateTime?
+  /// A peça nova da troca chegou: fecha o lado da oficina.
+  oficinaRecebeuTrocaEm DateTime?
+  canceladaEm           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  envio CotacaoLoja @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  peca  CotacaoPeca @relation(fields: [pecaId], references: [id], onDelete: Cascade)
 
   @@index([oficinaId])
   @@index([envioId])

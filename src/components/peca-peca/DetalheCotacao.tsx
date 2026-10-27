@@ -20,15 +20,19 @@ import {
   lojasSemAPeca,
   ofertasDa,
   pedidoPorLoja,
+  podeDevolver,
   precoDaPeca,
   rotuloDaEntrega,
+  situacaoDaDevolucao,
   totaisDa,
+  tudoRecebido,
   type CotacaoVista,
   type Etapa,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
 import { VitrineBoxOS } from "./VitrineBoxOS";
+import { DevolucoesDaLoja, ModalDevolucao, temOQueDevolver } from "./Devolucoes";
 
 type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 
@@ -63,22 +67,61 @@ export function DetalheCotacao({ id }: { id: string }) {
   );
 }
 
+/** O que só a loja mexe na devolução: mudou entre duas leituras, a novidade é dela. */
+type DevolucaoLida = {
+  aceitaEm: string | null;
+  recusadaEm: string | null;
+  trocaSaiuEm: string | null;
+  lojaRecebeuEm: string | null;
+};
+
 /**
- * Avisa quando uma loja responde ou anda com a entrega — com som, porque quem cota
- * costuma estar com a tela de lado. A primeira leitura não conta: é o estado de partida.
+ * Avisa quando uma loja responde, anda com a entrega ou mexe numa devolução — com som,
+ * porque quem cota costuma estar com a tela de lado. A primeira leitura não conta: é o
+ * estado de partida.
  */
 function useAvisosDasLojas(c: CotacaoVista | null) {
   const avisar = useAvisar();
   const anterior = useRef<Map<string, { respondidaEm: string | null; entrega: string | null }> | null>(null);
+  const devolucoesAntes = useRef<Map<string, DevolucaoLida> | null>(null);
 
   useEffect(() => {
     if (!c) return;
     const agora = new Map(c.envios.map((e) => [e.id, { respondidaEm: e.respondidaEm, entrega: e.entrega }]));
     const antes = anterior.current;
     anterior.current = agora;
-    if (!antes) return;
+    const devolucoesAgora = new Map(
+      c.devolucoes.map((d) => [
+        d.id,
+        { aceitaEm: d.aceitaEm, recusadaEm: d.recusadaEm, trocaSaiuEm: d.trocaSaiuEm, lojaRecebeuEm: d.lojaRecebeuEm },
+      ])
+    );
+    const devolucoesEram = devolucoesAntes.current;
+    devolucoesAntes.current = devolucoesAgora;
+    if (!antes || !devolucoesEram) return;
 
     const novidades: string[] = [];
+    for (const d of c.devolucoes) {
+      const era = devolucoesEram.get(d.id);
+      if (!era) continue;
+      const loja = c.envios.find((e) => e.id === d.envioId)?.lojaNome ?? "A loja";
+      const peca = c.pecas.find((p) => p.id === d.pecaId)?.descricao ?? "a peça";
+      if (d.aceitaEm && !era.aceitaEm) {
+        const s = situacaoDaDevolucao(d);
+        novidades.push(
+          d.querTroca && d.semAPeca
+            ? `${loja} não tem ${peca} para trocar. O valor volta para você.`
+            : s === "PRECO_NOVO"
+              ? `${loja}: a troca de ${peca} custa mais. Diga se pode mandar.`
+              : `${loja} aceitou a devolução de ${peca}`
+        );
+      }
+      if (d.recusadaEm && !era.recusadaEm) novidades.push(`${loja} recusou a devolução de ${peca}`);
+      if (d.trocaSaiuEm && !era.trocaSaiuEm && !d.oficinaRecebeuTrocaEm) {
+        novidades.push(`${loja}: a peça nova (${peca}) saiu com o motoboy`);
+      }
+      if (d.lojaRecebeuEm && !era.lojaRecebeuEm) novidades.push(`${loja} confirmou que ${peca} voltou para a loja`);
+    }
     for (const e of c.envios) {
       const era = antes.get(e.id);
       if (!era) continue;
@@ -105,11 +148,11 @@ function useAvisosDasLojas(c: CotacaoVista | null) {
 // Peça, e para quem pediu direto sem gerar orçamento.
 const COM_ORCAMENTO = {
   rotulos: ["Enviada", "Lojas responderam", "Orçamento", "Pedido", "Entregue"],
-  posicao: { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, CONFERIR: 3, ENTREGUE: 4 },
+  posicao: { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 2, PEDIDO: 3, CONFERIR: 3, DEVOLUCAO: 4, ENTREGUE: 4 },
 } satisfies { rotulos: string[]; posicao: Record<Etapa, number> };
 const SEM_ORCAMENTO = {
   rotulos: ["Enviada", "Lojas responderam", "Pedido", "Entregue"],
-  posicao: { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 1, PEDIDO: 2, CONFERIR: 2, ENTREGUE: 3 },
+  posicao: { AGUARDANDO: 0, RESPONDIDA: 1, ORCAMENTO: 1, PEDIDO: 2, CONFERIR: 2, DEVOLUCAO: 3, ENTREGUE: 3 },
 } satisfies { rotulos: string[]; posicao: Record<Etapa, number> };
 
 /** Por que a escolha das peças não muda mais: o orçamento saiu, ou o pedido foi feito. */
@@ -148,7 +191,9 @@ function Conteudo({
   };
 
   const linha = usaBoxOS && !(c.pedidoEm && !c.orcamento) ? COM_ORCAMENTO : SEM_ORCAMENTO;
-  const posicao = linha.posicao[etapaDa(c)];
+  // Devolução aberta com loja ainda entregando: a barra fica no pedido, não no fim.
+  const etapa = etapaDa(c);
+  const posicao = etapa === "DEVOLUCAO" && !tudoRecebido(c) ? linha.posicao.PEDIDO : linha.posicao[etapa];
   const pendentes = c.envios.filter((e) => !e.respondidaEm);
   const respondeu = pendentes.length < c.envios.length;
   // Depois do orçamento, mudar a escolha faria a cotação contar uma história e o
@@ -895,6 +940,7 @@ function PainelEntrega({
   const usaBoxOS = useUsaBoxOS();
   const linkDoBoxOS = useLinkDoBoxOS();
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [devolvendo, setDevolvendo] = useState<string | null>(null);
 
   // Só entra no pedido a loja de quem se escolheu alguma peça.
   const doPedido = c.envios.filter((e) => c.pecas.some((p) => e.ofertas.some((o) => o.id === p.ofertaId)));
@@ -919,12 +965,14 @@ function PainelEntrega({
     avisar(`Recebimento das peças da ${envio.lojaNome} confirmado`);
   }
 
-  const tudoEntregue = etapaDa(c) === "ENTREGUE";
+  // Com devolução aberta as peças já estão na oficina: o próximo passo continua valendo.
+  const tudoEntregue = tudoRecebido(c);
+  const envioDevolvendo = doPedido.find((e) => e.id === devolvendo);
 
   return (
     <Painel
       titulo="Pedido das peças"
-      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. O balconista avança a entrega do painel dele, e aqui atualiza sozinho. Quando as peças chegarem, confirme o recebimento.`}
+      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. O balconista avança a entrega do painel dele, e aqui atualiza sozinho. Quando as peças chegarem, confirme o recebimento. Peça com defeito, errada ou que não vai usar: devolva por aqui.`}
     >
       <div className="space-y-4">
         {doPedido.map((e) => {
@@ -991,9 +1039,19 @@ function PainelEntrega({
                   {confirmando === e.id ? "Confirmando..." : "Já chegou? Marcar como recebido"}
                 </Botao>
               )}
+              <DevolucoesDaLoja c={c} envio={e} url={url} gravar={gravar} />
+              {podeDevolver(e) && temOQueDevolver(c, e) && (
+                <Botao variante="secundario" tamanho="denso" onClick={() => setDevolvendo(e.id)} className="mt-3">
+                  Devolver uma peça
+                </Botao>
+              )}
             </div>
           );
         })}
+
+        {envioDevolvendo && (
+          <ModalDevolucao c={c} envio={envioDevolvendo} url={url} gravar={gravar} onFechar={() => setDevolvendo(null)} />
+        )}
 
         {tudoEntregue && (
           <div className="space-y-2 rounded-lg border border-ok-linha bg-ok-fraco p-3">

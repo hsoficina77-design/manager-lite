@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { anoVeiculo } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -11,8 +11,8 @@ import { useConfirmar } from "@/components/ui/Avisos";
 import { Busca, Confere, Fechar, Lapis, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
-import { normalizarPlaca, prazoDaLoja, type LojasDaOficina, type VeiculoCotado } from "./regras";
-import { enviarJson, useAoVivo } from "./aoVivo";
+import { normalizarPlaca, prazoDaLoja, type CotacaoVista, type LojasDaOficina, type VeiculoCotado } from "./regras";
+import { buscar, enviarJson, useAoVivo } from "./aoVivo";
 import { Cabecalho, InformarCidade } from "./ui";
 
 // As peças que mais se pedem no balcão: um toque e entram na lista.
@@ -53,7 +53,10 @@ type VeiculoNaTela = VeiculoCotado & { clienteId?: string; veiculoId?: string; c
 
 const VEICULO_VAZIO: VeiculoNaTela = { placa: "", marca: "", modelo: "", ano: "", motor: "" };
 
-export function NovaCotacao() {
+/** A cotação nova a partir de uma devolução: a peça que a loja não tinha para trocar. */
+type Recotar = { cotacaoId: string; devolucaoId: string };
+
+export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
   const router = useRouter();
   // A busca da placa olha os carros cadastrados no boxOS; sem ele, não há onde procurar.
   const usaBoxOS = useUsaBoxOS();
@@ -73,6 +76,45 @@ export function NovaCotacao() {
   const [erro, setErro] = useState("");
 
   const lojas = marcadas ?? (lojasDisponiveis ?? []).map((l) => l.id);
+  // Vindo da devolução: a loja que não tinha a peça sai das marcadas, e o aviso diz de onde veio.
+  const [deOnde, setDeOnde] = useState<{ numero: number; lojaId: string } | null>(null);
+
+  const deCotacao = recotar?.cotacaoId;
+  const deDevolucao = recotar?.devolucaoId;
+  useEffect(() => {
+    if (!deCotacao || !deDevolucao) return;
+    let ativo = true;
+    void (async () => {
+      try {
+        const r = await buscar(`/api/peca-peca/cotacoes/${deCotacao}`, { cache: "no-store" });
+        if (!r.ok || !ativo) return;
+        const c = (await r.json()) as CotacaoVista;
+        const d = c.devolucoes.find((x) => x.id === deDevolucao);
+        const peca = c.pecas.find((p) => p.id === d?.pecaId);
+        const envio = c.envios.find((e) => e.id === d?.envioId);
+        if (!ativo || !d || !peca || !envio) return;
+        const recado =
+          d.motivo === "ERRADA"
+            ? `A peça anterior veio errada${d.detalhe ? `: ${d.detalhe}` : "."}`
+            : `A peça anterior veio com defeito${d.detalhe ? `: ${d.detalhe}` : "."}`;
+        setVeiculo({ ...c.veiculo, veiculoId: c.veiculoId ?? undefined, clienteId: c.clienteId ?? undefined });
+        setObservacao([c.observacao, recado].filter(Boolean).join("\n"));
+        setPecas([{ descricao: peca.descricao, quantidade: d.quantidade }]);
+        setDeOnde({ numero: c.numero, lojaId: envio.lojaId });
+      } catch {
+        // Sem conexão: a tela abre vazia, como uma cotação nova qualquer.
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [deCotacao, deDevolucao]);
+
+  useEffect(() => {
+    if (deOnde && lojasDisponiveis && marcadas === null) {
+      setMarcadas(lojasDisponiveis.filter((l) => l.id !== deOnde.lojaId).map((l) => l.id));
+    }
+  }, [deOnde, lojasDisponiveis, marcadas]);
 
   const mudar = (campo: keyof VeiculoCotado, valor: string) => setVeiculo((v) => ({ ...v, [campo]: valor }));
 
@@ -190,7 +232,14 @@ export function NovaCotacao() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
-      <Cabecalho titulo="Nova cotação" voltar="/peca-peca" />
+      <Cabecalho titulo="Nova cotação" voltar={recotar ? `/peca-peca/${recotar.cotacaoId}` : "/peca-peca"} />
+
+      {deOnde && (
+        <p className="rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm text-tinta-2">
+          Cotação da peça que voltou na cotação #{deOnde.numero}. O carro, a peça e o recado para as lojas já vêm
+          preenchidos; confira antes de enviar.
+        </p>
+      )}
 
       <Painel
         titulo="1. Veículo"

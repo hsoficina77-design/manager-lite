@@ -25,6 +25,8 @@ export type LojaVista = {
   atende: string[];
   /** Tempo real de entrega, em minutos. Nulo enquanto vale a faixa padrão. */
   entregaMedia: number | null;
+  /** Dias para devolver peça sem uso (zero = não aceita). */
+  prazoDevolucao: number;
 };
 
 /** O que `/api/peca-peca/lojas` devolve: a cidade da oficina e as lojas que a atendem. */
@@ -43,6 +45,10 @@ export type EnvioVista = {
   entrega: EtapaEntrega | null;
   /** A oficina conferiu as peças desta loja. */
   oficinaRecebeuEm: string | null;
+  /** Quando as peças chegaram: é daqui que conta o prazo para devolver. */
+  entregueEm: string | null;
+  /** Dias que a loja dá para devolver peça sem uso (zero = não aceita). */
+  prazoDevolucao: number;
   ofertas: OfertaVista[];
 };
 
@@ -70,6 +76,7 @@ export type CotacaoVista = {
   pedidoEm: string | null;
   pecas: PecaVista[];
   envios: EnvioVista[];
+  devolucoes: DevolucaoVista[];
 };
 
 // ─── O que o balcão da loja recebe ──────────────────────────────────────────
@@ -120,6 +127,8 @@ export type EnvioNoBalcao = {
   veiculo: VeiculoCotado;
   observacao: string;
   pecas: PecaNoBalcao[];
+  /** Peças deste pedido que a oficina quer devolver (ou já devolveu). */
+  devolucoes: DevolucaoVista[];
 };
 
 /** O que o link antigo do balcão responde depois que a loja passou a ter login. */
@@ -181,7 +190,7 @@ export function rotuloDaEntrega(etapa: EtapaEntrega): string {
 
 // ─── Etapas da cotação (lado da oficina) ────────────────────────────────────
 
-export type Etapa = "AGUARDANDO" | "RESPONDIDA" | "ORCAMENTO" | "PEDIDO" | "CONFERIR" | "ENTREGUE";
+export type Etapa = "AGUARDANDO" | "RESPONDIDA" | "ORCAMENTO" | "PEDIDO" | "CONFERIR" | "DEVOLUCAO" | "ENTREGUE";
 
 export const ETAPAS: Record<Etapa, { rotulo: string; cor: string }> = {
   AGUARDANDO: { rotulo: "Aguardando as lojas", cor: "status status-aberta" },
@@ -189,6 +198,7 @@ export const ETAPAS: Record<Etapa, { rotulo: string; cor: string }> = {
   ORCAMENTO: { rotulo: "Com o cliente", cor: "status status-peca" },
   PEDIDO: { rotulo: "Peças a caminho", cor: "status status-chegou" },
   CONFERIR: { rotulo: "Confirmar recebimento", cor: "status status-peca" },
+  DEVOLUCAO: { rotulo: "Devolução em andamento", cor: "status status-peca" },
   ENTREGUE: { rotulo: "Peças entregues", cor: "status status-entregue" },
 };
 
@@ -217,16 +227,216 @@ export function aConferir(e: EnvioVista): boolean {
   return e.entrega === "ENTREGUE" && !e.oficinaRecebeuEm;
 }
 
-/** Só a oficina fecha a entrega: a loja marcar "entregue" deixa a cotação em CONFERIR. */
+/** Todas as lojas do pedido entregaram e a oficina conferiu. */
+export function tudoRecebido(c: CotacaoVista): boolean {
+  const doPedido = enviosDoPedido(c);
+  return doPedido.length > 0 && doPedido.every((e) => e.oficinaRecebeuEm);
+}
+
+/**
+ * Só a oficina fecha a entrega: a loja marcar "entregue" deixa a cotação em CONFERIR.
+ * Devolução aberta vem antes de "entregue" — ainda há peça indo ou voltando.
+ */
 export function etapaDa(c: CotacaoVista): Etapa {
   if (c.pedidoEm) {
-    const doPedido = enviosDoPedido(c);
-    if (doPedido.length > 0 && doPedido.every((e) => e.oficinaRecebeuEm)) return "ENTREGUE";
-    return doPedido.some(aConferir) ? "CONFERIR" : "PEDIDO";
+    if (enviosDoPedido(c).some(aConferir)) return "CONFERIR";
+    if (c.devolucoes.some(devolucaoAberta)) return "DEVOLUCAO";
+    return tudoRecebido(c) ? "ENTREGUE" : "PEDIDO";
   }
   if (c.orcamento) return "ORCAMENTO";
   if (c.envios.some((e) => e.respondidaEm)) return "RESPONDIDA";
   return "AGUARDANDO";
+}
+
+// ─── Devolução ──────────────────────────────────────────────────────────────
+//
+// Depois da entrega, a peça pode voltar: com defeito, sem uso (o diagnóstico mudou) ou
+// errada (o mesmo carro aceita versões diferentes). A oficina pede, a loja aceita ou
+// recusa, e cada lado confirma o que recebe — a loja, a peça que voltou; a oficina, a
+// peça nova da troca. Nada aqui é gravado como situação: sai das datas, como a etapa.
+//
+// O pagamento é feito na entrega, fora do app; a devolução só registra quanto, para os
+// dois lados conferirem.
+
+export type MotivoDevolucao = "DEFEITO" | "ERRADA" | "NAO_USADA";
+
+export const MOTIVOS_DEVOLUCAO: {
+  value: MotivoDevolucao;
+  rotulo: string;
+  ajuda: string;
+  /** O que perguntar no detalhe. Sem pergunta, o detalhe é opcional. */
+  pergunta: string | null;
+}[] = [
+  {
+    value: "DEFEITO",
+    rotulo: "Veio com defeito",
+    ajuda: "Quebrada, com barulho, vazando ou não funcionou.",
+    pergunta: "O que aconteceu com a peça?",
+  },
+  {
+    value: "ERRADA",
+    rotulo: "Veio a peça errada",
+    ajuda: "Não serve no carro: outra versão, outro lado, outra medida.",
+    pergunta: "O que estava diferente?",
+  },
+  {
+    value: "NAO_USADA",
+    rotulo: "Não vou usar",
+    ajuda: "O defeito do carro era outro. A peça volta na caixa, sem montar.",
+    pergunta: null,
+  },
+];
+
+export function ehMotivoDevolucao(valor: unknown): valor is MotivoDevolucao {
+  return MOTIVOS_DEVOLUCAO.some((m) => m.value === valor);
+}
+
+export function rotuloDoMotivo(motivo: MotivoDevolucao): string {
+  return MOTIVOS_DEVOLUCAO.find((m) => m.value === motivo)?.rotulo ?? motivo;
+}
+
+export type DevolucaoVista = {
+  id: string;
+  envioId: string;
+  pecaId: string;
+  quantidade: number;
+  motivo: MotivoDevolucao;
+  detalhe: string;
+  querTroca: boolean;
+  /** Preço da loja × quantidade, quando a devolução foi pedida. */
+  valor: number;
+  pedidaEm: string;
+  aceitaEm: string | null;
+  recusadaEm: string | null;
+  motivoRecusa: string;
+  semAPeca: boolean;
+  trocaMarca: string | null;
+  /** Preço por unidade da peça da troca, quando mudou. */
+  trocaPreco: number | null;
+  trocaSaiuEm: string | null;
+  lojaRecebeuEm: string | null;
+  valorDevolvido: number | null;
+  precoAceitoEm: string | null;
+  oficinaRecebeuTrocaEm: string | null;
+  canceladaEm: string | null;
+};
+
+export type SituacaoDevolucao =
+  | "PEDIDA"
+  | "PRECO_NOVO"
+  | "ACEITA"
+  | "TROCA_A_CAMINHO"
+  | "CONCLUIDA"
+  | "RECUSADA"
+  | "CANCELADA";
+
+export const SITUACOES_DEVOLUCAO: Record<SituacaoDevolucao, { rotulo: string; cor: string }> = {
+  PEDIDA: { rotulo: "Esperando a loja", cor: "status status-aberta" },
+  PRECO_NOVO: { rotulo: "Troca com preço novo", cor: "status status-peca" },
+  ACEITA: { rotulo: "Aceita", cor: "status status-andamento" },
+  TROCA_A_CAMINHO: { rotulo: "Peça nova a caminho", cor: "status status-chegou" },
+  CONCLUIDA: { rotulo: "Concluída", cor: "status status-entregue" },
+  RECUSADA: { rotulo: "Recusada", cor: "status status-inerte" },
+  CANCELADA: { rotulo: "Cancelada", cor: "status status-inerte" },
+};
+
+/** A oficina pediu outra peça no lugar, e a loja tem: há uma peça nova indo. */
+export function ehTroca(d: Pick<DevolucaoVista, "querTroca" | "semAPeca">): boolean {
+  return d.querTroca && !d.semAPeca;
+}
+
+/**
+ * Quanto a troca muda no bolso da oficina: positivo, ela paga a mais; negativo, a loja
+ * devolve a diferença. Zero quando o preço não mudou.
+ */
+export function diferencaDaTroca(d: Pick<DevolucaoVista, "trocaPreco" | "quantidade" | "valor">): number {
+  if (d.trocaPreco === null) return 0;
+  return Math.round((d.trocaPreco * d.quantidade - d.valor) * 100) / 100;
+}
+
+/** A troca ficou mais cara e a oficina ainda não disse se topa. */
+function precoPendente(d: DevolucaoVista): boolean {
+  return ehTroca(d) && diferencaDaTroca(d) > 0 && !d.precoAceitoEm;
+}
+
+export function situacaoDaDevolucao(d: DevolucaoVista): SituacaoDevolucao {
+  if (d.canceladaEm) return "CANCELADA";
+  if (d.recusadaEm) return "RECUSADA";
+  if (!d.aceitaEm) return "PEDIDA";
+  if (precoPendente(d)) return "PRECO_NOVO";
+  if (d.lojaRecebeuEm && (!ehTroca(d) || d.oficinaRecebeuTrocaEm)) return "CONCLUIDA";
+  if (ehTroca(d) && d.trocaSaiuEm && !d.oficinaRecebeuTrocaEm) return "TROCA_A_CAMINHO";
+  return "ACEITA";
+}
+
+export function devolucaoAberta(d: DevolucaoVista): boolean {
+  const s = situacaoDaDevolucao(d);
+  return s !== "CONCLUIDA" && s !== "RECUSADA" && s !== "CANCELADA";
+}
+
+/** O que falta, dito do lado da oficina. */
+export function oQueFaltaNaDevolucao(d: DevolucaoVista): string {
+  switch (situacaoDaDevolucao(d)) {
+    case "PEDIDA":
+      return "A loja ainda vai responder.";
+    case "PRECO_NOVO":
+      return "A peça da troca custa mais. Diga se pode mandar.";
+    case "TROCA_A_CAMINHO":
+      return "A peça nova saiu com o motoboy. Confirme quando ela chegar.";
+    case "ACEITA":
+      if (!ehTroca(d)) return "O motoboy da loja busca a peça. A loja confirma quando ela voltar.";
+      if (!d.trocaSaiuEm) return "A loja vai mandar a peça nova e buscar a outra.";
+      return "Falta a loja confirmar que a peça devolvida voltou.";
+    case "CONCLUIDA":
+      return ehTroca(d) ? "Troca feita." : "Peça devolvida à loja.";
+    case "RECUSADA":
+      return d.motivoRecusa ? `A loja recusou: ${d.motivoRecusa}` : "A loja recusou a devolução.";
+    case "CANCELADA":
+      return "Você cancelou esta devolução.";
+  }
+}
+
+/** A oficina precisa fazer algo: topar o preço novo, ou confirmar a peça nova. */
+export function oficinaPrecisaAgir(d: DevolucaoVista): boolean {
+  const s = situacaoDaDevolucao(d);
+  return s === "PRECO_NOVO" || s === "TROCA_A_CAMINHO";
+}
+
+/** A loja precisa fazer algo: responder, mandar a peça nova ou confirmar a que voltou. */
+export function lojaPrecisaAgir(d: DevolucaoVista): boolean {
+  const s = situacaoDaDevolucao(d);
+  if (s === "PEDIDA") return true;
+  if (s !== "ACEITA" && s !== "TROCA_A_CAMINHO") return false;
+  return !d.lojaRecebeuEm || (ehTroca(d) && !d.trocaSaiuEm);
+}
+
+/**
+ * Até quando a oficina pode devolver peça sem uso: dias da loja contados de quando as
+ * peças chegaram. Nulo quando a loja não aceita (prazo zero) ou a entrega não fechou.
+ */
+export function prazoParaDevolver(e: Pick<EnvioVista, "entregueEm" | "oficinaRecebeuEm" | "prazoDevolucao">): Date | null {
+  const chegou = e.entregueEm ?? e.oficinaRecebeuEm;
+  if (!chegou || e.prazoDevolucao <= 0) return null;
+  return new Date(new Date(chegou).getTime() + e.prazoDevolucao * 24 * 60 * 60 * 1000);
+}
+
+/** Dá para pedir a devolução: a loja entregou ou a oficina já conferiu. */
+export function podeDevolver(e: { entrega: string | null; oficinaRecebeuEm: string | Date | null }): boolean {
+  return e.entrega === "ENTREGUE" || Boolean(e.oficinaRecebeuEm);
+}
+
+/**
+ * Quantas unidades da peça ainda dá para devolver: as pedidas menos as que já estão
+ * voltando ou voltaram. Recusada e cancelada não contam.
+ */
+export function quantasDaParaDevolver(
+  peca: Pick<PecaVista, "id" | "quantidade">,
+  devolucoes: { pecaId: string; quantidade: number; recusadaEm: string | Date | null; canceladaEm: string | Date | null }[]
+): number {
+  const usadas = devolucoes
+    .filter((d) => d.pecaId === peca.id && !d.recusadaEm && !d.canceladaEm)
+    .reduce((s, d) => s + d.quantidade, 0);
+  return Math.max(0, peca.quantidade - usadas);
 }
 
 // ─── Comparação e preço ─────────────────────────────────────────────────────

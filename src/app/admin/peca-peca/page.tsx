@@ -109,7 +109,10 @@ export default async function AdminPecaPecaPage() {
         </Painel>
       </div>
 
-      <Painel titulo="Lojas que mais respondem" ajuda="Desde o começo. Responder rápido é o que faz a oficina voltar.">
+      <Painel
+        titulo="Lojas que mais respondem"
+        ajuda="Desde o começo. Responder rápido é o que faz a oficina voltar; peça errada demais é o que a faz desistir."
+      >
         {lojasQueMaisRespondem.length === 0 ? (
           <p className="text-sm text-tinta-3">Nenhuma loja recebeu cotação ainda.</p>
         ) : (
@@ -119,6 +122,8 @@ export default async function AdminPecaPecaPage() {
                 <span className="text-tinta">{l.nome}</span>
                 <span className="tabular-nums text-tinta-3">
                   {l.respondidas} de {l.cotacoes} respondidas ({pct(l.respondidas, l.cotacoes)}) · {l.pedidos} pedidos
+                  {l.devolucoes > 0 &&
+                    ` · ${l.devolucoes} ${l.devolucoes === 1 ? "devolução" : "devoluções"} (${pct(l.devolucoes, l.pedidos)}), ${l.erradas} de peça errada`}
                 </span>
               </li>
             ))}

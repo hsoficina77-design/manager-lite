@@ -63,6 +63,55 @@ export const cotacaoAlterarSchema = z.object({
 /** A oficina confirma que as peças de uma loja do pedido chegaram. */
 export const cotacaoRecebidoSchema = z.object({ envioId: id("Loja do pedido") });
 
+// ─── Devolução ──────────────────────────────────────────────────────────────
+
+/** O que o balconista lê, e o que a oficina explica: curto, como no balcão. */
+const LIMITE_DETALHE = 500;
+
+export const devolucaoCriarSchema = z.object({
+  envioId: id("Loja do pedido"),
+  pecaId: id("Peça"),
+  quantidade: inteiro("Quantidade", 1, 999),
+  motivo: z.enum(["DEFEITO", "ERRADA", "NAO_USADA"], { errorMap: () => ({ message: "Escolha o motivo da devolução" }) }),
+  detalhe: texto("Detalhe", LIMITE_DETALHE),
+  querTroca: z.boolean().optional().default(false),
+});
+
+/** O que a oficina faz depois de pedir: desistir, responder ao preço novo, receber a troca. */
+export const devolucaoOficinaSchema = z.object({
+  acao: z.enum(["cancelar", "aceitar-preco", "recusar-preco", "recebi-troca"], {
+    errorMap: () => ({ message: "Ação inválida" }),
+  }),
+});
+
+/** O que a loja faz com a devolução. Uma ação por vez, como os botões do balcão. */
+export const devolucaoLojaSchema = z.discriminatedUnion(
+  "acao",
+  [
+    z.object({
+      devolucaoId: id("Devolução"),
+      acao: z.literal("aceitar"),
+      /** Peça da troca, quando muda: a marca e o preço por unidade. */
+      trocaMarca: nulavel("Marca", LIMITES.nomeCurto).optional(),
+      trocaPreco: dinheiroNulavel("Preço").optional(),
+    }),
+    z.object({ devolucaoId: id("Devolução"), acao: z.literal("sem-a-peca") }),
+    z.object({
+      devolucaoId: id("Devolução"),
+      acao: z.literal("recusar"),
+      motivoRecusa: obrigatorio("Motivo da recusa", LIMITE_DETALHE),
+    }),
+    z.object({ devolucaoId: id("Devolução"), acao: z.literal("saiu") }),
+    z.object({
+      devolucaoId: id("Devolução"),
+      acao: z.literal("voltou"),
+      /** Quanto a loja devolveu ou abateu. Só na devolução sem troca. */
+      valorDevolvido: dinheiroNulavel("Valor devolvido").optional(),
+    }),
+  ],
+  { errorMap: () => ({ message: "Ação inválida" }) }
+);
+
 export const cotacaoOrcamentoSchema = z.object({
   clienteNome: nulavel("Nome do cliente", LIMITES.nome).optional(),
   maoDeObra: dinheiro("Mão de obra").optional(),
@@ -110,12 +159,14 @@ export const pessoaDaLojaSchema = z.object({
 });
 
 /**
- * O que o dono da loja edita, um bloco por vez: o telefone ou as cidades que atende. A
- * cidade onde a loja fica é da plataforma, e o tempo de entrega é medido, não digitado.
+ * O que o dono da loja edita, um bloco por vez: o telefone, as cidades que atende ou o
+ * prazo de devolução. A cidade onde a loja fica é da plataforma, e o tempo de entrega é
+ * medido, não digitado.
  */
 export const dadosDaLojaSchema = z.object({
   telefone: camposDaLoja.telefone.optional(),
   atende: camposDaLoja.atende.optional(),
+  prazoDevolucao: inteiro("Prazo para devolver", 0, 90).optional(),
 });
 
 /** Aceitar o convite (ou o "novo acesso"): nome, e-mail e a senha. */

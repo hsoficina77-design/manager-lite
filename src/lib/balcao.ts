@@ -12,6 +12,7 @@
 //     envio, e os gatilhos do banco recusam qualquer vínculo com outra oficina.
 
 import { randomBytes } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { bancoDaOficina } from "@/lib/db-oficina";
 import { getConfiguracao } from "@/lib/configuracao-db";
@@ -21,15 +22,22 @@ import { mesmaCidade, rotuloDoMunicipio } from "@/lib/municipios";
 import { municipioOficial } from "@/lib/municipios-servidor";
 import {
   ENTREGAS_PARA_MEDIA,
+  diferencaDaTroca,
   ehEtapaEntrega,
+  ehMotivoDevolucao,
+  ehTroca,
   proximaEtapa,
+  situacaoDaDevolucao,
   type CaixaDoBalcao,
+  type DevolucaoVista,
   type EnvioNoBalcao,
   type EtapaEntrega,
   type LojaVista,
+  type MotivoDevolucao,
   type OfertaNova,
   type SituacaoNoBalcao,
 } from "@/components/peca-peca/regras";
+import { formatCurrency } from "@/lib/utils";
 
 // ─── Lojas ──────────────────────────────────────────────────────────────────
 //
@@ -48,6 +56,7 @@ const CAMPOS_DA_LOJA = {
   uf: true,
   atende: true,
   entregaMedia: true,
+  prazoDevolucao: true,
 } as const;
 
 /**
@@ -80,6 +89,7 @@ export type DadosDaLoja = {
   /** Rótulos "Nome - UF" escolhidos da lista do IBGE. */
   atende: string[];
   telefone: string | null;
+  prazoDevolucao?: number;
 };
 
 export type LojaDoPainel = LojaVista & {
@@ -95,6 +105,9 @@ export type LojaDoPainel = LojaVista & {
   cotacoes: number;
   respondidas: number;
   pedidos: number;
+  /** Devoluções pedidas à loja (sem as canceladas), e quantas foram de peça errada. */
+  devolucoes: number;
+  erradas: number;
 };
 
 /**
@@ -116,7 +129,7 @@ function conferirCidades(cidade: string, uf: string, atende: string[]) {
 }
 
 export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
-  const [lojas, respondidas, pedidos] = await Promise.all([
+  const [lojas, respondidas, pedidos, devolucoes] = await Promise.all([
     prisma.loja.findMany({
       orderBy: [{ ativa: "desc" }, { nome: "asc" }],
       select: {
@@ -131,9 +144,12 @@ export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
     }),
     prisma.cotacaoLoja.groupBy({ by: ["lojaId"], where: { respondidaEm: { not: null } }, _count: { _all: true } }),
     prisma.cotacaoLoja.groupBy({ by: ["lojaId"], where: { entrega: { not: null } }, _count: { _all: true } }),
+    // A devolução não tem a loja direto: vem pelo envio. Só contagens, como o resto daqui.
+    prisma.devolucao.findMany({ where: { canceladaEm: null }, select: { motivo: true, envio: { select: { lojaId: true } } } }),
   ]);
   const contar = (lista: { lojaId: string; _count: { _all: number } }[], id: string) =>
     lista.find((x) => x.lojaId === id)?._count._all ?? 0;
+  const daLoja = (id: string) => devolucoes.filter((d) => d.envio.lojaId === id);
 
   return lojas.map(({ tokenBalcao, createdAt, _count, ...l }) => ({
     ...l,
@@ -143,6 +159,8 @@ export async function lojasDoPainel(): Promise<LojaDoPainel[]> {
     cotacoes: _count.envios,
     respondidas: contar(respondidas, l.id),
     pedidos: contar(pedidos, l.id),
+    devolucoes: daLoja(l.id).length,
+    erradas: daLoja(l.id).filter((d) => d.motivo === "ERRADA").length,
   }));
 }
 
@@ -200,6 +218,65 @@ export async function lojaPeloToken(token: string | undefined | null) {
 
 export { MENSAGEM_BALCAO_COM_LOGIN } from "@/components/peca-peca/regras";
 
+// ─── Devolução: o que os dois lados leem ────────────────────────────────────
+//
+// A mesma lista de campos serve à oficina (lib/cotacoes.ts) e ao balcão: na devolução
+// não há nada que um lado não possa ver — é a conversa entre os dois sobre a peça.
+
+export const CAMPOS_DA_DEVOLUCAO = {
+  id: true,
+  envioId: true,
+  pecaId: true,
+  quantidade: true,
+  motivo: true,
+  detalhe: true,
+  querTroca: true,
+  valor: true,
+  createdAt: true,
+  aceitaEm: true,
+  recusadaEm: true,
+  motivoRecusa: true,
+  semAPeca: true,
+  trocaMarca: true,
+  trocaPreco: true,
+  trocaSaiuEm: true,
+  lojaRecebeuEm: true,
+  valorDevolvido: true,
+  precoAceitoEm: true,
+  oficinaRecebeuTrocaEm: true,
+  canceladaEm: true,
+} satisfies Prisma.DevolucaoSelect;
+
+type DevolucaoDoBanco = Prisma.DevolucaoGetPayload<{ select: typeof CAMPOS_DA_DEVOLUCAO }>;
+
+const iso = (d: Date | null) => d?.toISOString() ?? null;
+
+export function devolucaoVista(d: DevolucaoDoBanco): DevolucaoVista {
+  return {
+    id: d.id,
+    envioId: d.envioId,
+    pecaId: d.pecaId,
+    quantidade: d.quantidade,
+    motivo: ehMotivoDevolucao(d.motivo) ? d.motivo : "DEFEITO",
+    detalhe: d.detalhe ?? "",
+    querTroca: d.querTroca,
+    valor: d.valor,
+    pedidaEm: d.createdAt.toISOString(),
+    aceitaEm: iso(d.aceitaEm),
+    recusadaEm: iso(d.recusadaEm),
+    motivoRecusa: d.motivoRecusa ?? "",
+    semAPeca: d.semAPeca,
+    trocaMarca: d.trocaMarca,
+    trocaPreco: d.trocaPreco,
+    trocaSaiuEm: iso(d.trocaSaiuEm),
+    lojaRecebeuEm: iso(d.lojaRecebeuEm),
+    valorDevolvido: d.valorDevolvido,
+    precoAceitoEm: iso(d.precoAceitoEm),
+    oficinaRecebeuTrocaEm: iso(d.oficinaRecebeuTrocaEm),
+    canceladaEm: iso(d.canceladaEm),
+  };
+}
+
 // ─── Caixa de entrada ───────────────────────────────────────────────────────
 
 const SELECAO_DO_ENVIO = {
@@ -213,6 +290,7 @@ const SELECAO_DO_ENVIO = {
     orderBy: { createdAt: "asc" },
     select: { id: true, pecaId: true, marca: true, preco: true, prazoMin: true },
   },
+  devolucoes: { orderBy: { createdAt: "asc" }, select: CAMPOS_DA_DEVOLUCAO },
   cotacao: {
     select: {
       placa: true,
@@ -286,13 +364,38 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
         .map(({ id, marca, preco, prazoMin }) => ({ id, marca, preco, prazoMin })),
       pedida: c.pedidoEm && p.ofertaId ? (minhas.get(p.ofertaId)?.marca ?? null) : null,
     })),
+    devolucoes: e.devolucoes.map(devolucaoVista),
   };
+}
+
+/**
+ * Envios mais antigos que os da caixa, mas com devolução esperando a loja: a peça
+ * pode voltar dias depois, quando o pedido já saiu da lista das últimas cotações.
+ */
+function enviosComDevolucaoPendente(lojaId: string, foraDe: string[]) {
+  return prisma.cotacaoLoja.findMany({
+    where: {
+      lojaId,
+      id: { notIn: foraDe },
+      devolucoes: {
+        some: {
+          recusadaEm: null,
+          canceladaEm: null,
+          OR: [{ lojaRecebeuEm: null }, { querTroca: true, semAPeca: false, trocaSaiuEm: null }],
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: SELECAO_DO_ENVIO,
+  });
 }
 
 export async function caixaDaLoja(
   loja: Pick<LojaVista, "id" | "nome" | "cidade" | "entregaMedia">
 ): Promise<CaixaDoBalcao> {
-  const envios = await lerEnvios({ lojaId: loja.id });
+  const recentes = await lerEnvios({ lojaId: loja.id });
+  const envios = [...recentes, ...(await enviosComDevolucaoPendente(loja.id, recentes.map((e) => e.id)))];
   const nomes = await nomesDasOficinas([...new Set(envios.map((e) => e.oficinaId))]);
   return {
     loja: { nome: loja.nome, cidade: loja.cidade, entregaMedia: loja.entregaMedia },
@@ -438,6 +541,152 @@ export async function avancarEntrega(
   return proxima;
 }
 
+// ─── Devolução: o que a loja faz ────────────────────────────────────────────
+
+/** Tipo da notificação de devolução — só nas novidades em que a oficina tem o que fazer. */
+export const TIPO_AVISO_DEVOLUCAO = "PECA_PECA_DEVOLUCAO";
+
+export type AcaoDaLojaNaDevolucao =
+  | { acao: "aceitar"; trocaMarca?: string | null; trocaPreco?: number | null }
+  | { acao: "sem-a-peca" }
+  | { acao: "recusar"; motivoRecusa: string }
+  | { acao: "saiu" }
+  | { acao: "voltou"; valorDevolvido?: number | null };
+
+/** "ok", "nao-encontrado", ou a explicação de por que a ação não vale agora (409). */
+export type ResultadoDaDevolucao = "ok" | "nao-encontrado" | { recusa: string };
+
+const MUDOU = { recusa: "Esta devolução mudou enquanto isso. Veja como ela está agora." };
+
+/**
+ * A loja responde à devolução, uma ação por vez, como os botões do balcão:
+ *
+ *   - aceitar: o motoboy busca a peça. Na troca, é "tenho, vou trocar", com a marca e
+ *     o preço da peça nova quando mudam — se ficar mais cara, a oficina precisa topar;
+ *   - sem-a-peca: aceita, mas não tem peça para trocar — vira devolução do dinheiro;
+ *   - recusar: com o motivo, enquanto a peça não voltou para a loja;
+ *   - saiu: a peça nova da troca saiu com o motoboy;
+ *   - voltou: a peça devolvida chegou na loja, com o valor devolvido (sem troca).
+ *
+ * Toda gravação leva na condição o estado que a loja viu: dois cliques, ou a oficina
+ * cancelando no mesmo instante, não passam por cima um do outro.
+ */
+export async function responderDevolucao(
+  lojaId: string,
+  envioId: string,
+  devolucaoId: string,
+  pedido: AcaoDaLojaNaDevolucao,
+  /** Quem respondeu, no painel com login; nulo no link antigo. */
+  respondidoPor: string | null = null
+): Promise<ResultadoDaDevolucao> {
+  const linha = await prisma.devolucao.findFirst({
+    where: { id: devolucaoId, envioId, envio: { lojaId } },
+    select: {
+      ...CAMPOS_DA_DEVOLUCAO,
+      oficinaId: true,
+      peca: { select: { descricao: true } },
+      envio: { select: { loja: { select: { nome: true } }, cotacao: { select: { id: true, numero: true } } } },
+    },
+  });
+  if (!linha) return "nao-encontrado";
+  const d = devolucaoVista(linha);
+  const situacao = situacaoDaDevolucao(d);
+  const agora = new Date();
+  const aberta = { id: d.id, recusadaEm: null, canceladaEm: null };
+
+  async function gravar(where: Prisma.DevolucaoWhereInput, data: Prisma.DevolucaoUpdateManyMutationInput) {
+    const { count } = await prisma.devolucao.updateMany({ where: { ...aberta, ...where }, data: { ...data, respondidoPor } });
+    return count > 0;
+  }
+
+  // Cliente cru, com o `oficinaId` da devolução: a loja não está logada em oficina
+  // nenhuma. O aviso não pode desfazer o que já foi gravado.
+  const peca = `${d.quantidade}× ${linha.peca.descricao}`;
+  const avisar = (titulo: string, mensagem: string) =>
+    prisma.notificacao
+      .create({
+        data: {
+          oficinaId: linha.oficinaId,
+          tipo: TIPO_AVISO_DEVOLUCAO,
+          publico: "TODOS",
+          titulo,
+          mensagem: `${linha.envio.loja.nome}, cotação #${linha.envio.cotacao.numero}: ${mensagem}`,
+          link: `/peca-peca/${linha.envio.cotacao.id}`,
+        },
+      })
+      .catch((err: unknown) => console.error("Falha ao avisar a oficina da devolução:", err));
+
+  switch (pedido.acao) {
+    case "aceitar": {
+      if (situacao !== "PEDIDA") return { recusa: "Esta devolução já foi respondida." };
+      // Marca e preço só valem na troca; na devolução do dinheiro não há peça nova.
+      const troca = d.querTroca
+        ? { trocaMarca: pedido.trocaMarca?.trim() || null, trocaPreco: pedido.trocaPreco ?? null }
+        : {};
+      if (!(await gravar({ aceitaEm: null }, { aceitaEm: agora, ...troca }))) return MUDOU;
+      const mais = d.querTroca ? diferencaDaTroca({ ...d, trocaPreco: troca.trocaPreco ?? null }) : 0;
+      if (mais > 0) {
+        await avisar(
+          "A troca ficou mais cara",
+          `a peça para trocar ${peca} custa ${formatCurrency(mais)} a mais. Diga se a loja pode mandar.`
+        );
+      }
+      return "ok";
+    }
+
+    case "sem-a-peca": {
+      if (situacao !== "PEDIDA") return { recusa: "Esta devolução já foi respondida." };
+      if (!d.querTroca) return { recusa: "A oficina não pediu troca nesta devolução." };
+      if (!(await gravar({ aceitaEm: null }, { aceitaEm: agora, semAPeca: true }))) return MUDOU;
+      await avisar(
+        "A loja não tem a peça para trocar",
+        `aceitou a devolução de ${peca}, mas não tem outra para trocar. O valor volta para você; dá para cotar nas outras lojas.`
+      );
+      return "ok";
+    }
+
+    case "recusar": {
+      if (situacao === "CONCLUIDA" || situacao === "RECUSADA" || situacao === "CANCELADA") {
+        return { recusa: "Esta devolução já terminou." };
+      }
+      if (d.lojaRecebeuEm) return { recusa: "A peça já voltou para a loja." };
+      if (d.trocaSaiuEm) return { recusa: "A peça da troca já saiu com o motoboy." };
+      const motivoRecusa = pedido.motivoRecusa.trim();
+      if (!(await gravar({ lojaRecebeuEm: null, trocaSaiuEm: null }, { recusadaEm: agora, motivoRecusa }))) return MUDOU;
+      await avisar("Devolução recusada", `a loja recusou a devolução de ${peca}: ${motivoRecusa}`);
+      return "ok";
+    }
+
+    case "saiu": {
+      if (!ehTroca(d)) return { recusa: "Esta devolução não tem troca." };
+      if (situacao === "PRECO_NOVO") return { recusa: "A oficina ainda vai dizer se topa o preço novo." };
+      if (situacao !== "ACEITA" || d.trocaSaiuEm) return { recusa: "A peça da troca já saiu." };
+      if (!(await gravar({ aceitaEm: { not: null }, trocaSaiuEm: null }, { trocaSaiuEm: agora }))) return MUDOU;
+      await avisar("A peça da troca saiu", `a peça nova (${peca}) saiu com o motoboy. Confirme quando ela chegar.`);
+      return "ok";
+    }
+
+    case "voltou": {
+      if (situacao === "PEDIDA") return { recusa: "Aceite a devolução antes." };
+      if (situacao === "PRECO_NOVO") return { recusa: "A oficina ainda vai dizer se topa o preço novo." };
+      if (situacao !== "ACEITA" && situacao !== "TROCA_A_CAMINHO") return { recusa: "Esta devolução já terminou." };
+      if (d.lojaRecebeuEm) return { recusa: "A peça já voltou para a loja." };
+      // Na troca não volta dinheiro: a peça nova vai no lugar (a diferença se acerta na entrega).
+      let valorDevolvido: number | null = null;
+      if (!ehTroca(d)) {
+        valorDevolvido = pedido.valorDevolvido ?? d.valor;
+        if (valorDevolvido > d.valor) {
+          return { recusa: `O valor devolvido não pode passar de ${formatCurrency(d.valor)}.` };
+        }
+      }
+      if (!(await gravar({ aceitaEm: { not: null }, lojaRecebeuEm: null }, { lojaRecebeuEm: agora, valorDevolvido }))) {
+        return MUDOU;
+      }
+      return "ok";
+    }
+  }
+}
+
 // ─── Tempo de entrega ───────────────────────────────────────────────────────
 //
 // Medido, não digitado: do pedido (`Cotacao.pedidoEm`) até as peças chegarem
@@ -488,8 +737,10 @@ export type MesDoResumo = {
   recebidas: number;
   respondidas: number;
   pedidos: number;
-  /** Soma das peças pedidas à loja (preço da loja × quantidade). */
+  /** Peças pedidas à loja (preço da loja × quantidade), já sem o que foi devolvido. */
   valor: number;
+  /** O que a loja devolveu ou abateu nas devoluções que fecharam no mês. */
+  devolvido: number;
 };
 
 export type ResumoDaLoja = {
@@ -497,20 +748,28 @@ export type ResumoDaLoja = {
   recebidas: number;
   respondidas: number;
   pedidos: number;
+  /** Já sem o que foi devolvido. */
   valor: number;
   /** Mediana, em minutos, entre a cotação chegar e a loja responder. */
   minutosParaResponder: number | null;
+  /** Devoluções pedidas nos últimos 30 dias (sem as canceladas), por motivo. */
+  devolucoes: number;
+  devolucoesPorMotivo: Record<MotivoDevolucao, number>;
+  /** O que a loja devolveu ou abateu nos últimos 30 dias. */
+  devolvido: number;
   meses: MesDoResumo[];
   /** Quem respondeu nos últimos 30 dias (no painel com login). */
   quemRespondeu: { nome: string; respostas: number }[];
 };
+
+const chaveDoMes = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
   const agora = new Date();
   const inicio = new Date(agora.getFullYear(), agora.getMonth() - (MESES_DO_RESUMO - 1), 1);
   const ha30dias = new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const [envios, pessoas] = await Promise.all([
+  const [envios, pessoas, devolucoes] = await Promise.all([
     prisma.cotacaoLoja.findMany({
       where: { lojaId, createdAt: { gte: inicio } },
       select: {
@@ -523,6 +782,14 @@ export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
       },
     }),
     prisma.usuarioLoja.findMany({ where: { lojaId }, select: { id: true, nome: true } }),
+    prisma.devolucao.findMany({
+      where: {
+        envio: { lojaId },
+        canceladaEm: null,
+        OR: [{ createdAt: { gte: inicio } }, { lojaRecebeuEm: { gte: inicio } }],
+      },
+      select: { createdAt: true, motivo: true, lojaRecebeuEm: true, valorDevolvido: true },
+    }),
   ]);
 
   const valorDoPedido = (e: (typeof envios)[number]) => {
@@ -533,9 +800,8 @@ export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
 
   const meses = new Map<string, MesDoResumo>();
   for (let i = 0; i < MESES_DO_RESUMO; i++) {
-    const d = new Date(inicio.getFullYear(), inicio.getMonth() + i, 1);
-    const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    meses.set(mes, { mes, recebidas: 0, respondidas: 0, pedidos: 0, valor: 0 });
+    const mes = chaveDoMes(new Date(inicio.getFullYear(), inicio.getMonth() + i, 1));
+    meses.set(mes, { mes, recebidas: 0, respondidas: 0, pedidos: 0, valor: 0, devolvido: 0 });
   }
 
   let recebidas = 0;
@@ -546,7 +812,7 @@ export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
   const respostasPorPessoa = new Map<string, number>();
 
   for (const e of envios) {
-    const mes = meses.get(`${e.createdAt.getFullYear()}-${String(e.createdAt.getMonth() + 1).padStart(2, "0")}`);
+    const mes = meses.get(chaveDoMes(e.createdAt));
     const v = valorDoPedido(e);
     if (mes) {
       mes.recebidas += 1;
@@ -565,14 +831,32 @@ export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
     if (e.respondidoPor) respostasPorPessoa.set(e.respondidoPor, (respostasPorPessoa.get(e.respondidoPor) ?? 0) + 1);
   }
 
+  // O dinheiro devolvido sai do mês em que a peça voltou; a contagem é do mês em que a
+  // devolução foi pedida. Na troca não volta dinheiro (`valorDevolvido` nulo).
+  const porMotivo: Record<MotivoDevolucao, number> = { DEFEITO: 0, ERRADA: 0, NAO_USADA: 0 };
+  let devolvido = 0;
+  for (const d of devolucoes) {
+    if (d.createdAt >= ha30dias && ehMotivoDevolucao(d.motivo)) porMotivo[d.motivo] += 1;
+    if (!d.lojaRecebeuEm || !d.valorDevolvido) continue;
+    const mes = meses.get(chaveDoMes(d.lojaRecebeuEm));
+    if (mes) {
+      mes.devolvido += d.valorDevolvido;
+      mes.valor -= d.valorDevolvido;
+    }
+    if (d.lojaRecebeuEm >= ha30dias) devolvido += d.valorDevolvido;
+  }
+
   const nomes = new Map(pessoas.map((p) => [p.id, p.nome]));
   const meio = mediana(tempos);
   return {
     recebidas,
     respondidas,
     pedidos,
-    valor,
+    valor: valor - devolvido,
     minutosParaResponder: meio === null ? null : Math.round(meio),
+    devolucoes: porMotivo.DEFEITO + porMotivo.ERRADA + porMotivo.NAO_USADA,
+    devolucoesPorMotivo: porMotivo,
+    devolvido,
     meses: [...meses.values()],
     quemRespondeu: [...respostasPorPessoa.entries()]
       .map(([id, respostas]) => ({ nome: nomes.get(id) ?? "Alguém da loja", respostas }))

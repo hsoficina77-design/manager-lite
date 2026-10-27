@@ -343,6 +343,10 @@ async function main() {
     ["POST", `/api/peca-peca/cotacoes/${cot.id}/pedido`],
     ["POST", `/api/peca-peca/cotacoes/${cot.id}/orcamento`, { clienteNome: "HACK" }],
     ["POST", `/api/peca-peca/cotacoes/${cot.id}/recebido`, { envioId: envioA.id }],
+    ["POST", `/api/peca-peca/cotacoes/${cot.id}/devolucoes`, {
+      envioId: envioA.id, pecaId: "x", quantidade: 1, motivo: "DEFEITO", detalhe: "HACK",
+    }],
+    ["PATCH", `/api/peca-peca/cotacoes/${cot.id}/devolucoes/x`, { acao: "cancelar" }],
     // Plataforma: a B é dona da oficina dela, mas não da plataforma.
     ["GET", `/api/plataforma/oficinas`],
     ["PATCH", `/api/plataforma/oficinas/${OFICINA_A}`, { ativa: false }],

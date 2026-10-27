@@ -56,6 +56,8 @@ export type ContaLoja = {
     /** Tempo real de entrega (ver lib/balcao.ts). Nulo enquanto vale a faixa padrão. */
     entregaMedia: number | null;
     entregasMedidas: number;
+    /** Dias para devolver peça sem uso (zero = não aceita). */
+    prazoDevolucao: number;
   };
 };
 
@@ -89,6 +91,7 @@ async function lerContaDaSessao(): Promise<ContaLoja | null> {
                 telefone: true,
                 entregaMedia: true,
                 entregasMedidas: true,
+                prazoDevolucao: true,
                 ativa: true,
               },
             },
@@ -126,6 +129,7 @@ async function lerContaDaSessao(): Promise<ContaLoja | null> {
         telefone: loja.telefone,
         entregaMedia: loja.entregaMedia,
         entregasMedidas: loja.entregasMedidas,
+        prazoDevolucao: loja.prazoDevolucao,
       },
     };
   } catch (err) {

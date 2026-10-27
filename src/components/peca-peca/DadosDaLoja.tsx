@@ -11,12 +11,12 @@ import { buscar } from "./aoVivo";
 import { CidadesAtendidas, outrasCidades } from "./CidadesAtendidas";
 import { ENTREGAS_PARA_MEDIA, ENTREGA_PADRAO } from "./regras";
 
-// O que o dono da autopeça mexe no cadastro da loja: o telefone e as cidades que atende
-// — é por elas que as oficinas alcançam a loja. O tempo de entrega só aparece: é medido
-// nas entregas da loja, ninguém digita (ver regras.ts). A cidade onde a loja fica é da
-// plataforma.
+// O que o dono da autopeça mexe no cadastro da loja: o telefone, as cidades que atende
+// — é por elas que as oficinas alcançam a loja — e o prazo para devolver peça sem uso.
+// O tempo de entrega só aparece: é medido nas entregas da loja, ninguém digita (ver
+// regras.ts). A cidade onde a loja fica é da plataforma.
 
-type Bloco = "telefone" | "cidades";
+type Bloco = "telefone" | "cidades" | "prazo";
 
 export function DadosDaLoja({
   loja,
@@ -29,6 +29,7 @@ export function DadosDaLoja({
     telefone: string | null;
     entregaMedia: number | null;
     entregasMedidas: number;
+    prazoDevolucao: number;
   };
 }) {
   const router = useRouter();
@@ -38,6 +39,7 @@ export function DadosDaLoja({
 
   const [telefone, setTelefone] = useState(loja.telefone ?? "");
   const [outras, setOutras] = useState(salvas);
+  const [prazo, setPrazo] = useState(String(loja.prazoDevolucao));
   const [salvando, setSalvando] = useState<Bloco | null>(null);
   const [erro, setErro] = useState<{ bloco: Bloco; texto: string } | null>(null);
   const cidadesMudaram = outras.length !== salvas.length || outras.some((c) => !salvas.includes(c));
@@ -125,6 +127,34 @@ export function DadosDaLoja({
             {salvando === "cidades" ? "Salvando..." : "Salvar cidades"}
           </Botao>
         </div>
+      </Painel>
+
+      <Painel
+        titulo="Devolução de peça sem uso"
+        ajuda="Quando o defeito do carro era outro e a peça volta na caixa. Peça com defeito ou errada não tem prazo: a loja aceita ou recusa cada uma."
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const dias = Math.max(0, Math.min(90, Math.round(Number(prazo) || 0)));
+            salvar("prazo", { prazoDevolucao: dias }, dias === 0 ? "A loja não aceita mais peça sem uso" : "Prazo salvo");
+          }}
+          className="space-y-4"
+        >
+          <Campo rotulo="Prazo, em dias depois da entrega" ajuda="Zero: a loja não aceita devolução de peça sem uso.">
+            <Entrada
+              value={prazo}
+              onChange={(e) => setPrazo(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              maxLength={2}
+              className="max-w-[6rem] tabular-nums"
+            />
+          </Campo>
+          {erro?.bloco === "prazo" && <Aviso>{erro.texto}</Aviso>}
+          <Botao type="submit" disabled={salvando !== null || Number(prazo) === loja.prazoDevolucao}>
+            {salvando === "prazo" ? "Salvando..." : "Salvar prazo"}
+          </Botao>
+        </form>
       </Painel>
     </div>
   );

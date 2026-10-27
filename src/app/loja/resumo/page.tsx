@@ -3,6 +3,7 @@ import { exigirContaLoja } from "@/lib/conta-loja";
 import { resumoDaLoja } from "@/lib/balcao";
 import { formatCurrency } from "@/lib/utils";
 import { FaixaMetricas, Metrica, Painel } from "@/components/ui/Dados";
+import { MOTIVOS_DEVOLUCAO } from "@/components/peca-peca/regras";
 
 export const metadata: Metadata = { title: "Resumo · Peça Peça" };
 
@@ -23,12 +24,15 @@ function tempo(minutos: number | null) {
 }
 
 // O que o dono da autopeça acompanha do balcão: quantas cotações chegaram, quantas a
-// loja respondeu e quão rápido, quantas viraram pedido e quanto valeram.
+// loja respondeu e quão rápido, quantas viraram pedido, quanto valeram e quanto voltou.
 export default async function ResumoDaLojaPage() {
   const conta = await exigirContaLoja("loja.resumo");
   const r = await resumoDaLoja(conta.loja.id);
   const taxa = r.recebidas ? Math.round((r.respondidas / r.recebidas) * 100) : 0;
   const conversao = r.respondidas ? Math.round((r.pedidos / r.respondidas) * 100) : 0;
+  const porMotivo = MOTIVOS_DEVOLUCAO.filter((m) => r.devolucoesPorMotivo[m.value] > 0)
+    .map((m) => `${r.devolucoesPorMotivo[m.value]} ${m.rotulo.toLowerCase()}`)
+    .join(" · ");
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-5">
@@ -56,7 +60,28 @@ export default async function ResumoDaLojaPage() {
         />
       </FaixaMetricas>
 
-      <Painel titulo="Mês a mês" ajuda="Pedido é a cotação em que a oficina fechou alguma peça com a loja.">
+      <Painel
+        titulo="Devoluções"
+        ajuda="Últimos 30 dias. O valor dos pedidos acima já vem sem o que a loja devolveu."
+      >
+        {r.devolucoes === 0 ? (
+          <p className="text-sm text-tinta-3">Nenhuma peça voltou nos últimos 30 dias.</p>
+        ) : (
+          <div className="space-y-1 text-sm">
+            <p className="text-tinta">
+              <strong>{r.devolucoes}</strong> {r.devolucoes === 1 ? "devolução pedida" : "devoluções pedidas"}
+              {r.pedidos > 0 && <span className="text-tinta-3"> ({Math.round((r.devolucoes / r.pedidos) * 100)}% dos pedidos)</span>}
+            </p>
+            <p className="text-tinta-3">{porMotivo}</p>
+            <p className="text-tinta-3">Devolvido às oficinas: {formatCurrency(r.devolvido)}</p>
+          </div>
+        )}
+      </Painel>
+
+      <Painel
+        titulo="Mês a mês"
+        ajuda="Pedido é a cotação em que a oficina fechou alguma peça com a loja. O valor já vem sem o que foi devolvido."
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -65,6 +90,7 @@ export default async function ResumoDaLojaPage() {
                 <th className="py-1.5 pr-3 text-right font-medium">Recebidas</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Respondidas</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Pedidos</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Devolvido</th>
                 <th className="py-1.5 text-right font-medium">Valor</th>
               </tr>
             </thead>
@@ -75,6 +101,7 @@ export default async function ResumoDaLojaPage() {
                   <td className="py-2 pr-3 text-right">{m.recebidas}</td>
                   <td className="py-2 pr-3 text-right">{m.respondidas}</td>
                   <td className="py-2 pr-3 text-right">{m.pedidos}</td>
+                  <td className="py-2 pr-3 text-right">{m.devolvido ? formatCurrency(m.devolvido) : "—"}</td>
                   <td className="py-2 text-right">{formatCurrency(m.valor)}</td>
                 </tr>
               ))}
