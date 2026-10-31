@@ -6,4 +6,5 @@ export const CAMINHOS_DO_PAINEL: CaminhosDoBalcao = {
   telas: "/loja/balcao",
   api: "/api/loja/balcao",
   comCabecalho: false,
+  push: "/api/loja/push",
 };

@@ -10,6 +10,9 @@
 // E de propósito NÃO guarda nada: nenhuma tela, nenhum dado da API. Cotação, preço,
 // pedido — tudo vem sempre do servidor. Só a abertura de tela (navegação) passa por
 // aqui; o resto (API, imagens, scripts) vai direto para a rede.
+//
+// 3. Aviso no celular: mensagem nova na conversa de uma cotação chega aqui com o app
+//    fechado (quem manda é lib/push.ts), e tocar no aviso abre a conversa.
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -39,6 +42,46 @@ self.addEventListener("fetch", (evento) => {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
       }
+    })()
+  );
+});
+
+// O aviso vem como { titulo, corpo, link, tag }. A `tag` é a conversa: a mensagem nova
+// substitui a anterior da mesma conversa, em vez de empilhar uma por mensagem.
+self.addEventListener("push", (evento) => {
+  let aviso = {};
+  try {
+    aviso = evento.data ? evento.data.json() : {};
+  } catch {
+    aviso = { corpo: evento.data ? evento.data.text() : "" };
+  }
+  evento.waitUntil(
+    self.registration.showNotification(aviso.titulo || "Peça Peça", {
+      body: aviso.corpo || "Mensagem nova",
+      icon: "/brand-pecapeca/favicon_192.png",
+      tag: aviso.tag || undefined,
+      renotify: Boolean(aviso.tag),
+      data: { link: aviso.link || "/" },
+    })
+  );
+});
+
+// Tocar no aviso: a aba que já está na conversa ganha o foco; senão, uma aba aberta do
+// app vai até ela; senão, abre o app nela.
+self.addEventListener("notificationclick", (evento) => {
+  evento.notification.close();
+  const link = new URL((evento.notification.data && evento.notification.data.link) || "/", self.location.origin).href;
+  evento.waitUntil(
+    (async () => {
+      const janelas = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const igual = janelas.find((j) => j.url === link);
+      if (igual) return igual.focus();
+      const aberta = janelas.find((j) => "navigate" in j);
+      if (aberta) {
+        await aberta.navigate(link);
+        return aberta.focus();
+      }
+      return self.clients.openWindow(link);
     })()
   );
 });

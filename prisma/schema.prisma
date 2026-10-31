@@ -83,6 +83,7 @@ model Oficina {
   cotacaoLojas       CotacaoLoja[]
   ofertas            Oferta[]
   devolucoes         Devolucao[]
+  mensagens          Mensagem[]
 }
 
 // Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
@@ -587,6 +588,7 @@ model Usuario {
 
   sessoes   Sessao[]
   exclusoes RegistroExclusao[]
+  push      InscricaoPush[]
 
   @@index([oficinaId])
 }
@@ -862,25 +864,26 @@ model Loja {
 // de login é uma só e procura nas duas.
 
 model UsuarioLoja {
-  id           String    @id @default(cuid())
-  lojaId       String
-  nome         String
-  email        String    @unique
-  senhaHash    String
+  id              String    @id @default(cuid())
+  lojaId          String
+  nome            String
+  email           String    @unique
+  senhaHash       String
   /// Ponto de partida dos acessos ("DONO" | "VENDEDOR"). Quem vale são as `permissoes`.
-  perfil       String    @default("VENDEDOR")
+  perfil          String    @default("VENDEDOR")
   /// Chaves do catálogo em `lib/acessos-loja.ts`. Chave desconhecida é ignorada.
-  permissoes   String[]  @default([])
-  ativo        Boolean   @default(true)
-  ultimoAcesso DateTime?
+  permissoes      String[]  @default([])
+  ativo           Boolean   @default(true)
+  ultimoAcesso    DateTime?
   /// Uso pelo app instalado, como em `Usuario`.
   appDesde        DateTime?
   ultimoAcessoApp DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  loja    Loja          @relation(fields: [lojaId], references: [id])
+  loja    Loja            @relation(fields: [lojaId], references: [id])
   sessoes SessaoLoja[]
+  push    InscricaoPush[]
 
   @@index([lojaId])
 }
@@ -982,32 +985,110 @@ model CotacaoPeca {
 // O envio da cotação para uma loja — e, depois do pedido, a entrega dela.
 // entrega: ENVIADO | SEPARANDO | A_CAMINHO | ENTREGUE (nula = esta loja não tem pedido)
 model CotacaoLoja {
-  id           String    @id @default(cuid())
-  oficinaId    String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
-  oficina      Oficina   @relation(fields: [oficinaId], references: [id])
-  cotacaoId    String
-  lojaId       String
-  respondidaEm DateTime?
-  entrega      String?
+  id               String    @id @default(cuid())
+  oficinaId        String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina          Oficina   @relation(fields: [oficinaId], references: [id])
+  cotacaoId        String
+  lojaId           String
+  respondidaEm     DateTime?
+  entrega          String?
   /// A oficina conferiu as peças. É isto que fecha a entrega: a loja marcar
   /// "entregue" só avisa a oficina, que confirma do lado dela.
   oficinaRecebeuEm DateTime?
   /// Quando as peças chegaram: o primeiro entre a loja marcar "entregue" e a oficina
   /// confirmar. Com o `Cotacao.pedidoEm`, dá o tempo de entrega da loja.
-  entregueEm   DateTime?
+  entregueEm       DateTime?
   /// Id do `UsuarioLoja` que respondeu (nulo no balcão antigo, por link). Sem chave
   /// estrangeira: é só para o resumo do dono da loja.
-  respondidoPor String?
-  createdAt    DateTime  @default(now())
+  respondidoPor    String?
+  createdAt        DateTime  @default(now())
+
+  // ── Conversa (ver `Mensagem`): o resumo fica aqui para as caixas de entrada e os
+  // contadores não precisarem ler mensagem nenhuma.
+  ultimaMensagemEm  DateTime?
+  /// Começo da última mensagem e quem mandou ("OFICINA" | "LOJA"), para a lista.
+  ultimaMensagem    String?
+  ultimaMensagemDe  String?
+  /// Até que `Mensagem.seq` cada lado leu. "Lido" é do lado, não da pessoa: no balcão,
+  /// se um vendedor respondeu, a mensagem foi atendida.
+  lidoOficinaAte    Int       @default(0)
+  lidoLojaAte       Int       @default(0)
+  naoLidasOficina   Int       @default(0)
+  naoLidasLoja      Int       @default(0)
+  /// A conversa acabou (a entrega fechou, ou o pedido foi para outra loja) e as
+  /// mensagens foram apagadas.
+  conversaFechadaEm DateTime?
 
   cotacao    Cotacao     @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
   loja       Loja        @relation(fields: [lojaId], references: [id])
   ofertas    Oferta[]
   devolucoes Devolucao[]
+  mensagens  Mensagem[]
 
   @@unique([cotacaoId, lojaId])
   @@index([oficinaId])
   @@index([lojaId, createdAt])
+  @@index([lojaId, ultimaMensagemEm])
+  @@index([oficinaId, ultimaMensagemEm])
+}
+
+// Conversa entre a oficina e uma loja sobre UMA cotação (o envio): tirar dúvida da
+// aplicação antes de responder, confirmar a peça, combinar a entrega. Não é guardada:
+// quando a entrega fecha, as mensagens são apagadas (pedido do dono do produto), e
+// número de telefone sai escondido do texto (`esconderTelefone` em regras.ts).
+//
+// É da oficina, como o envio, e entra nas três travas. A loja lê e grava pelo
+// lib/conversa.ts, sempre a partir do envio para ela e com o `oficinaId` dele.
+model Mensagem {
+  id        String   @id @default(cuid())
+  /// Ordem de chegada no sistema todo. É o cursor das telas: "o que chegou depois de
+  /// 812" é uma leitura pelo índice que quase sempre volta vazia.
+  seq       Int      @unique @default(autoincrement())
+  oficinaId String   @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina   Oficina  @relation(fields: [oficinaId], references: [id])
+  envioId   String
+  /// "OFICINA" | "LOJA"
+  autor     String
+  /// `Usuario` ou `UsuarioLoja` que escreveu (nulo no link antigo do balcão). Sem chave
+  /// estrangeira, como `respondidoPor`.
+  autorId   String?
+  /// O nome de quem escreveu, como estava na hora.
+  autorNome String
+  texto     String
+  /// Gerado no aparelho: reenviar com sinal ruim não duplica a mensagem.
+  idCliente String
+  createdAt DateTime @default(now())
+
+  envio CotacaoLoja @relation(fields: [envioId], references: [id], onDelete: Cascade)
+
+  @@unique([envioId, idCliente])
+  @@index([envioId, seq])
+  @@index([oficinaId])
+}
+
+// Celular (ou navegador) que recebe aviso de mensagem nova com o app fechado — o Web
+// Push. Do sistema, como `Loja`: a mensagem da loja avisa a oficina e vice-versa, então
+// quem envia o aviso não está logado no lado de quem recebe (lib/push.ts).
+// Uma linha tem a pessoa da oficina OU a da loja.
+model InscricaoPush {
+  id            String   @id @default(cuid())
+  /// O endereço do serviço de push do navegador. Único: o mesmo aparelho que troca de
+  /// conta passa a avisar só a conta nova.
+  endpoint      String   @unique
+  p256dh        String
+  auth          String
+  usuarioId     String?
+  oficinaId     String?
+  usuarioLojaId String?
+  lojaId        String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  usuario     Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioLoja UsuarioLoja? @relation(fields: [usuarioLojaId], references: [id], onDelete: Cascade)
+
+  @@index([oficinaId])
+  @@index([lojaId])
 }
 
 // Uma marca que a loja tem para uma peça. Loja que respondeu sem oferta para a peça

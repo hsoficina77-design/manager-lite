@@ -20,6 +20,12 @@ const PERMITIDOS = new Set([
   // Balcão do Peça Peça: a loja não é de oficina nenhuma e atende várias. Só chega às
   // cotações pelos envios para ela, e só com os campos de balcão.
   "src/lib/balcao.ts",
+  // Conversa do Peça Peça: o lado da loja chega às mensagens só pelos envios para ela,
+  // como o balcão; o lado da oficina passa pelo `Db`.
+  "src/lib/conversa.ts",
+  // Aviso no celular: a mensagem de um lado avisa o outro, que não está logado ali.
+  // Tabela do sistema; da oficina só lê quem pode ver o Peça Peça.
+  "src/lib/push.ts",
   // Contas de quem trabalha nas autopeças: login, sessão, convite e equipe — tabelas do
   // sistema, como a própria loja. Não lê nada de oficina.
   "src/lib/conta-loja.ts",

@@ -27,6 +27,7 @@ import {
   ehMotivoDevolucao,
   ehTroca,
   proximaEtapa,
+  situacaoDaConversa,
   situacaoDaDevolucao,
   type CaixaDoBalcao,
   type DevolucaoVista,
@@ -286,6 +287,8 @@ const SELECAO_DO_ENVIO = {
   respondidaEm: true,
   entrega: true,
   oficinaRecebeuEm: true,
+  naoLidasLoja: true,
+  conversaFechadaEm: true,
   ofertas: {
     orderBy: { createdAt: "asc" },
     select: { id: true, pecaId: true, marca: true, preco: true, prazoMin: true },
@@ -319,7 +322,7 @@ function lerEnvios(where: { lojaId: string; id?: string }) {
 }
 
 /** Nome da oficina, o mesmo que ela vê no menu. É tudo o que a loja sabe de quem pediu. */
-async function nomesDasOficinas(ids: string[]) {
+export async function nomesDasOficinas(ids: string[]) {
   const nomes = new Map<string, string>();
   await Promise.all(
     ids.map(async (id) => nomes.set(id, nomeDoMenu(await getConfiguracao(bancoDaOficina(id)))))
@@ -347,6 +350,7 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
     entrega: ehEtapaEntrega(e.entrega) ? e.entrega : null,
     oficinaRecebeuEm: e.oficinaRecebeuEm?.toISOString() ?? null,
     travada,
+    pedidoEm: c.pedidoEm?.toISOString() ?? null,
     veiculo: {
       placa: c.placa ?? "",
       marca: c.marca ?? "",
@@ -365,6 +369,8 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
       pedida: c.pedidoEm && p.ofertaId ? (minhas.get(p.ofertaId)?.marca ?? null) : null,
     })),
     devolucoes: e.devolucoes.map(devolucaoVista),
+    naoLidas: e.naoLidasLoja,
+    conversaFechada: !situacaoDaConversa({ ...e, pedidoEm: c.pedidoEm }).aberta,
   };
 }
 

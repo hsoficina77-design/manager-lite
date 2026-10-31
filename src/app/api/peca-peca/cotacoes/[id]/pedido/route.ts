@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
 import { lerCotacao } from "@/lib/cotacoes";
+import { fecharConversas } from "@/lib/conversa";
 
 /**
  * Faz o pedido: manda as peças escolhidas para cada loja de quem se escolheu alguma. A
@@ -33,6 +34,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       await tx.orcamento.updateMany({ where: { id: c.orcamento.id, status: "PENDENTE" }, data: { status: "APROVADO" } });
     }
     await tx.cotacaoLoja.updateMany({ where: { id: { in: comPedido } }, data: { entrega: "ENVIADO" } });
+    // Com a loja que ficou de fora do pedido não há mais o que conversar.
+    await fecharConversas(
+      tx,
+      c.envios.filter((e) => !comPedido.includes(e.id)).map((e) => e.id)
+    );
     return true;
   });
   if (!feito) return NextResponse.json({ error: "O pedido já foi feito" }, { status: 409 });

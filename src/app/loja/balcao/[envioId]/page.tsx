@@ -16,6 +16,7 @@ export default async function EnvioNoPainelPage({ params }: { params: Promise<{ 
       // A tela esconde o que a pessoa não pode; quem barra de verdade é a rota.
       pode={{
         responder: permissoes.includes("balcao.responder"),
+        conversa: permissoes.includes("balcao.conversa"),
         entrega: permissoes.includes("balcao.entrega"),
         devolucao: permissoes.includes("balcao.devolucao"),
       }}

@@ -7,7 +7,7 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Area, Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { useAvisar } from "@/components/ui/Avisos";
-import { Confere, Lixeira, Mais, Voltar } from "@/components/ui/Icones";
+import { Confere, Conversa as IconeConversa, Lixeira, Mais, Voltar } from "@/components/ui/Icones";
 import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 import {
   ETAPAS_ENTREGA,
@@ -27,6 +27,7 @@ import {
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo, useTituloComContador } from "./aoVivo";
 import { AvisoSemConexao, haQuanto, horaCurta } from "./ui";
+import { AvisoNoCelular, ContadorDeMensagens, Conversa, useConversaDoEndereco, type EventoDaConversa } from "./Conversa";
 
 // O balcão é a tela da autopeça — outra empresa. Só mostra o que a loja precisa: o
 // carro, as peças, as próprias respostas e o pedido quando a oficina fecha.
@@ -47,10 +48,12 @@ export type CaminhosDoBalcao = {
   api: string;
   /** O link antigo traz o próprio cabeçalho; o painel já está numa moldura. */
   comCabecalho: boolean;
+  /** A rota do aviso no celular — só no painel com login: sem conta, não há de quem é o aparelho. */
+  push?: string;
 };
 
 /** O que a pessoa pode no balcão. No link antigo, tudo; no painel, o acesso dela. */
-export type PodeNoBalcao = { responder: boolean; entrega: boolean; devolucao: boolean };
+export type PodeNoBalcao = { responder: boolean; conversa: boolean; entrega: boolean; devolucao: boolean };
 
 function Moldura({
   loja,
@@ -96,15 +99,22 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
   const devolucoesNovas = devolucoes.filter(({ d }) => situacaoDaDevolucao(d) === "PEDIDA");
 
   // O que pede ação vai para a aba do navegador e para o ícone do app; quando aumenta, toca.
-  const pendentes = responder.length + pedidosNovos.length + devolucoesNovas.length;
+  const mensagens = envios.reduce((s, e) => s + e.naoLidas, 0);
+  const pendentes = responder.length + pedidosNovos.length + devolucoesNovas.length + mensagens;
   useTituloComContador(`Balcão · ${loja.nome}`, pendentes, true);
-  const antes = useRef<{ cotacoes: Set<string>; pedidos: Set<string>; devolucoes: Set<string> } | null>(null);
+  const antes = useRef<{
+    cotacoes: Set<string>;
+    pedidos: Set<string>;
+    devolucoes: Set<string>;
+    naoLidas: Map<string, number>;
+  } | null>(null);
   useEffect(() => {
     if (!dados) return;
     const agora = {
       cotacoes: new Set(responder.map((e) => e.id)),
       pedidos: new Set(pedidosNovos.map((e) => e.id)),
       devolucoes: new Set(devolucoesNovas.map(({ d }) => d.id)),
+      naoLidas: new Map(envios.map((e) => [e.id, e.naoLidas])),
     };
     const anterior = antes.current;
     antes.current = agora;
@@ -112,10 +122,12 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
     const novasCotacoes = responder.filter((e) => !anterior.cotacoes.has(e.id));
     const novosPedidos = pedidosNovos.filter((e) => !anterior.pedidos.has(e.id));
     const novasDevolucoes = devolucoesNovas.filter(({ d }) => !anterior.devolucoes.has(d.id));
+    const novasMensagens = envios.filter((e) => e.naoLidas > (anterior.naoLidas.get(e.id) ?? 0));
     novasCotacoes.forEach((e) => avisar(`Nova cotação de ${e.oficina}`));
     novosPedidos.forEach((e) => avisar(`Pedido fechado por ${e.oficina}!`));
     novasDevolucoes.forEach(({ envio }) => avisar(`${envio.oficina} quer devolver uma peça`));
-    if (novasCotacoes.length + novosPedidos.length + novasDevolucoes.length > 0) tocarAviso();
+    novasMensagens.forEach((e) => avisar(`${e.oficina} mandou mensagem`));
+    if (novasCotacoes.length + novosPedidos.length + novasDevolucoes.length + novasMensagens.length > 0) tocarAviso();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dados]);
 
@@ -126,8 +138,13 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
         <h1 className="text-xl font-bold text-tinta">{loja.nome}</h1>
         <p className="mt-0.5 text-sm text-tinta-3">
           Balcão da loja. Deixe esta tela aberta: ela se atualiza sozinha e avisa com som quando chega cotação,
-          pedido ou devolução.
+          pedido, devolução ou mensagem.
         </p>
+        {caminhos.push && (
+          <div className="mt-2">
+            <AvisoNoCelular api={caminhos.push} />
+          </div>
+        )}
       </div>
 
       <AvisoSemConexao ativo={semConexao} />
@@ -227,8 +244,16 @@ function Lista({ envios, telas }: { envios: EnvioNoBalcao[]; telas: string }) {
               {e.pecas.length} {e.pecas.length === 1 ? "peça" : "peças"} · chegou {haQuanto(e.recebidoEm)}
             </p>
           </div>
-          <span className={cn(SITUACOES_NO_BALCAO[e.situacao].cor, "self-start sm:self-auto")}>
-            {e.situacao === "PEDIDO" && e.entrega ? rotuloDaEntrega(e.entrega) : SITUACOES_NO_BALCAO[e.situacao].rotulo}
+          <span className="flex items-center gap-2 self-start sm:self-auto">
+            {e.naoLidas > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-tinta-2">
+                <IconeConversa tamanho={14} />
+                <ContadorDeMensagens total={e.naoLidas} />
+              </span>
+            )}
+            <span className={SITUACOES_NO_BALCAO[e.situacao].cor}>
+              {e.situacao === "PEDIDO" && e.entrega ? rotuloDaEntrega(e.entrega) : SITUACOES_NO_BALCAO[e.situacao].rotulo}
+            </span>
           </span>
         </Link>
       ))}
@@ -253,6 +278,9 @@ export function EnvioDoBalcaoTela({
   const { dados: envio, naoEncontrado, semConexao, gravar } = useAoVivo<EnvioNoBalcao>(url, 4000);
   useTituloComContador(`Balcão · ${loja.nome}`, 0);
   const { comCabecalho } = caminhos;
+  // O aviso no celular e a caixa "Conversas" trazem `?conversa=1`: abre direto nela.
+  const [conversando, setConversando] = useState(false);
+  useConversaDoEndereco(() => setConversando(true));
 
   const voltar = (
     <Link
@@ -285,15 +313,43 @@ export function EnvioDoBalcaoTela({
   return (
     <Moldura loja={loja} comCabecalho={comCabecalho}>
       {voltar}
-      <div>
-        <h1 className="text-xl font-bold text-tinta">Cotação de {envio.oficina}</h1>
-        <p className="mt-0.5 text-sm text-tinta-3">
-          Chegou às {horaCurta(envio.recebidoEm)}
-          {envio.respondidaEm && ` · respondida às ${horaCurta(envio.respondidaEm)}`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-tinta">Cotação de {envio.oficina}</h1>
+          <p className="mt-0.5 text-sm text-tinta-3">
+            Chegou às {horaCurta(envio.recebidoEm)}
+            {envio.respondidaEm && ` · respondida às ${horaCurta(envio.respondidaEm)}`}
+          </p>
+        </div>
+        {/* Conversa que já acabou (e foi apagada) não tem o que abrir. */}
+        {!envio.conversaFechada && (
+          <Botao
+            variante={envio.naoLidas > 0 ? "primario" : "secundario"}
+            onClick={() => setConversando(true)}
+            className="shrink-0"
+          >
+            <IconeConversa tamanho={16} />
+            {envio.situacao === "RESPONDER" ? "Perguntar à oficina" : "Conversar com a oficina"}
+            <ContadorDeMensagens total={envio.naoLidas} />
+          </Botao>
+        )}
       </div>
 
       <AvisoSemConexao ativo={semConexao} />
+
+      {conversando && (
+        <Conversa
+          api={`${url}/conversa`}
+          titulo={envio.oficina}
+          subtitulo={[descricaoDoVeiculo(envio.veiculo), envio.veiculo.motor].filter(Boolean).join(" · ")}
+          eu="LOJA"
+          podeEscrever={pode.conversa}
+          semAcessoTexto="Seu acesso não inclui conversar com as oficinas. Quem cuida da equipe da loja libera."
+          eventos={eventosNoBalcao(envio)}
+          pushApi={caminhos.push}
+          onFechar={() => setConversando(false)}
+        />
+      )}
 
       {envio.devolucoes.length > 0 && (
         <DevolucoesNoBalcao envio={envio} url={url} gravar={gravar} podeCuidar={pode.devolucao} />
@@ -338,6 +394,14 @@ export function EnvioDoBalcaoTela({
 }
 
 type GravarEnvio = ReturnType<typeof useAoVivo<EnvioNoBalcao>>["gravar"];
+
+/** O que aconteceu na cotação, no meio das mensagens. */
+function eventosNoBalcao(envio: EnvioNoBalcao): EventoDaConversa[] {
+  const eventos: EventoDaConversa[] = [{ em: envio.recebidoEm, texto: "A cotação chegou" }];
+  if (envio.respondidaEm) eventos.push({ em: envio.respondidaEm, texto: "A loja respondeu" });
+  if (envio.pedidoEm && envio.situacao === "PEDIDO") eventos.push({ em: envio.pedidoEm, texto: "Pedido fechado com a loja" });
+  return eventos;
+}
 
 function PedidoNoBalcao({
   envio,

@@ -11,7 +11,10 @@ import { usePedirSaida } from "@/components/ui/SaidaSegura";
 import { SeletorTema } from "@/components/ui/Tema";
 import { labelPapel, type Papel } from "@/lib/permissoes";
 import { PERMISSOES_DA_LOJA, rotuloDosAcessos, type PermissaoLoja } from "@/lib/acessos-loja";
+import { ContadorDeMensagens } from "./Conversa";
+import { useMensagensNaoLidas } from "./CaixaDeConversas";
 import {
+  Conversa as IconeConversa,
   Engrenagem,
   Fechar,
   Grafico,
@@ -37,6 +40,8 @@ export type ItemDaMoldura = {
   exato?: boolean;
   /** A ação principal: botão cheio no centro da barra do celular. */
   destaque?: boolean;
+  /** Número ao lado (mensagens não lidas). */
+  contador?: number;
 };
 
 export type LinkDaGaveta = { href: string; label: string; externo?: boolean };
@@ -123,6 +128,7 @@ export function Moldura({
               >
                 <item.Icone tamanho={16} className="shrink-0 opacity-80" />
                 {item.label}
+                <ContadorDeMensagens total={item.contador ?? 0} />
               </Link>
             ))}
           </nav>
@@ -172,7 +178,10 @@ export function Moldura({
                   ativo(item) ? "text-brand-texto" : "text-tinta-3"
                 )}
               >
-                <item.Icone tamanho={19} />
+                <span className="relative">
+                  <item.Icone tamanho={19} />
+                  <ContadorDeMensagens total={item.contador ?? 0} className="absolute -right-3 -top-2" />
+                </span>
                 <span className="text-xs leading-none">{item.label}</span>
               </Link>
             )
@@ -269,15 +278,18 @@ export function MolduraDaOficina({
   children,
 }: {
   nome: string;
-  usuario: { nome: string; papel: Papel };
+  usuario: { nome: string; papel: Papel; podeFinanceiro: boolean };
   usaBoxOS: boolean;
   /** Endereço do boxOS, quando a tela está no endereço do Peça Peça. */
   urlBoxOS: string;
   children: React.ReactNode;
 }) {
+  // Quem não vê o Peça Peça (operador sem o financeiro) não tem conversa para contar.
+  const naoLidas = useMensagensNaoLidas(usuario.podeFinanceiro ? "/api/peca-peca/conversas" : null);
   const itens: ItemDaMoldura[] = [
     { href: "/peca-peca", label: "Cotações", Icone: PecaPeca },
     { href: "/peca-peca/nova", label: "Nova cotação", Icone: Mais, destaque: true },
+    { href: "/peca-peca/conversas", label: "Conversas", Icone: IconeConversa, contador: naoLidas },
   ];
   const links: LinkDaGaveta[] = usaBoxOS
     ? [{ href: urlBoxOS || "/", label: "Abrir o boxOS", externo: Boolean(urlBoxOS) }]
@@ -305,8 +317,10 @@ export function MolduraDaLoja({
   children: React.ReactNode;
 }) {
   const pode = (p: PermissaoLoja) => pessoa.permissoes.includes(p);
+  const naoLidas = useMensagensNaoLidas("/api/loja/conversas");
   const itens: ItemDaMoldura[] = [
     { href: "/loja", label: "Balcão", Icone: Recibo },
+    { href: "/loja/conversas", label: "Conversas", Icone: IconeConversa, contador: naoLidas },
     ...(pode("loja.resumo") ? [{ href: "/loja/resumo", label: "Resumo", Icone: Grafico }] : []),
     ...(pode("loja.equipe") ? [{ href: "/loja/equipe", label: "Equipe", Icone: Pessoas }] : []),
     ...(pode("loja.dados") ? [{ href: "/loja/dados", label: "Loja", Icone: Engrenagem }] : []),

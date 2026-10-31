@@ -13,9 +13,11 @@ import {
   medirEntregasDaLoja,
   todasAsLojas,
 } from "@/lib/balcao";
+import { fecharConversas } from "@/lib/conversa";
 import {
   ehEtapaEntrega,
   precoDaPeca,
+  situacaoDaConversa,
   type CotacaoVista,
   type LojaVista,
 } from "@/components/peca-peca/regras";
@@ -71,6 +73,8 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
         entregueEm: e.entregueEm?.toISOString() ?? null,
         prazoDevolucao: loja?.prazoDevolucao ?? 0,
         ofertas: e.ofertas.map((o) => ({ id: o.id, pecaId: o.pecaId, marca: o.marca, preco: o.preco, prazoMin: o.prazoMin })),
+        naoLidas: e.naoLidasOficina,
+        conversaFechada: !situacaoDaConversa({ ...e, pedidoEm: c.pedidoEm }).aberta,
       };
     }),
     devolucoes: c.envios.flatMap((e) => e.devolucoes.map(devolucaoVista)),
@@ -93,7 +97,8 @@ export async function listarCotacoes(db: Db): Promise<CotacaoVista[]> {
 /**
  * A oficina confirma que as peças de uma loja chegaram: é o que fecha a entrega. Vale com
  * a loja já tendo marcado "entregue" ou não — se não marcou, a etapa dela pula para
- * "entregue" junto, e o balcão para de pedir para avançar.
+ * "entregue" junto, e o balcão para de pedir para avançar. A conversa com a loja acaba
+ * aqui, e as mensagens são apagadas.
  *
  * Roda dentro da transação de quem chama. Devolve a loja cuja entrega terminou agora
  * (para `medirSeEntregou`, fora da transação), ou nulo.
@@ -111,6 +116,7 @@ export async function confirmarRecebimento(
     // dela termina para o tempo de entrega.
     data: { oficinaRecebeuEm: agora, entrega: "ENTREGUE", entregueEm: envio.entregueEm ?? agora },
   });
+  await fecharConversas(tx, [envio.id]);
   // Sem outra loja esperando conferência, o aviso de "a loja entregou" sai do sino.
   const faltaConferir = await tx.cotacaoLoja.count({
     where: { cotacaoId, entrega: "ENTREGUE", oficinaRecebeuEm: null },

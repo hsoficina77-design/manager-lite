@@ -173,6 +173,21 @@ export const Mais = (p: Props) => (
   </Base>
 );
 
+/** Balão de fala — a conversa entre oficina e loja no Peça Peça. */
+export const Conversa = (p: Props) => (
+  <Base {...p}>
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+  </Base>
+);
+
+/** Avião de papel — mandar a mensagem. */
+export const Enviar = (p: Props) => (
+  <Base {...p}>
+    <path d="m22 2-7 20-4-9-9-4Z" />
+    <path d="M22 2 11 13" />
+  </Base>
+);
+
 /** Porca-balão — o Peça Peça: a porca da frente do símbolo, em traço. */
 export const PecaPeca = (p: Props) => (
   <Base {...p}>

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { BotaoLink } from "@/components/ui/Botao";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
-import { Mais } from "@/components/ui/Icones";
+import { Conversa as IconeConversa, Mais } from "@/components/ui/Icones";
+import { ContadorDeMensagens } from "./Conversa";
 import {
   aConferir,
   descricaoDoVeiculo,
@@ -134,7 +135,13 @@ export function ListaCotacoes() {
                     </p>
                   </div>
                 </div>
-                <div className="pl-[3.25rem] sm:pl-0">
+                <div className="flex items-center gap-2 pl-[3.25rem] sm:pl-0">
+                  {c.envios.some((e) => e.naoLidas > 0) && (
+                    <span className="inline-flex items-center gap-1 text-tinta-2">
+                      <IconeConversa tamanho={14} />
+                      <ContadorDeMensagens total={c.envios.reduce((s, e) => s + e.naoLidas, 0)} />
+                    </span>
+                  )}
                   <PilulaEtapa cotacao={c} />
                 </div>
               </Link>

@@ -13,6 +13,10 @@
 //
 // Para desligar um dia: troque este arquivo por um que chame
 // `self.registration.unregister()` no "activate".
+//
+// O aviso no celular da conversa do Peça Peça também passa por aqui quando o Peça Peça
+// roda no endereço do boxOS (sem PECA_PECA_URL). O de sempre é o sw-pecapeca.js, que
+// tem o mesmo código.
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -43,6 +47,42 @@ self.addEventListener("fetch", (evento) => {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
       }
+    })()
+  );
+});
+
+self.addEventListener("push", (evento) => {
+  let aviso = {};
+  try {
+    aviso = evento.data ? evento.data.json() : {};
+  } catch {
+    aviso = { corpo: evento.data ? evento.data.text() : "" };
+  }
+  evento.waitUntil(
+    self.registration.showNotification(aviso.titulo || "Peça Peça", {
+      body: aviso.corpo || "Mensagem nova",
+      icon: "/brand-pecapeca/favicon_192.png",
+      tag: aviso.tag || undefined,
+      renotify: Boolean(aviso.tag),
+      data: { link: aviso.link || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (evento) => {
+  evento.notification.close();
+  const link = new URL((evento.notification.data && evento.notification.data.link) || "/", self.location.origin).href;
+  evento.waitUntil(
+    (async () => {
+      const janelas = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const igual = janelas.find((j) => j.url === link);
+      if (igual) return igual.focus();
+      const aberta = janelas.find((j) => "navigate" in j);
+      if (aberta) {
+        await aberta.navigate(link);
+        return aberta.focus();
+      }
+      return self.clients.openWindow(link);
     })()
   );
 });

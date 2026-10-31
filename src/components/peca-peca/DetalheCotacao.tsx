@@ -8,7 +8,7 @@ import { Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
-import { Confere } from "@/components/ui/Icones";
+import { Confere, Conversa as IconeConversa } from "@/components/ui/Icones";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
 import { useLinkDoBoxOS } from "@/components/ProdutoProvider";
 import {
@@ -33,13 +33,17 @@ import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
 import { VitrineBoxOS } from "./VitrineBoxOS";
 import { DevolucoesDaLoja, ModalDevolucao, temOQueDevolver } from "./Devolucoes";
+import { ContadorDeMensagens, Conversa, useConversaDoEndereco, type EventoDaConversa } from "./Conversa";
 
 type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 
 export function DetalheCotacao({ id }: { id: string }) {
   const url = `/api/peca-peca/cotacoes/${id}`;
   const { dados: cotacao, naoEncontrado, semConexao, carregar, gravar } = useAoVivo<CotacaoVista>(url, 4000);
-  useAvisosDasLojas(cotacao);
+  // A conversa aberta (o envio), se alguma. O aviso no celular abre direto nela.
+  const [conversaCom, setConversaCom] = useState<string | null>(null);
+  useConversaDoEndereco(setConversaCom);
+  useAvisosDasLojas(cotacao, conversaCom);
 
   if (naoEncontrado) {
     return (
@@ -62,9 +66,38 @@ export function DetalheCotacao({ id }: { id: string }) {
     );
   }
 
+  const envioDaConversa = cotacao.envios.find((e) => e.id === conversaCom);
   return (
-    <Conteudo c={cotacao} url={url} gravar={gravar} recarregar={carregar} semConexao={semConexao} />
+    <>
+      <Conteudo
+        c={cotacao}
+        url={url}
+        gravar={gravar}
+        recarregar={carregar}
+        semConexao={semConexao}
+        onConversar={setConversaCom}
+      />
+      {envioDaConversa && (
+        <Conversa
+          api={`${url}/conversa/${envioDaConversa.id}`}
+          titulo={envioDaConversa.lojaNome}
+          subtitulo={`Cotação #${cotacao.numero} · ${descricaoDoVeiculo(cotacao.veiculo)}`}
+          eu="OFICINA"
+          eventos={eventosDaConversa(cotacao, envioDaConversa)}
+          pushApi="/api/peca-peca/push"
+          onFechar={() => setConversaCom(null)}
+        />
+      )}
+    </>
   );
+}
+
+/** O que aconteceu na cotação com esta loja, no meio das mensagens. */
+function eventosDaConversa(c: CotacaoVista, e: CotacaoVista["envios"][number]): EventoDaConversa[] {
+  const eventos: EventoDaConversa[] = [{ em: c.criadaEm, texto: "Cotação enviada à loja" }];
+  if (e.respondidaEm) eventos.push({ em: e.respondidaEm, texto: `${e.lojaNome} respondeu` });
+  if (c.pedidoEm && e.entrega) eventos.push({ em: c.pedidoEm, texto: "Pedido feito" });
+  return eventos;
 }
 
 /** O que só a loja mexe na devolução: mudou entre duas leituras, a novidade é dela. */
@@ -80,14 +113,20 @@ type DevolucaoLida = {
  * porque quem cota costuma estar com a tela de lado. A primeira leitura não conta: é o
  * estado de partida.
  */
-function useAvisosDasLojas(c: CotacaoVista | null) {
+function useAvisosDasLojas(c: CotacaoVista | null, conversaAberta: string | null) {
   const avisar = useAvisar();
-  const anterior = useRef<Map<string, { respondidaEm: string | null; entrega: string | null }> | null>(null);
+  const anterior = useRef<Map<string, { respondidaEm: string | null; entrega: string | null; naoLidas: number }> | null>(
+    null
+  );
   const devolucoesAntes = useRef<Map<string, DevolucaoLida> | null>(null);
+  const aberta = useRef(conversaAberta);
+  aberta.current = conversaAberta;
 
   useEffect(() => {
     if (!c) return;
-    const agora = new Map(c.envios.map((e) => [e.id, { respondidaEm: e.respondidaEm, entrega: e.entrega }]));
+    const agora = new Map(
+      c.envios.map((e) => [e.id, { respondidaEm: e.respondidaEm, entrega: e.entrega, naoLidas: e.naoLidas }])
+    );
     const antes = anterior.current;
     anterior.current = agora;
     const devolucoesAgora = new Map(
@@ -136,6 +175,10 @@ function useAvisosDasLojas(c: CotacaoVista | null) {
             : `${e.lojaNome}: ${rotuloDaEntrega(e.entrega).toLowerCase()}`
         );
       }
+      // Com a conversa aberta, a própria conversa mostra e toca.
+      if (e.naoLidas > era.naoLidas && e.id !== aberta.current) {
+        novidades.push(`${e.lojaNome} mandou mensagem`);
+      }
     }
     if (novidades.length > 0) {
       novidades.forEach((n) => avisar(n));
@@ -164,12 +207,14 @@ function Conteudo({
   gravar,
   recarregar,
   semConexao,
+  onConversar,
 }: {
   c: CotacaoVista;
   url: string;
   gravar: Gravar;
   recarregar: () => Promise<void>;
   semConexao: boolean;
+  onConversar: (envioId: string) => void;
 }) {
   const router = useRouter();
   const confirmar = useConfirmar();
@@ -318,7 +363,7 @@ function Conteudo({
             <PainelEntrega c={{ ...c, pedidoEm: c.pedidoEm }} url={url} gravar={gravar} onGerar={() => setGerando(true)} />
           )}
 
-          <PainelLojas c={c} />
+          <PainelLojas c={c} onConversar={onConversar} />
 
           {respondeu ? (
             <PainelEscolha
@@ -396,14 +441,17 @@ function Conteudo({
 
 // ─── Lojas ──────────────────────────────────────────────────────────────────
 
-function PainelLojas({ c }: { c: CotacaoVista }) {
+function PainelLojas({ c, onConversar }: { c: CotacaoVista; onConversar: (envioId: string) => void }) {
   return (
-    <Painel titulo="Lojas" ajuda="Atualiza sozinho. O balconista confere a aplicação de cada peça antes de responder.">
+    <Painel
+      titulo="Lojas"
+      ajuda="Atualiza sozinho. O balconista confere a aplicação de cada peça antes de responder. Dúvida sobre a peça? Converse com a loja."
+    >
       <ul className="divide-y divide-linha">
         {c.envios.map((e) => {
           const temQuantas = c.pecas.filter((p) => e.ofertas.some((o) => o.pecaId === p.id)).length;
           return (
-            <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+            <li key={e.id} className="flex items-center gap-3 py-2.5">
               <span
                 className={cn("h-2.5 w-2.5 shrink-0 rounded-full", e.respondidaEm ? "bg-ok" : "animate-pulse bg-atencao")}
                 aria-hidden="true"
@@ -416,6 +464,19 @@ function PainelLojas({ c }: { c: CotacaoVista }) {
                     : "Esperando o balconista responder"}
                 </p>
               </div>
+              {/* Conversa que já acabou (e foi apagada) não tem o que abrir. */}
+              {!e.conversaFechada && (
+                <Botao
+                  variante={e.naoLidas > 0 ? "primario" : "secundario"}
+                  tamanho="denso"
+                  onClick={() => onConversar(e.id)}
+                  className="shrink-0"
+                >
+                  <IconeConversa tamanho={15} />
+                  Conversar
+                  <ContadorDeMensagens total={e.naoLidas} />
+                </Botao>
+              )}
             </li>
           );
         })}

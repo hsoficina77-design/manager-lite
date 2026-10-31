@@ -50,6 +50,10 @@ export type EnvioVista = {
   /** Dias que a loja dá para devolver peça sem uso (zero = não aceita). */
   prazoDevolucao: number;
   ofertas: OfertaVista[];
+  /** Mensagens da loja que ninguém da oficina leu ainda. */
+  naoLidas: number;
+  /** A conversa com esta loja acabou e as mensagens foram apagadas. */
+  conversaFechada: boolean;
 };
 
 export type PecaVista = {
@@ -124,11 +128,17 @@ export type EnvioNoBalcao = {
   oficinaRecebeuEm: string | null;
   /** A oficina já gerou o orçamento ou fez o pedido: a resposta não muda mais. */
   travada: boolean;
+  /** Quando a oficina fez o pedido (para esta loja ou para outra). */
+  pedidoEm: string | null;
   veiculo: VeiculoCotado;
   observacao: string;
   pecas: PecaNoBalcao[];
   /** Peças deste pedido que a oficina quer devolver (ou já devolveu). */
   devolucoes: DevolucaoVista[];
+  /** Mensagens da oficina que ninguém da loja leu ainda. */
+  naoLidas: number;
+  /** A conversa acabou e as mensagens foram apagadas. */
+  conversaFechada: boolean;
 };
 
 /** O que o link antigo do balcão responde depois que a loja passou a ter login. */
@@ -494,4 +504,98 @@ export function descricaoDoVeiculo(v: Pick<VeiculoCotado, "marca" | "modelo" | "
 
 export function normalizarPlaca(placa: string): string {
   return placa.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+// ─── Conversa ───────────────────────────────────────────────────────────────
+//
+// Uma conversa por envio (a cotação para uma loja). Serve para tirar dúvida da
+// aplicação e combinar a peça antes de ela sair — e acaba junto com a entrega: quando a
+// oficina confirma que as peças chegaram, as mensagens são apagadas. Se o pedido foi
+// para outra loja, a conversa com esta acaba no pedido.
+
+export type LadoDaConversa = "OFICINA" | "LOJA";
+
+export type MensagemVista = {
+  id: string;
+  /** Ordem de chegada: as telas pedem "o que veio depois de `seq`". */
+  seq: number;
+  autor: LadoDaConversa;
+  autorNome: string;
+  texto: string;
+  em: string;
+};
+
+/** O que `GET …/conversa` devolve. */
+export type ConversaVista = {
+  mensagens: MensagemVista[];
+  /** Tem mensagem mais antiga que a primeira da lista (rolar para cima busca). */
+  maisAntigas: boolean;
+  /** Até que `seq` o outro lado leu: é o "visto" das minhas mensagens. */
+  lidoPeloOutroAte: number;
+  /** Até que `seq` o meu lado leu: a tela só marca como lida o que passar disso. */
+  lidoPorMimAte: number;
+  /** Dá para mandar mensagem agora. */
+  aberta: boolean;
+  /** Por que não dá, quando não dá. */
+  motivoFechada: string | null;
+};
+
+/** Uma conversa na caixa "Conversas", de qualquer dos dois lados. */
+export type ConversaNaLista = {
+  envioId: string;
+  /** A tela da cotação, já com a conversa aberta. */
+  link: string;
+  /** Com quem: a loja (para a oficina) ou a oficina (para a loja). */
+  titulo: string;
+  /** Sobre o quê: o carro, e o número da cotação do lado da oficina. */
+  subtitulo: string;
+  ultima: string | null;
+  ultimaDe: LadoDaConversa;
+  em: string;
+  naoLidas: number;
+};
+
+/** Tamanho máximo de uma mensagem: o que cabe numa dúvida de balcão. */
+export const LIMITE_MENSAGEM = 1000;
+
+/** Mensagens por página, ao abrir a conversa e ao buscar as mais antigas. */
+export const MENSAGENS_POR_PAGINA = 50;
+
+/** A conversa ainda vale: o envio não fechou nem ficou de fora do pedido. */
+export function situacaoDaConversa(e: {
+  conversaFechadaEm: Date | string | null;
+  oficinaRecebeuEm: Date | string | null;
+  entrega: string | null;
+  pedidoEm: Date | string | null;
+}): { aberta: true; motivo: null } | { aberta: false; motivo: string } {
+  if (e.oficinaRecebeuEm) return { aberta: false, motivo: "A entrega fechou. As mensagens foram apagadas." };
+  if (e.pedidoEm && !e.entrega) {
+    return { aberta: false, motivo: "O pedido foi para outra loja. As mensagens foram apagadas." };
+  }
+  if (e.conversaFechadaEm) return { aberta: false, motivo: "Esta conversa acabou. As mensagens foram apagadas." };
+  return { aberta: true, motivo: null };
+}
+
+const TEXTO_NUMERO_ESCONDIDO = "[número escondido]";
+
+// Telefone do Brasil, com ou sem +55 e DDD, fixo ou celular, com espaço, ponto ou traço
+// no meio: "(11) 98765-4321", "11987654321", "+55 11 9 8765 4321", "4002-8922". Não pode
+// estar grudado em letra ou número, nem em "-7" de dígito verificador — senão pegaria
+// pedaço de código de peça. DDD não começa com zero, e código Bosch ("0986452041") sim.
+const TELEFONE =
+  /(?<![\p{L}\p{N}+]|\d[.-])(?:\+\s?55[\s.-]?|55[\s.-]?)?(?:\(\s?[1-9]\d\s?\)|[1-9]\d)?[\s.-]?(?:9[\s.-]?)?[2-9]\d{3}[\s.-]?\d{4}(?![\p{L}\p{N}]|[.-]\d)/gu;
+
+/**
+ * Esconde número de telefone do texto da mensagem — decisão do dono do produto: a
+ * conversa fica no app. Faixa de anos ("2015-2018", "2015 2018") parece telefone fixo e
+ * fica como está: é o que mais se escreve sobre aplicação de peça.
+ */
+export function esconderTelefone(texto: string): string {
+  return texto.replace(TELEFONE, (achado) => {
+    const digitos = achado.replace(/\D/g, "");
+    if (digitos.length === 8 && /^(19|20)\d{2}(19|20)\d{2}$/.test(digitos)) return achado;
+    // O separador antes do número (espaço, traço) faz parte do achado: volta para o texto.
+    const antes = achado.match(/^[\s.-]*/)?.[0] ?? "";
+    return `${antes}${TEXTO_NUMERO_ESCONDIDO}`;
+  });
 }

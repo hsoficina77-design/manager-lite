@@ -26,7 +26,7 @@ export default async function EnvioDoBalcaoPage({
       envioId={envioId}
       loja={{ nome, cidade, entregaMedia }}
       // O link antigo era o balcão inteiro: responder, entregar e cuidar das devoluções.
-      pode={{ responder: true, entrega: true, devolucao: true }}
+      pode={{ responder: true, conversa: true, entrega: true, devolucao: true }}
     />
   );
 }

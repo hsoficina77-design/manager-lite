@@ -2,6 +2,7 @@
 // (rotas /api/balcao, públicas, então validadas com o mesmo rigor das outras).
 
 import { z } from "zod";
+import { LIMITE_MENSAGEM } from "@/components/peca-peca/regras";
 import {
   LIMITES,
   dinheiro,
@@ -111,6 +112,28 @@ export const devolucaoLojaSchema = z.discriminatedUnion(
   ],
   { errorMap: () => ({ message: "Ação inválida" }) }
 );
+
+// ─── Conversa ───────────────────────────────────────────────────────────────
+
+export const mensagemSchema = z.object({
+  texto: obrigatorio("Mensagem", LIMITE_MENSAGEM),
+  /** Gerado no aparelho: o reenvio da mesma mensagem não duplica. */
+  idCliente: z.string().min(8, "Mensagem inválida").max(64, "Mensagem inválida").regex(/^[\w-]+$/, "Mensagem inválida"),
+});
+
+/** "Li até aqui": o `seq` da última mensagem que a tela mostrou. */
+export const conversaLidaSchema = z.object({ ate: inteiro("Mensagem", 0, 2_000_000_000) });
+
+/** A inscrição do navegador no Web Push, como `PushSubscription.toJSON()` devolve. */
+export const inscricaoPushSchema = z.object({
+  endpoint: z.string().url("Inscrição inválida").max(1000, "Inscrição inválida").startsWith("https://", "Inscrição inválida"),
+  keys: z.object({
+    p256dh: z.string().min(1).max(200),
+    auth: z.string().min(1).max(100),
+  }),
+});
+
+export const cancelarPushSchema = z.object({ endpoint: z.string().max(1000) });
 
 export const cotacaoOrcamentoSchema = z.object({
   clienteNome: nulavel("Nome do cliente", LIMITES.nome).optional(),

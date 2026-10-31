@@ -15,6 +15,11 @@
 
 export const PERMISSOES_DA_LOJA = [
   { chave: "balcao.responder", rotulo: "Responder cotações", ajuda: "Marca, preço e prazo de cada peça." },
+  {
+    chave: "balcao.conversa",
+    rotulo: "Conversar com as oficinas",
+    ajuda: "Tirar dúvida da aplicação e combinar a peça pela conversa de cada cotação.",
+  },
   { chave: "balcao.entrega", rotulo: "Avançar a entrega", ajuda: "Separando, saiu com o motoboy, entregue." },
   {
     chave: "balcao.devolucao",
@@ -37,7 +42,7 @@ export const PERFIS_DA_LOJA: Record<PerfilLoja, { rotulo: string; ajuda: string;
   VENDEDOR: {
     rotulo: "Vendedor",
     ajuda: "Responde as cotações e cuida da entrega e das devoluções.",
-    permissoes: ["balcao.responder", "balcao.entrega", "balcao.devolucao"],
+    permissoes: ["balcao.responder", "balcao.conversa", "balcao.entrega", "balcao.devolucao"],
   },
 };
 
