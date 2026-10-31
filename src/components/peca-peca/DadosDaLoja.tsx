@@ -16,7 +16,7 @@ import { ENTREGAS_PARA_MEDIA, ENTREGA_PADRAO } from "./regras";
 // O tempo de entrega só aparece: é medido nas entregas da loja, ninguém digita (ver
 // regras.ts). A cidade onde a loja fica é da plataforma.
 
-type Bloco = "telefone" | "cidades" | "prazo";
+type Bloco = "telefone" | "cidades" | "prazo" | "chassi";
 
 export function DadosDaLoja({
   loja,
@@ -30,6 +30,7 @@ export function DadosDaLoja({
     entregaMedia: number | null;
     entregasMedidas: number;
     prazoDevolucao: number;
+    exigeChassi: boolean;
   };
 }) {
   const router = useRouter();
@@ -155,6 +156,33 @@ export function DadosDaLoja({
             {salvando === "prazo" ? "Salvando..." : "Salvar prazo"}
           </Botao>
         </form>
+      </Painel>
+
+      <Painel
+        titulo="Chassi"
+        ajuda="Para quem pesquisa a peça pelo chassi no catálogo. As oficinas sempre podem mandar; aqui a loja decide se exige."
+      >
+        <label className="flex min-h-9 w-fit cursor-pointer items-center gap-2 text-sm text-tinta">
+          <input
+            type="checkbox"
+            checked={loja.exigeChassi}
+            disabled={salvando !== null}
+            onChange={(e) =>
+              salvar(
+                "chassi",
+                { exigeChassi: e.target.checked },
+                e.target.checked ? "A loja agora só recebe cotação com chassi" : "Chassi deixou de ser obrigatório"
+              )
+            }
+            className="h-5 w-5 accent-brand-600"
+          />
+          Só responder cotação com chassi
+        </label>
+        <p className="mt-1 text-xs text-tinta-3">
+          A oficina que marcar a loja precisa preencher o chassi para enviar. Quem não tem o chassi à mão manda só para
+          as outras lojas.
+        </p>
+        {erro?.bloco === "chassi" && <Aviso>{erro.texto}</Aviso>}
       </Painel>
     </div>
   );

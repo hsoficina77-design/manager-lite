@@ -76,7 +76,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
       // Sem devolução desta cotação esperando a oficina, os avisos dela saem do sino.
       const daCotacao = await tx.devolucao.findMany({ where: { envio: { cotacaoId: id } }, select: CAMPOS_DA_DEVOLUCAO });
-      if (!daCotacao.map(devolucaoVista).some(oficinaPrecisaAgir)) {
+      if (!daCotacao.map((x) => devolucaoVista(x)).some(oficinaPrecisaAgir)) {
         await tx.notificacao.updateMany({
           where: { tipo: TIPO_AVISO_DEVOLUCAO, link: `/peca-peca/${id}`, lida: false },
           data: { lida: true, lidaEm: agora },

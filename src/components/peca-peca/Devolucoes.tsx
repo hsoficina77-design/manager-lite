@@ -23,6 +23,7 @@ import {
   type MotivoDevolucao,
 } from "./regras";
 import { enviarJson, type useAoVivo } from "./aoVivo";
+import { EscolherFotos, MiniaturasDaPeca, enviarFotos } from "./FotosDaPeca";
 
 // A devolução do lado da oficina: pedir (a janela) e acompanhar (um cartão por peça
 // devolvida, dentro do cartão da loja no pedido). O balcão tem o lado dele em Balcao.tsx.
@@ -71,6 +72,7 @@ export function ModalDevolucao({
   const [motivo, setMotivo] = useState<MotivoDevolucao | null>(null);
   const [detalhe, setDetalhe] = useState("");
   const [querTroca, setQuerTroca] = useState(true);
+  const [fotos, setFotos] = useState<File[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -108,9 +110,16 @@ export function ModalDevolucao({
       }),
       { devolveDado: true }
     );
+    if (!r.ok) {
+      setEnviando(false);
+      return setErro(r.erro);
+    }
+    // As fotos sobem depois que a devolução existe: é a última desta peça desta loja.
+    const criada = (r.corpo as CotacaoVista).devolucoes.filter((d) => d.envioId === envio.id && d.pecaId === peca.id).at(-1);
+    const falhas = criada && fotos.length > 0 ? await enviarFotos(c.id, fotos, { devolucaoId: criada.id }) : 0;
     setEnviando(false);
-    if (!r.ok) return setErro(r.erro);
     avisar(`Devolução pedida à ${envio.lojaNome}`);
+    if (falhas > 0) avisar("A devolução foi pedida, mas alguma foto não subiu.", "erro");
     onFechar();
   }
 
@@ -178,6 +187,12 @@ export function ModalDevolucao({
             );
           })}
         </fieldset>
+
+        {motivo && motivo !== "NAO_USADA" && (
+          <Campo rotulo="Fotos (opcional)" ajuda="O defeito, ou o que estava diferente. Ajuda a loja a decidir.">
+            <EscolherFotos fotos={fotos} onChange={setFotos} />
+          </Campo>
+        )}
 
         {doMotivo?.pergunta && (
           <Campo rotulo={doMotivo.pergunta} obrigatorio ajuda="O balconista lê antes de responder.">
@@ -349,6 +364,7 @@ export function DevolucoesDaLoja({
                 Peça da troca: {[d.trocaMarca, d.trocaPreco !== null && `${formatCurrency(d.trocaPreco)} cada`].filter(Boolean).join(" · ")}
               </p>
             ) : null}
+            <MiniaturasDaPeca fotos={d.fotos} />
             <p className={cn("text-sm", s === "RECUSADA" ? "text-perigo" : "text-tinta-2")}>{oQueFaltaNaDevolucao(d)}</p>
             {d.querTroca && d.semAPeca && s !== "RECUSADA" && s !== "CANCELADA" && (
               <p className="text-sm text-tinta-2">A loja não tem a peça para trocar, então o valor volta para você.</p>

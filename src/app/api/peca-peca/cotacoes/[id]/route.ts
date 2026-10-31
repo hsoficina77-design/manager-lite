@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
 import { lerCotacao } from "@/lib/cotacoes";
+import { apagarFotos } from "@/lib/fotos-peca-peca";
 import { registroNaoEncontrado } from "@/lib/db-oficina";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { cotacaoAlterarSchema } from "@/lib/schemas-peca-peca";
@@ -111,6 +112,8 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (guarda.resposta) return guarda.resposta;
   const { id } = await params;
   try {
+    // O banco apaga as linhas das fotos junto; os arquivos no Storage, só daqui.
+    await apagarFotos(guarda.db, { cotacaoId: id });
     await guarda.db.cotacao.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -158,6 +158,11 @@ export function uploadFotoOrcamento(
   return uploadArquivo(`${oficinaId}/orcamentos/${orcamentoId}`, bytes, contentType);
 }
 
+/** Foto da peça no Peça Peça (cotação ou devolução) — pasta da cotação. */
+export function uploadFotoCotacao(oficinaId: string, cotacaoId: string, bytes: ArrayBuffer, contentType: TipoImagem) {
+  return uploadArquivo(`${oficinaId}/peca-peca/${cotacaoId}`, bytes, contentType);
+}
+
 /** Logo da oficina (painel de configurações). */
 export function uploadLogo(oficinaId: string, bytes: ArrayBuffer, contentType: TipoImagem) {
   return uploadArquivo(`${oficinaId}/marca`, bytes, contentType);

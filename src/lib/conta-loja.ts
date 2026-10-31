@@ -58,6 +58,8 @@ export type ContaLoja = {
     entregasMedidas: number;
     /** Dias para devolver peça sem uso (zero = não aceita). */
     prazoDevolucao: number;
+    /** Só responde cotação com chassi. */
+    exigeChassi: boolean;
   };
 };
 
@@ -92,6 +94,7 @@ async function lerContaDaSessao(): Promise<ContaLoja | null> {
                 entregaMedia: true,
                 entregasMedidas: true,
                 prazoDevolucao: true,
+                exigeChassi: true,
                 ativa: true,
               },
             },
@@ -130,6 +133,7 @@ async function lerContaDaSessao(): Promise<ContaLoja | null> {
         entregaMedia: loja.entregaMedia,
         entregasMedidas: loja.entregasMedidas,
         prazoDevolucao: loja.prazoDevolucao,
+        exigeChassi: loja.exigeChassi,
       },
     };
   } catch (err) {

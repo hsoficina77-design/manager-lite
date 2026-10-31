@@ -7,12 +7,22 @@ import { cn } from "@/lib/utils";
 import { Botao } from "@/components/ui/Botao";
 import { Area, Aviso, Campo, CampoQuantidade, Entrada } from "@/components/ui/Campos";
 import { Painel } from "@/components/ui/Dados";
-import { useConfirmar } from "@/components/ui/Avisos";
+import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
 import { Busca, Confere, Fechar, Lapis, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
-import { normalizarPlaca, prazoDaLoja, type CotacaoVista, type LojasDaOficina, type VeiculoCotado } from "./regras";
+import {
+  chassiValido,
+  normalizarChassi,
+  normalizarPlaca,
+  pecaQueVaria,
+  prazoDaLoja,
+  type CotacaoVista,
+  type LojasDaOficina,
+  type VeiculoCotado,
+} from "./regras";
 import { buscar, enviarJson, useAoVivo } from "./aoVivo";
+import { EscolherFotos, enviarFotos } from "./FotosDaPeca";
 import { Cabecalho, InformarCidade } from "./ui";
 
 // As peças que mais se pedem no balcão: um toque e entram na lista.
@@ -56,6 +66,17 @@ const VEICULO_VAZIO: VeiculoNaTela = { placa: "", marca: "", modelo: "", ano: ""
 /** A cotação nova a partir de uma devolução: a peça que a loja não tinha para trocar. */
 type Recotar = { cotacaoId: string; devolucaoId: string };
 
+/** Uma peça da lista, com o que ajuda a acertar: código, recado e fotos (tudo opcional). */
+type PecaNaTela = { descricao: string; quantidade: number; codigo: string; observacao: string; fotos: File[] };
+
+const pecaNova = (descricao: string, quantidade: number): PecaNaTela => ({
+  descricao,
+  quantidade,
+  codigo: "",
+  observacao: "",
+  fotos: [],
+});
+
 export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
   const router = useRouter();
   // A busca da placa olha os carros cadastrados no boxOS; sem ele, não há onde procurar.
@@ -65,7 +86,11 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
   const [veiculo, setVeiculo] = useState<VeiculoNaTela>(VEICULO_VAZIO);
   const [busca, setBusca] = useState<EstadoBusca>({ tipo: "nada" });
   const [observacao, setObservacao] = useState("");
-  const [pecas, setPecas] = useState<{ descricao: string; quantidade: number }[]>([]);
+  const [chassi, setChassi] = useState("");
+  const [pecas, setPecas] = useState<PecaNaTela[]>([]);
+  // Peças com os detalhes abertos. As que variam muito abrem sozinhas, ao entrar na lista.
+  const [detalhes, setDetalhes] = useState<Set<number>>(new Set());
+  const avisar = useAvisar();
   const [novaPeca, setNovaPeca] = useState("");
   const [quantidade, setQuantidade] = useState("1");
   const [editando, setEditando] = useState<{ indice: number; descricao: string; quantidade: string } | null>(null);
@@ -76,6 +101,8 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
   const [erro, setErro] = useState("");
 
   const lojas = marcadas ?? (lojasDisponiveis ?? []).map((l) => l.id);
+  /** Lojas marcadas que só cotam com o chassi. */
+  const pedemChassi = (lojasDisponiveis ?? []).filter((l) => l.exigeChassi && lojas.includes(l.id));
   // Vindo da devolução: a loja que não tinha a peça sai das marcadas, e o aviso diz de onde veio.
   const [deOnde, setDeOnde] = useState<{ numero: number; lojaId: string } | null>(null);
 
@@ -98,8 +125,10 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
             ? `A peça anterior veio errada${d.detalhe ? `: ${d.detalhe}` : "."}`
             : `A peça anterior veio com defeito${d.detalhe ? `: ${d.detalhe}` : "."}`;
         setVeiculo({ ...c.veiculo, veiculoId: c.veiculoId ?? undefined, clienteId: c.clienteId ?? undefined });
+        setChassi(c.chassi);
         setObservacao([c.observacao, recado].filter(Boolean).join("\n"));
-        setPecas([{ descricao: peca.descricao, quantidade: d.quantidade }]);
+        setPecas([{ ...pecaNova(peca.descricao, d.quantidade), codigo: peca.codigo, observacao: peca.observacao }]);
+        setDetalhes(new Set([0]));
         setDeOnde({ numero: c.numero, lojaId: envio.lojaId });
       } catch {
         // Sem conexão: a tela abre vazia, como uma cotação nova qualquer.
@@ -165,18 +194,21 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
   function adicionar(descricao = novaPeca) {
     const texto = descricao.trim();
     if (!texto) return;
-    setPecas((lista) => [...lista, { descricao: texto, quantidade: unidades(quantidade) }]);
+    if (pecaQueVaria(texto)) setDetalhes((d) => new Set(d).add(pecas.length));
+    setPecas((lista) => [...lista, pecaNova(texto, unidades(quantidade))]);
     setNovaPeca("");
     setQuantidade("1");
+  }
+
+  function mudarPeca(indice: number, mudanca: Partial<PecaNaTela>) {
+    setPecas((lista) => lista.map((p, i) => (i === indice ? { ...p, ...mudanca } : p)));
   }
 
   function salvarEdicao() {
     if (!editando) return;
     const texto = editando.descricao.trim();
     if (!texto) return;
-    setPecas((lista) =>
-      lista.map((p, i) => (i === editando.indice ? { descricao: texto, quantidade: unidades(editando.quantidade) } : p))
-    );
+    mudarPeca(editando.indice, { descricao: texto, quantidade: unidades(editando.quantidade) });
     setEditando(null);
   }
 
@@ -189,6 +221,8 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
     });
     if (!ok) return;
     setPecas((lista) => lista.filter((_, j) => j !== indice));
+    // Os índices de quem vem depois descem um.
+    setDetalhes((d) => new Set([...d].filter((i) => i !== indice).map((i) => (i > indice ? i - 1 : i))));
     setEditando(null);
   }
 
@@ -203,20 +237,37 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
     }
     if (pecas.length === 0) return setErro("Adicione ao menos uma peça.");
     if (lojas.length === 0) return setErro("Escolha ao menos uma loja.");
+    const vin = normalizarChassi(chassi);
+    if (vin && !chassiValido(vin)) return setErro("O chassi tem 17 letras e números (sem I, O e Q). Confira ou deixe em branco.");
+    if (!vin && pedemChassi.length > 0) {
+      return setErro(
+        `${pedemChassi.map((l) => l.nome).join(" e ")} só cota com o chassi. Preencha o chassi ou desmarque a loja.`
+      );
+    }
     setErro("");
     setEnviando(true);
     try {
       const r = await enviarJson("/api/peca-peca/cotacoes", "POST", {
-        veiculo: { placa: normalizarPlaca(placa), marca, modelo, ano, motor },
+        veiculo: { placa: normalizarPlaca(placa), marca, modelo, ano, motor, chassi: vin },
         observacao,
         veiculoId: veiculoId ?? null,
-        pecas,
+        pecas: pecas.map(({ descricao, quantidade, codigo, observacao }) => ({ descricao, quantidade, codigo, observacao })),
         lojas,
       })();
       const corpo = await r.json().catch(() => ({}));
       if (!r.ok) {
         setErro(corpo.error ?? "Não consegui enviar a cotação.");
         return;
+      }
+      // As fotos sobem depois que a cotação existe; o balcão as vê na próxima leitura.
+      if (pecas.some((p) => p.fotos.length > 0)) {
+        const criada = (await (await buscar(`/api/peca-peca/cotacoes/${corpo.id}`)).json()) as CotacaoVista;
+        let falhas = 0;
+        for (const [i, p] of pecas.entries()) {
+          const pecaId = criada.pecas[i]?.id;
+          if (pecaId && p.fotos.length > 0) falhas += await enviarFotos(corpo.id, p.fotos, { pecaId });
+        }
+        if (falhas > 0) avisar(falhas === 1 ? "Uma foto não subiu. A cotação foi enviada mesmo assim." : `${falhas} fotos não subiram. A cotação foi enviada mesmo assim.`, "erro");
       }
       router.push(`/peca-peca/${corpo.id}`);
     } catch {
@@ -309,6 +360,25 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
         <p className="mt-2 text-xs text-tinta-3">
           O motor é o que mais evita peça errada. O balconista confere a aplicação antes de responder.
         </p>
+        <Campo
+          rotulo={pedemChassi.length > 0 ? "Chassi" : "Chassi (opcional)"}
+          obrigatorio={pedemChassi.length > 0}
+          ajuda={
+            pedemChassi.length > 0
+              ? `${pedemChassi.map((l) => l.nome).join(" e ")} só cota com o chassi.`
+              : "Com ele, a loja acha a peça exata no catálogo."
+          }
+          className="mt-4"
+        >
+          <Entrada
+            value={chassi}
+            onChange={(e) => setChassi(e.target.value.toUpperCase())}
+            maxLength={20}
+            autoCapitalize="characters"
+            placeholder="17 letras e números"
+            className="font-mono uppercase tracking-wider placeholder:font-sans placeholder:normal-case placeholder:tracking-normal"
+          />
+        </Campo>
         <Campo rotulo="Observação (opcional)" className="mt-4">
           <Area
             value={observacao}
@@ -386,27 +456,49 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
                   </Botao>
                 </li>
               ) : (
-                <li key={`${p.descricao}-${i}`} className="flex items-center gap-3 px-3 py-1.5">
-                  <span className="w-8 shrink-0 text-sm font-semibold text-tinta-2">{p.quantidade}×</span>
-                  <span className="min-w-0 flex-1 text-sm text-tinta">{p.descricao}</span>
-                  <Botao
-                    variante="fantasma"
-                    tamanho="icone"
-                    onClick={() => setEditando({ indice: i, descricao: p.descricao, quantidade: String(p.quantidade) })}
-                    aria-label={`Editar ${p.descricao}`}
-                    className="text-tinta-2"
-                  >
-                    <Lapis tamanho={16} />
-                  </Botao>
-                  <Botao
-                    variante="fantasma"
-                    tamanho="icone"
-                    onClick={() => tirar(i)}
-                    aria-label={`Tirar ${p.descricao}`}
-                    className="text-perigo"
-                  >
-                    <Lixeira tamanho={16} />
-                  </Botao>
+                <li key={`${p.descricao}-${i}`} className="px-3 py-1.5">
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 shrink-0 text-sm font-semibold text-tinta-2">{p.quantidade}×</span>
+                    <span className="min-w-0 flex-1 text-sm text-tinta">
+                      {p.descricao}
+                      {!detalhes.has(i) && (p.codigo || p.observacao || p.fotos.length > 0) && (
+                        <span className="block text-xs text-tinta-3">
+                          {[p.codigo && `cód. ${p.codigo}`, p.observacao, p.fotos.length > 0 && `${p.fotos.length} foto(s)`]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      )}
+                    </span>
+                    <Botao
+                      variante="fantasma"
+                      tamanho="icone"
+                      onClick={() => setEditando({ indice: i, descricao: p.descricao, quantidade: String(p.quantidade) })}
+                      aria-label={`Editar ${p.descricao}`}
+                      className="text-tinta-2"
+                    >
+                      <Lapis tamanho={16} />
+                    </Botao>
+                    <Botao
+                      variante="fantasma"
+                      tamanho="icone"
+                      onClick={() => tirar(i)}
+                      aria-label={`Tirar ${p.descricao}`}
+                      className="text-perigo"
+                    >
+                      <Lixeira tamanho={16} />
+                    </Botao>
+                  </div>
+                  {detalhes.has(i) ? (
+                    <DetalhesDaPeca peca={p} onChange={(mudanca) => mudarPeca(i, mudanca)} />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDetalhes((d) => new Set(d).add(i))}
+                      className="mb-1 ml-11 min-h-8 text-xs font-medium text-brand-texto underline-offset-2 hover:underline"
+                    >
+                      + Código, recado ou foto
+                    </button>
+                  )}
                 </li>
               )
             )}
@@ -447,7 +539,14 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
                   className="h-5 w-5 accent-brand-600"
                 />
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-tinta">{l.nome}</span>
+                  <span className="flex flex-wrap items-center gap-x-2 text-sm font-semibold text-tinta">
+                    {l.nome}
+                    {l.exigeChassi && (
+                      <span className="rounded-full bg-superficie-3 px-1.5 text-[0.7rem] font-medium text-tinta-2">
+                        Pede chassi
+                      </span>
+                    )}
+                  </span>
                   <span className="block text-xs text-tinta-3">
                     {l.cidade ?? "—"} · entrega em {prazoDaLoja(l)}
                   </span>
@@ -465,6 +564,39 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
           {enviando ? "Enviando..." : `Enviar para ${lojas.length === 1 ? "a loja" : `${lojas.length} lojas`}`}
         </Botao>
       </div>
+    </div>
+  );
+}
+
+/**
+ * O que ajuda a loja a acertar esta peça. Nada é obrigatório; nas peças que mudam muito
+ * de um carro para outro, o app só lembra.
+ */
+function DetalhesDaPeca({ peca, onChange }: { peca: PecaNaTela; onChange: (mudanca: Partial<PecaNaTela>) => void }) {
+  const lembrar = pecaQueVaria(peca.descricao) && !peca.codigo.trim() && peca.fotos.length === 0;
+  return (
+    <div className="mb-2 ml-11 mt-1 space-y-2">
+      {lembrar && (
+        <p className="rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-xs text-atencao">
+          Esta peça muda muito de um carro para outro. Se tiver, mande o código, a medida ou uma foto.
+        </p>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Entrada
+          value={peca.codigo}
+          onChange={(e) => onChange({ codigo: e.target.value })}
+          placeholder={/correia/i.test(peca.descricao) ? "Código ou medida (ex.: 6PK1035)" : "Código da peça (opcional)"}
+          aria-label="Código da peça"
+          className="font-mono"
+        />
+        <Entrada
+          value={peca.observacao}
+          onChange={(e) => onChange({ observacao: e.target.value })}
+          placeholder="Recado desta peça (ex.: lado esquerdo)"
+          aria-label="Recado desta peça"
+        />
+      </div>
+      <EscolherFotos fotos={peca.fotos} onChange={(fotos) => onChange({ fotos })} />
     </div>
   );
 }

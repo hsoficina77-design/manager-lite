@@ -347,6 +347,7 @@ async function main() {
       envioId: envioA.id, pecaId: "x", quantidade: 1, motivo: "DEFEITO", detalhe: "HACK",
     }],
     ["PATCH", `/api/peca-peca/cotacoes/${cot.id}/devolucoes/x`, { acao: "cancelar" }],
+    ["DELETE", `/api/peca-peca/cotacoes/${cot.id}/fotos`, {}],
     // Plataforma: a B é dona da oficina dela, mas não da plataforma.
     ["GET", `/api/plataforma/oficinas`],
     ["PATCH", `/api/plataforma/oficinas/${OFICINA_A}`, { ativa: false }],

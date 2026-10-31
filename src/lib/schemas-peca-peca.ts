@@ -12,6 +12,7 @@ import {
   nulavel,
   obrigatorio,
 } from "@/lib/validacao";
+import { chassiValido, normalizarChassi } from "@/components/peca-peca/regras";
 
 /** Texto opcional que sempre sai string (vazio quando não veio). */
 const texto = (rotulo: string, max: number) =>
@@ -36,6 +37,10 @@ export const cotacaoCriarSchema = z.object({
     modelo: obrigatorio("Modelo", LIMITES.nomeCurto),
     ano: obrigatorio("Ano", 20),
     motor: obrigatorio("Motor", LIMITES.nomeCurto),
+    // Opcional; a rota confere o formato e a loja que exige.
+    chassi: texto("Chassi", 30)
+      .transform(normalizarChassi)
+      .refine((c) => !c || chassiValido(c), "Chassi tem 17 letras e números (sem I, O e Q)"),
   }),
   observacao: texto("Observação", LIMITES.observacao),
   /** Carro já cadastrado na oficina, achado pela placa. */
@@ -45,6 +50,8 @@ export const cotacaoCriarSchema = z.object({
       z.object({
         descricao: obrigatorio("Peça", LIMITES.descricao),
         quantidade: inteiro("Quantidade", 1, 999),
+        codigo: texto("Código da peça", LIMITES.nomeCurto),
+        observacao: texto("Recado da peça", LIMITES.descricao),
       })
     )
     .min(1, "Adicione ao menos uma peça")
@@ -59,6 +66,9 @@ export const cotacaoAlterarSchema = z.object({
   venda: z.object({ pecaId: id("Peça"), valor: dinheiroNulavel("Preço de venda") }).optional(),
   menorPreco: z.literal(true).optional(),
 });
+
+/** Apagar uma foto, ou (sem `fotoId`) todas as da cotação. */
+export const fotoPecaPecaApagarSchema = z.object({ fotoId: idNulavel("Foto").optional() });
 
 /** A oficina confirma que as peças de uma loja do pedido chegaram. */
 export const cotacaoRecebidoSchema = z.object({ envioId: id("Loja do pedido") });
@@ -167,6 +177,7 @@ export const dadosDaLojaSchema = z.object({
   telefone: camposDaLoja.telefone.optional(),
   atende: camposDaLoja.atende.optional(),
   prazoDevolucao: inteiro("Prazo para devolver", 0, 90).optional(),
+  exigeChassi: z.boolean().optional(),
 });
 
 /** Aceitar o convite (ou o "novo acesso"): nome, e-mail e a senha. */
@@ -187,6 +198,8 @@ export const respostaDoBalcaoSchema = z.object({
           marca: obrigatorio("Marca", LIMITES.nomeCurto),
           preco: dinheiroPositivo("Preço"),
           prazoMin: inteiro("Prazo", 0, 7 * 24 * 60),
+          /** Código da peça oferecida, para a oficina comparar com o da peça velha. */
+          codigo: nulavel("Código da peça", LIMITES.nomeCurto).optional(),
         })
       )
       .max(10, "No máximo 10 marcas por peça")

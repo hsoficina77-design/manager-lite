@@ -38,6 +38,7 @@ import {
   type SituacaoNoBalcao,
 } from "@/components/peca-peca/regras";
 import { formatCurrency } from "@/lib/utils";
+import { CAMPOS_DA_FOTO, assinarFotos, fotoVista } from "@/lib/fotos-peca-peca";
 
 // ─── Lojas ──────────────────────────────────────────────────────────────────
 //
@@ -57,6 +58,7 @@ const CAMPOS_DA_LOJA = {
   atende: true,
   entregaMedia: true,
   prazoDevolucao: true,
+  exigeChassi: true,
 } as const;
 
 /**
@@ -90,6 +92,7 @@ export type DadosDaLoja = {
   atende: string[];
   telefone: string | null;
   prazoDevolucao?: number;
+  exigeChassi?: boolean;
 };
 
 export type LojaDoPainel = LojaVista & {
@@ -245,13 +248,18 @@ export const CAMPOS_DA_DEVOLUCAO = {
   precoAceitoEm: true,
   oficinaRecebeuTrocaEm: true,
   canceladaEm: true,
+  fotos: { orderBy: { createdAt: "asc" }, select: CAMPOS_DA_FOTO },
 } satisfies Prisma.DevolucaoSelect;
 
 type DevolucaoDoBanco = Prisma.DevolucaoGetPayload<{ select: typeof CAMPOS_DA_DEVOLUCAO }>;
 
 const iso = (d: Date | null) => d?.toISOString() ?? null;
 
-export function devolucaoVista(d: DevolucaoDoBanco): DevolucaoVista {
+/**
+ * `assinadas`: as URLs temporárias das fotos (ver `assinarFotos`). Sem ela, a foto vai
+ * com a URL gravada — basta para quem só confere a situação.
+ */
+export function devolucaoVista(d: DevolucaoDoBanco, assinadas: Map<string, string> = new Map()): DevolucaoVista {
   return {
     id: d.id,
     envioId: d.envioId,
@@ -274,6 +282,7 @@ export function devolucaoVista(d: DevolucaoDoBanco): DevolucaoVista {
     precoAceitoEm: iso(d.precoAceitoEm),
     oficinaRecebeuTrocaEm: iso(d.oficinaRecebeuTrocaEm),
     canceladaEm: iso(d.canceladaEm),
+    fotos: d.fotos.map((f) => fotoVista(f, assinadas)),
   };
 }
 
@@ -288,7 +297,7 @@ const SELECAO_DO_ENVIO = {
   oficinaRecebeuEm: true,
   ofertas: {
     orderBy: { createdAt: "asc" },
-    select: { id: true, pecaId: true, marca: true, preco: true, prazoMin: true },
+    select: { id: true, pecaId: true, marca: true, preco: true, prazoMin: true, codigo: true },
   },
   devolucoes: { orderBy: { createdAt: "asc" }, select: CAMPOS_DA_DEVOLUCAO },
   cotacao: {
@@ -298,11 +307,23 @@ const SELECAO_DO_ENVIO = {
       modelo: true,
       ano: true,
       motor: true,
+      chassi: true,
       observacao: true,
       orcamentoId: true,
       pedidoEm: true,
       // `ofertaId` só serve para saber se a peça foi fechada com ESTA loja; não sai daqui.
-      pecas: { orderBy: { ordem: "asc" }, select: { id: true, descricao: true, quantidade: true, ofertaId: true } },
+      pecas: {
+        orderBy: { ordem: "asc" },
+        select: {
+          id: true,
+          descricao: true,
+          quantidade: true,
+          codigo: true,
+          observacao: true,
+          ofertaId: true,
+          fotos: { orderBy: { createdAt: "asc" }, select: CAMPOS_DA_FOTO },
+        },
+      },
     },
   },
 } as const;
@@ -327,7 +348,14 @@ async function nomesDasOficinas(ids: string[]) {
   return nomes;
 }
 
-function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
+/** As fotos de uma leva de envios — das peças e das devoluções —, assinadas de uma vez. */
+function assinarFotosDosEnvios(envios: EnvioDoBanco[]) {
+  return assinarFotos(
+    envios.flatMap((e) => [...e.cotacao.pecas.flatMap((p) => p.fotos), ...e.devolucoes.flatMap((d) => d.fotos)])
+  );
+}
+
+function paraOBalcao(e: EnvioDoBanco, oficina: string, assinadas: Map<string, string>): EnvioNoBalcao {
   const c = e.cotacao;
   const minhas = new Map(e.ofertas.map((o) => [o.id, o]));
   const fechouComigo = c.pecas.some((p) => p.ofertaId && minhas.has(p.ofertaId));
@@ -354,17 +382,21 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
       ano: c.ano ?? "",
       motor: c.motor ?? "",
     },
+    chassi: c.chassi ?? "",
     observacao: c.observacao ?? "",
     pecas: c.pecas.map((p) => ({
       id: p.id,
       descricao: p.descricao,
       quantidade: p.quantidade,
+      codigo: p.codigo ?? "",
+      observacao: p.observacao ?? "",
+      fotos: p.fotos.map((f) => fotoVista(f, assinadas)),
       ofertas: e.ofertas
         .filter((o) => o.pecaId === p.id)
-        .map(({ id, marca, preco, prazoMin }) => ({ id, marca, preco, prazoMin })),
+        .map(({ id, marca, preco, prazoMin, codigo }) => ({ id, marca, preco, prazoMin, codigo })),
       pedida: c.pedidoEm && p.ofertaId ? (minhas.get(p.ofertaId)?.marca ?? null) : null,
     })),
-    devolucoes: e.devolucoes.map(devolucaoVista),
+    devolucoes: e.devolucoes.map((d) => devolucaoVista(d, assinadas)),
   };
 }
 
@@ -396,18 +428,19 @@ export async function caixaDaLoja(
 ): Promise<CaixaDoBalcao> {
   const recentes = await lerEnvios({ lojaId: loja.id });
   const envios = [...recentes, ...(await enviosComDevolucaoPendente(loja.id, recentes.map((e) => e.id)))];
+  // A caixa é lida a cada 4 s e não mostra foto: assinar fica para a tela de cada cotação.
   const nomes = await nomesDasOficinas([...new Set(envios.map((e) => e.oficinaId))]);
   return {
     loja: { nome: loja.nome, cidade: loja.cidade, entregaMedia: loja.entregaMedia },
-    envios: envios.map((e) => paraOBalcao(e, nomes.get(e.oficinaId) ?? "Oficina")),
+    envios: envios.map((e) => paraOBalcao(e, nomes.get(e.oficinaId) ?? "Oficina", new Map())),
   };
 }
 
 export async function envioDaLoja(lojaId: string, envioId: string): Promise<EnvioNoBalcao | null> {
   const [envio] = await lerEnvios({ lojaId, id: envioId });
   if (!envio) return null;
-  const nomes = await nomesDasOficinas([envio.oficinaId]);
-  return paraOBalcao(envio, nomes.get(envio.oficinaId) ?? "Oficina");
+  const [nomes, assinadas] = await Promise.all([nomesDasOficinas([envio.oficinaId]), assinarFotosDosEnvios([envio])]);
+  return paraOBalcao(envio, nomes.get(envio.oficinaId) ?? "Oficina", assinadas);
 }
 
 // ─── O que a loja grava ─────────────────────────────────────────────────────

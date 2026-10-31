@@ -83,6 +83,7 @@ model Oficina {
   cotacaoLojas       CotacaoLoja[]
   ofertas            Oferta[]
   devolucoes         Devolucao[]
+  fotosPecaPeca      FotoPecaPeca[]
 }
 
 // Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
@@ -844,6 +845,9 @@ model Loja {
   /// Dias, contados da entrega, para a oficina devolver peça que não usou. Zero = a loja
   /// não aceita devolução de peça sem uso. Defeito e peça errada não têm prazo no app.
   prazoDevolucao  Int      @default(7)
+  /// A loja só responde cotação com chassi (quem pesquisa a peça pelo chassi no
+  /// catálogo). A oficina que marcar esta loja precisa preencher o chassi.
+  exigeChassi     Boolean  @default(false)
   ativa           Boolean  @default(true)
   createdAt       DateTime @default(now())
 
@@ -933,6 +937,8 @@ model Cotacao {
   modelo      String
   ano         String?
   motor       String?
+  /// Chassi (VIN), opcional: com ele o balconista acha a peça exata no catálogo.
+  chassi      String?
   /// Recado livre da oficina para o balconista (versão, ABS, urgência...).
   observacao  String?
   // Só da oficina — a loja nunca recebe.
@@ -951,6 +957,7 @@ model Cotacao {
   orcamento Orcamento?    @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
   pecas     CotacaoPeca[]
   envios    CotacaoLoja[]
+  fotos     FotoPecaPeca[]
 
   @@unique([oficinaId, numero])
   @@index([oficinaId, createdAt])
@@ -964,6 +971,10 @@ model CotacaoPeca {
   ordem      Int
   descricao  String
   quantidade Int     @default(1)
+  /// Código ou medida da peça velha (ex.: "6PK1035"). Opcional — é o que mais acerta a peça.
+  codigo     String?
+  /// Recado só desta peça ("lado esquerdo", "com sensor").
+  observacao String?
   /// Oferta que a oficina escolheu para esta peça.
   ofertaId   String?
   /// Preço de venda unitário digitado pela oficina. Sem ele, vale a margem da cotação.
@@ -973,6 +984,7 @@ model CotacaoPeca {
   oferta     Oferta?     @relation("OfertaEscolhida", fields: [ofertaId], references: [id], onDelete: SetNull)
   ofertas    Oferta[]    @relation("OfertasDaPeca")
   devolucoes Devolucao[]
+  fotos      FotoPecaPeca[]
 
   @@index([oficinaId])
   @@index([cotacaoId])
@@ -1021,6 +1033,8 @@ model Oferta {
   marca     String
   preco     Float
   prazoMin  Int
+  /// Código da peça que a loja vai mandar, para a oficina comparar com o da peça velha.
+  codigo    String?
   createdAt DateTime @default(now())
 
   envio       CotacaoLoja   @relation(fields: [envioId], references: [id], onDelete: Cascade)
@@ -1080,10 +1094,40 @@ model Devolucao {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  envio CotacaoLoja @relation(fields: [envioId], references: [id], onDelete: Cascade)
-  peca  CotacaoPeca @relation(fields: [pecaId], references: [id], onDelete: Cascade)
+  envio CotacaoLoja    @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  peca  CotacaoPeca    @relation(fields: [pecaId], references: [id], onDelete: Cascade)
+  fotos FotoPecaPeca[]
 
   @@index([oficinaId])
   @@index([envioId])
   @@index([pecaId])
+}
+
+// Foto que ajuda a acertar a peça: a peça velha, a etiqueta, o código — na cotação
+// (presa à peça) ou na devolução. O arquivo fica no Supabase Storage; aqui, a referência.
+//
+// A foto se apaga sozinha 30 dias depois que a cotação fecha (`lib/fotos-peca-peca.ts`),
+// ou quando a oficina manda. Apagar tira só o arquivo: a linha fica, com `apagadaEm`,
+// para a tela dizer "foto apagada" em vez de sumir com ela.
+model FotoPecaPeca {
+  id           String    @id @default(cuid())
+  oficinaId    String    @default(dbgenerated("current_setting('app.oficina_id'::text, true)"))
+  oficina      Oficina   @relation(fields: [oficinaId], references: [id])
+  cotacaoId    String
+  pecaId       String?
+  devolucaoId  String?
+  path         String
+  url          String
+  tamanhoBytes Int       @default(0)
+  apagadaEm    DateTime?
+  createdAt    DateTime  @default(now())
+
+  cotacao   Cotacao      @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  peca      CotacaoPeca? @relation(fields: [pecaId], references: [id], onDelete: Cascade)
+  devolucao Devolucao?   @relation(fields: [devolucaoId], references: [id], onDelete: Cascade)
+
+  @@index([oficinaId])
+  @@index([cotacaoId])
+  @@index([pecaId])
+  @@index([devolucaoId])
 }

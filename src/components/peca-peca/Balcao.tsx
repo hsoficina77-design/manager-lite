@@ -16,6 +16,7 @@ import {
   diferencaDaTroca,
   ehTroca,
   lojaPrecisaAgir,
+  pecaQueVaria,
   prazoSugerido,
   proximaEtapa,
   rotuloDaEntrega,
@@ -26,6 +27,7 @@ import {
   type EnvioNoBalcao,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo, useTituloComContador } from "./aoVivo";
+import { BotaoCopiar, MiniaturasDaPeca } from "./FotosDaPeca";
 import { AvisoSemConexao, haQuanto, horaCurta } from "./ui";
 
 // O balcão é a tela da autopeça — outra empresa. Só mostra o que a loja precisa: o
@@ -318,6 +320,13 @@ export function EnvioDoBalcaoTela({
             </div>
           ))}
         </dl>
+        {envio.chassi && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-xs text-tinta-3">Chassi</span>
+            <span className="font-mono font-medium tracking-wider text-tinta">{envio.chassi}</span>
+            <BotaoCopiar texto={envio.chassi} rotulo="Chassi" />
+          </div>
+        )}
         {envio.observacao && (
           <div className="mt-3 rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm">
             <p className="text-xs text-tinta-3">Observação da oficina</p>
@@ -392,6 +401,7 @@ function PedidoNoBalcao({
         {pedidas.map((p) => (
           <li key={p.id} className="text-tinta">
             <strong>{p.quantidade}×</strong> {p.descricao} <span className="text-tinta-3">({p.pedida})</span>
+            {p.codigo && <span className="font-mono text-xs text-tinta-3"> · cód. {p.codigo}</span>}
           </li>
         ))}
       </ul>
@@ -406,6 +416,34 @@ function PedidoNoBalcao({
         ))}
       </ol>
     </section>
+  );
+}
+
+// ─── O que a oficina mandou de cada peça ────────────────────────────────────
+
+/**
+ * O código (com o botão de copiar para o catálogo), o recado e as fotos da peça. Nas
+ * peças que mudam muito, avisa quando a oficina não mandou nada disso: é ali que o
+ * balconista confere com mais cuidado.
+ */
+function InfoDaPeca({ peca }: { peca: EnvioNoBalcao["pecas"][number] }) {
+  const semNada = !peca.codigo && peca.fotos.length === 0;
+  if (semNada && !peca.observacao && !pecaQueVaria(peca.descricao)) return null;
+  return (
+    <div className="mb-3 space-y-2">
+      {peca.codigo && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-xs text-tinta-3">Código</span>
+          <span className="font-mono font-semibold text-tinta">{peca.codigo}</span>
+          <BotaoCopiar texto={peca.codigo} rotulo="Código" />
+        </p>
+      )}
+      {peca.observacao && <p className="text-sm text-tinta-2">&ldquo;{peca.observacao}&rdquo;</p>}
+      <MiniaturasDaPeca fotos={peca.fotos} />
+      {semNada && pecaQueVaria(peca.descricao) && (
+        <p className="text-xs text-atencao">Sem código nem foto: esta peça muda muito. Confira a aplicação com cuidado.</p>
+      )}
+    </div>
   );
 }
 
@@ -548,6 +586,7 @@ function DevolucaoNoBalcao({
         <strong>{rotuloDoMotivo(d.motivo)}</strong>
         {d.detalhe && <span className="text-tinta-2">: &ldquo;{d.detalhe}&rdquo;</span>}
       </p>
+      <MiniaturasDaPeca fotos={d.fotos} />
       <p className="text-sm text-tinta-2">
         {pedido} Valor no pedido: {formatCurrency(d.valor)}
         {d.quantidade > 1 && ` (${formatCurrency(unitario)} cada)`}.
@@ -747,12 +786,14 @@ function RespostaFechada({ envio, semAcesso = false }: { envio: EnvioNoBalcao; s
               <p className="text-sm font-semibold text-tinta">
                 {p.quantidade}× {p.descricao}
               </p>
+              <InfoDaPeca peca={p} />
               {p.ofertas.length === 0 ? (
                 <p className="text-xs text-tinta-3">Não tinha.</p>
               ) : (
                 p.ofertas.map((o) => (
                   <p key={o.id} className="text-xs text-tinta-3">
                     {o.marca} · {formatCurrency(o.preco)} · {o.prazoMin} min
+                    {o.codigo && <span className="font-mono"> · cód. {o.codigo}</span>}
                     {p.pedida === o.marca && <span className="ml-1 font-semibold text-ok">pedida</span>}
                   </p>
                 ))
@@ -765,7 +806,7 @@ function RespostaFechada({ envio, semAcesso = false }: { envio: EnvioNoBalcao; s
   );
 }
 
-type OfertaEmEdicao = { chave: string; id?: string; marca: string; preco: string; prazo: string };
+type OfertaEmEdicao = { chave: string; id?: string; marca: string; preco: string; prazo: string; codigo: string };
 type Rascunho = Record<string, { naoTem: boolean; ofertas: OfertaEmEdicao[] }>;
 
 let contador = 0;
@@ -787,7 +828,7 @@ function FormResposta({
 }) {
   const avisar = useAvisar();
   const prazoPadrao = String(prazoSugerido(loja));
-  const vazia = (): OfertaEmEdicao => ({ chave: chaveNova(), marca: "", preco: "", prazo: prazoPadrao });
+  const vazia = (): OfertaEmEdicao => ({ chave: chaveNova(), marca: "", preco: "", prazo: prazoPadrao, codigo: "" });
 
   const [rascunho, setRascunho] = useState<Rascunho>(() =>
     Object.fromEntries(
@@ -802,6 +843,7 @@ function FormResposta({
                 marca: o.marca,
                 preco: String(o.preco),
                 prazo: String(o.prazoMin),
+                codigo: o.codigo ?? "",
               })),
             }
           : { naoTem: false, ofertas: [vazia()] },
@@ -812,7 +854,7 @@ function FormResposta({
   const [enviando, setEnviando] = useState(false);
   const [enviada, setEnviada] = useState(false);
 
-  function mudarOferta(pecaId: string, chave: string, campo: "marca" | "preco" | "prazo", valor: string) {
+  function mudarOferta(pecaId: string, chave: string, campo: "marca" | "preco" | "prazo" | "codigo", valor: string) {
     setRascunho((r) => ({
       ...r,
       [pecaId]: { ...r[pecaId], ofertas: r[pecaId].ofertas.map((o) => (o.chave === chave ? { ...o, [campo]: valor } : o)) },
@@ -827,7 +869,7 @@ function FormResposta({
   }
 
   async function enviar() {
-    const itens: Record<string, { id?: string; marca: string; preco: number; prazoMin: number }[]> = {};
+    const itens: Record<string, { id?: string; marca: string; preco: number; prazoMin: number; codigo: string | null }[]> = {};
     for (const p of envio.pecas) {
       const r = rascunho[p.id];
       if (r.naoTem) {
@@ -844,6 +886,7 @@ function FormResposta({
         marca: o.marca.trim(),
         preco: Number(o.preco),
         prazoMin: Math.max(0, Math.round(Number(o.prazo) || 0)),
+        codigo: o.codigo.trim() || null,
       }));
     }
     setErro("");
@@ -886,6 +929,7 @@ function FormResposta({
         const r = rascunho[p.id];
         return (
           <Painel key={p.id} titulo={`${p.quantidade}× ${p.descricao}`}>
+            <InfoDaPeca peca={p} />
             <label className="mb-3 flex min-h-9 w-fit cursor-pointer items-center gap-2 text-sm text-tinta-2">
               <input
                 type="checkbox"
@@ -940,6 +984,14 @@ function FormResposta({
                     >
                       <Lixeira tamanho={16} />
                     </Botao>
+                    {/* A oficina compara com o código da peça velha antes de pedir. */}
+                    <Entrada
+                      value={o.codigo}
+                      onChange={(e) => mudarOferta(p.id, o.chave, "codigo", e.target.value)}
+                      placeholder="Código desta peça (opcional)"
+                      aria-label="Código da peça que a loja vai mandar"
+                      className="col-span-3 font-mono sm:col-span-4"
+                    />
                   </div>
                 ))}
                 <Botao

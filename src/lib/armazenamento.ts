@@ -15,10 +15,13 @@ export const PLANO_LIMITE_BYTES = (Number(process.env.PLANO_LIMITE_MB) || 1024) 
 export const LIMIAR_AVISO = 0.8;
 export const LIMIAR_CRITICO = 0.95;
 
-/** Espaço ocupado pelas fotos da oficina do `db`. */
+/** Espaço ocupado pelas fotos da oficina do `db` — as da OS e as do Peça Peça que ainda existem. */
 export async function bytesUsados(db: Db): Promise<number> {
-  const { _sum } = await db.fotoOS.aggregate({ _sum: { tamanhoBytes: true } });
-  return _sum.tamanhoBytes ?? 0;
+  const [os, pecaPeca] = await Promise.all([
+    db.fotoOS.aggregate({ _sum: { tamanhoBytes: true } }),
+    db.fotoPecaPeca.aggregate({ where: { apagadaEm: null }, _sum: { tamanhoBytes: true } }),
+  ]);
+  return (os._sum.tamanhoBytes ?? 0) + (pecaPeca._sum.tamanhoBytes ?? 0);
 }
 
 export async function statusArmazenamento(db: Db): Promise<{

@@ -13,6 +13,7 @@ import {
   medirEntregasDaLoja,
   todasAsLojas,
 } from "@/lib/balcao";
+import { CAMPOS_DA_FOTO, assinarFotos, fotoVista } from "@/lib/fotos-peca-peca";
 import {
   ehEtapaEntrega,
   precoDaPeca,
@@ -23,7 +24,7 @@ import {
 const INCLUIR = {
   cliente: { select: { nome: true } },
   orcamento: { select: { id: true, numero: true, status: true } },
-  pecas: { orderBy: { ordem: "asc" } },
+  pecas: { orderBy: { ordem: "asc" }, include: { fotos: { orderBy: { createdAt: "asc" }, select: CAMPOS_DA_FOTO } } },
   envios: {
     orderBy: { createdAt: "asc" },
     include: {
@@ -39,12 +40,18 @@ function lerDoBanco(db: Db, id: string) {
   return db.cotacao.findUnique({ where: { id }, include: INCLUIR });
 }
 
-function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
+/** As fotos da cotação — das peças e das devoluções —, assinadas de uma vez. */
+function assinarFotosDa(c: CotacaoDoBanco) {
+  return assinarFotos([...c.pecas.flatMap((p) => p.fotos), ...c.envios.flatMap((e) => e.devolucoes.flatMap((d) => d.fotos))]);
+}
+
+function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>, assinadas: Map<string, string>): CotacaoVista {
   return {
     id: c.id,
     numero: c.numero,
     criadaEm: c.createdAt.toISOString(),
     veiculo: { placa: c.placa ?? "", marca: c.marca ?? "", modelo: c.modelo, ano: c.ano ?? "", motor: c.motor ?? "" },
+    chassi: c.chassi ?? "",
     observacao: c.observacao ?? "",
     clienteId: c.clienteId,
     veiculoId: c.veiculoId,
@@ -56,6 +63,9 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
       id: p.id,
       descricao: p.descricao,
       quantidade: p.quantidade,
+      codigo: p.codigo ?? "",
+      observacao: p.observacao ?? "",
+      fotos: p.fotos.map((f) => fotoVista(f, assinadas)),
       ofertaId: p.ofertaId,
       vendaUnit: p.vendaUnit,
     })),
@@ -70,24 +80,32 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
         oficinaRecebeuEm: e.oficinaRecebeuEm?.toISOString() ?? null,
         entregueEm: e.entregueEm?.toISOString() ?? null,
         prazoDevolucao: loja?.prazoDevolucao ?? 0,
-        ofertas: e.ofertas.map((o) => ({ id: o.id, pecaId: o.pecaId, marca: o.marca, preco: o.preco, prazoMin: o.prazoMin })),
+        ofertas: e.ofertas.map((o) => ({
+          id: o.id,
+          pecaId: o.pecaId,
+          marca: o.marca,
+          preco: o.preco,
+          prazoMin: o.prazoMin,
+          codigo: o.codigo,
+        })),
       };
     }),
-    devolucoes: c.envios.flatMap((e) => e.devolucoes.map(devolucaoVista)),
+    devolucoes: c.envios.flatMap((e) => e.devolucoes.map((d) => devolucaoVista(d, assinadas))),
   };
 }
 
 export async function lerCotacao(db: Db, id: string): Promise<CotacaoVista | null> {
   const [c, lojas] = await Promise.all([lerDoBanco(db, id), todasAsLojas()]);
-  return c ? vista(c, lojas) : null;
+  return c ? vista(c, lojas, await assinarFotosDa(c)) : null;
 }
 
+/** A lista é lida a cada 5 s e não mostra foto: as fotos não vão assinadas. */
 export async function listarCotacoes(db: Db): Promise<CotacaoVista[]> {
   const [lista, lojas] = await Promise.all([
     db.cotacao.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: INCLUIR }),
     todasAsLojas(),
   ]);
-  return lista.map((c) => vista(c, lojas));
+  return lista.map((c) => vista(c, lojas, new Map()));
 }
 
 /**

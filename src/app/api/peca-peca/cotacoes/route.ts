@@ -3,6 +3,7 @@ import { guardaPecaPeca } from "@/lib/peca-peca";
 import { lojasQueAtendem } from "@/lib/balcao";
 import { getConfiguracao } from "@/lib/configuracao-db";
 import { listarCotacoes } from "@/lib/cotacoes";
+import { apagarFotosVencidas } from "@/lib/fotos-peca-peca";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { cotacaoCriarSchema } from "@/lib/schemas-peca-peca";
 import { normalizarPlaca } from "@/components/peca-peca/regras";
@@ -23,13 +24,23 @@ export async function POST(request: Request) {
 
     // Só vai para loja ativa que atende a cidade da oficina — a mesma lista da tela.
     const { cidade, estado } = await getConfiguracao(guarda);
-    const daRegiao = new Set((await lojasQueAtendem(cidade, estado)).map((l) => l.id));
+    const daRegiao = new Map((await lojasQueAtendem(cidade, estado)).map((l) => [l.id, l]));
     const lojas = [...new Set(dados.lojas)].filter((l) => daRegiao.has(l));
     if (lojas.length === 0) {
       return NextResponse.json({ error: "Escolha ao menos uma loja que atenda a sua cidade" }, { status: 400 });
     }
 
     const v = dados.veiculo;
+    // A loja que pesquisa pelo chassi só responde com ele — a mesma regra da tela.
+    const pedemChassi = lojas.map((l) => daRegiao.get(l)!).filter((l) => l.exigeChassi);
+    if (!v.chassi && pedemChassi.length > 0) {
+      return NextResponse.json(
+        {
+          error: `${pedemChassi.map((l) => l.nome).join(" e ")} só cota com o chassi. Preencha o chassi ou desmarque a loja.`,
+        },
+        { status: 400 }
+      );
+    }
     const criada = await transacao(async (tx) => {
       // O carro achado pela placa só entra se for desta oficina — o filtro devolve
       // nulo para id de outra, e aí a cotação segue só com os dados digitados.
@@ -51,17 +62,30 @@ export async function POST(request: Request) {
           modelo: v.modelo,
           ano: v.ano,
           motor: v.motor,
+          chassi: v.chassi || null,
           observacao: dados.observacao || null,
           veiculoId: doCadastro?.id ?? null,
           clienteId: doCadastro?.clienteId ?? null,
           pecas: {
-            create: dados.pecas.map((p, ordem) => ({ ordem, descricao: p.descricao, quantidade: p.quantidade })),
+            create: dados.pecas.map((p, ordem) => ({
+              ordem,
+              descricao: p.descricao,
+              quantidade: p.quantidade,
+              codigo: p.codigo || null,
+              observacao: p.observacao || null,
+            })),
           },
           envios: { create: lojas.map((lojaId) => ({ lojaId })) },
         },
         select: { id: true, numero: true },
       });
     });
+
+    // Quem cota é quem junta foto: é a hora de apagar as das cotações que fecharam há
+    // mais de 30 dias. Falhar aqui não atrapalha a cotação nova.
+    await apagarFotosVencidas(guarda.db).catch((err: unknown) =>
+      console.error("Falha ao apagar as fotos vencidas do Peça Peça:", err)
+    );
 
     return NextResponse.json(criada, { status: 201 });
   } catch (err) {

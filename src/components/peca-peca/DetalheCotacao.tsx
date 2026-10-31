@@ -12,6 +12,7 @@ import { Confere } from "@/components/ui/Icones";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
 import { useLinkDoBoxOS } from "@/components/ProdutoProvider";
 import {
+  DIAS_PARA_APAGAR_FOTOS,
   ETAPAS_ENTREGA,
   aConferir,
   descricaoDoVeiculo,
@@ -33,6 +34,7 @@ import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
 import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
 import { VitrineBoxOS } from "./VitrineBoxOS";
 import { DevolucoesDaLoja, ModalDevolucao, temOQueDevolver } from "./Devolucoes";
+import { MiniaturasDaPeca } from "./FotosDaPeca";
 
 type Gravar = ReturnType<typeof useAoVivo<CotacaoVista>>["gravar"];
 
@@ -248,6 +250,22 @@ function Conteudo({
     gravarVenda(pecaId, n > 0 ? n : null);
   }
 
+  const temFotos = [...c.pecas.flatMap((p) => p.fotos), ...c.devolucoes.flatMap((d) => d.fotos)].some((f) => f.url);
+
+  /** Só os arquivos: a cotação fica, com "foto apagada" no lugar de cada uma. */
+  async function apagarAsFotos() {
+    const ok = await confirmar({
+      titulo: "Apagar as fotos desta cotação?",
+      texto: `A cotação continua salva; só as fotos saem. Elas já se apagariam sozinhas ${DIAS_PARA_APAGAR_FOTOS} dias depois de a cotação fechar.`,
+      acao: "Apagar as fotos",
+      perigo: true,
+    });
+    if (!ok) return;
+    const r = await gravar(enviarJson(`${url}/fotos`, "DELETE", {}), { devolveDado: true });
+    if (!r.ok) return avisar(r.erro, "erro");
+    avisar("Fotos apagadas");
+  }
+
   async function excluir() {
     const ok = await confirmar({
       titulo: `Excluir a cotação #${c.numero}?`,
@@ -280,6 +298,7 @@ function Conteudo({
               </span>
             )}
             {c.clienteNome && <span>· {c.clienteNome}</span>}
+            {c.chassi && <span className="font-mono text-xs">chassi {c.chassi}</span>}
           </span>
         }
         acao={<PilulaEtapa cotacao={c} />}
@@ -337,11 +356,14 @@ function Conteudo({
               onMenorPreco={() => alterar({ menorPreco: true })}
             />
           ) : (
-            <Vazio
-              compacto
-              titulo="Esperando as lojas"
-              texto="Quando o balconista responder, os preços aparecem aqui sozinhos, lado a lado. Com esta tela aberta, toca um aviso quando uma loja responder."
-            />
+            <>
+              <Vazio
+                compacto
+                titulo="Esperando as lojas"
+                texto="Quando o balconista responder, os preços aparecem aqui sozinhos, lado a lado. Com esta tela aberta, toca um aviso quando uma loja responder."
+              />
+              <PecasPedidas c={c} />
+            </>
           )}
 
           {/* Preço para o cliente: é o orçamento, coisa do boxOS. */}
@@ -372,6 +394,11 @@ function Conteudo({
             onGerar={() => setGerando(true)}
             onPedir={pedir}
           />
+          {temFotos && (
+            <Botao variante="fantasma" tamanho="denso" onClick={apagarAsFotos} className="w-full text-tinta-2">
+              Apagar as fotos
+            </Botao>
+          )}
           <Botao variante="fantasma" tamanho="denso" onClick={excluir} className="w-full text-perigo">
             Excluir cotação
           </Botao>
@@ -426,6 +453,37 @@ function PainelLojas({ c }: { c: CotacaoVista }) {
 
 // ─── Escolha das peças ──────────────────────────────────────────────────────
 
+/** Antes da primeira resposta: o que foi pedido, com o código, o recado e as fotos. */
+function PecasPedidas({ c }: { c: CotacaoVista }) {
+  return (
+    <Painel titulo="Peças pedidas" ajuda="É o que cada loja está vendo no balcão.">
+      <ul className="divide-y divide-linha">
+        {c.pecas.map((p) => (
+          <li key={p.id} className="space-y-1.5 py-2.5 first:pt-0 last:pb-0">
+            <p className="text-sm font-semibold text-tinta">
+              <span className="text-tinta-3">{p.quantidade}×</span> {p.descricao}
+            </p>
+            {(p.codigo || p.observacao) && (
+              <p className="text-xs text-tinta-3">
+                {p.codigo && <span className="font-mono text-tinta-2">cód. {p.codigo}</span>}
+                {p.codigo && p.observacao && " · "}
+                {p.observacao}
+              </p>
+            )}
+            <MiniaturasDaPeca fotos={p.fotos} />
+          </li>
+        ))}
+      </ul>
+    </Painel>
+  );
+}
+
+/** O código da loja bate com o da peça velha (sem contar espaço, traço e ponto). */
+function mesmoCodigo(a: string, b: string): boolean {
+  const limpo = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return limpo(a) !== "" && limpo(a) === limpo(b);
+}
+
 function PainelEscolha({
   c,
   trava,
@@ -479,6 +537,18 @@ function PainelEscolha({
                   </span>
                 )}
               </div>
+              {(p.codigo || p.observacao) && (
+                <p className="mb-1.5 text-xs text-tinta-3">
+                  {p.codigo && <span className="font-mono text-tinta-2">cód. {p.codigo}</span>}
+                  {p.codigo && p.observacao && " · "}
+                  {p.observacao}
+                </p>
+              )}
+              {p.fotos.length > 0 && (
+                <div className="mb-2">
+                  <MiniaturasDaPeca fotos={p.fotos} />
+                </div>
+              )}
 
               {ofertas.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-linha-forte px-3 py-2 text-xs text-tinta-3">
@@ -514,6 +584,16 @@ function PainelEscolha({
                         <span className="min-w-0 flex-1">
                           <span className="text-sm font-semibold text-tinta">{o.marca}</span>
                           <span className="text-sm text-tinta-3"> · {o.lojaNome}</span>
+                          {o.codigo && (
+                            <span className="mt-0.5 block text-xs text-tinta-2">
+                              <span className="font-mono">cód. {o.codigo}</span>
+                              {p.codigo && (
+                                <span className={cn("ml-1.5", mesmoCodigo(o.codigo, p.codigo) ? "font-medium text-ok" : "text-tinta-3")}>
+                                  {mesmoCodigo(o.codigo, p.codigo) ? "igual ao seu" : "confira com o seu"}
+                                </span>
+                              )}
+                            </span>
+                          )}
                           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-tinta-3">
                             chega em ~{o.prazoMin} min
                             {!travado && i === 0 && ofertas.length > 1 && (

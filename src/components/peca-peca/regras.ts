@@ -27,15 +27,28 @@ export type LojaVista = {
   entregaMedia: number | null;
   /** Dias para devolver peça sem uso (zero = não aceita). */
   prazoDevolucao: number;
+  /** Só responde cotação com chassi. */
+  exigeChassi: boolean;
 };
 
 /** O que `/api/peca-peca/lojas` devolve: a cidade da oficina e as lojas que a atendem. */
 export type LojasDaOficina = { cidade: string | null; estado: string | null; lojas: LojaVista[] };
 
-export type OfertaVista = { id: string; pecaId: string; marca: string; preco: number; prazoMin: number };
+export type OfertaVista = {
+  id: string;
+  pecaId: string;
+  marca: string;
+  preco: number;
+  prazoMin: number;
+  /** Código da peça que a loja vai mandar. */
+  codigo: string | null;
+};
 
 /** O que o balconista manda para uma peça. */
-export type OfertaNova = { marca: string; preco: number; prazoMin: number };
+export type OfertaNova = { marca: string; preco: number; prazoMin: number; codigo?: string | null };
+
+/** Foto da peça (ou da devolução). Sem `url` quando já foi apagada. */
+export type FotoVista = { id: string; url: string | null; apagadaEm: string | null };
 
 export type EnvioVista = {
   id: string;
@@ -56,6 +69,11 @@ export type PecaVista = {
   id: string;
   descricao: string;
   quantidade: number;
+  /** Código ou medida da peça velha; vazio quando a oficina não mandou. */
+  codigo: string;
+  /** Recado só desta peça. */
+  observacao: string;
+  fotos: FotoVista[];
   ofertaId: string | null;
   vendaUnit: number | null;
 };
@@ -65,6 +83,8 @@ export type CotacaoVista = {
   numero: number;
   criadaEm: string;
   veiculo: VeiculoCotado;
+  /** Vazio quando a oficina não mandou. */
+  chassi: string;
   /** Recado da oficina para as lojas; vazio quando não escreveu nada. */
   observacao: string;
   /** Preenchidos quando a placa já estava no boxOS: o orçamento nasce ligado a eles. */
@@ -107,8 +127,11 @@ export type PecaNoBalcao = {
   id: string;
   descricao: string;
   quantidade: number;
+  codigo: string;
+  observacao: string;
+  fotos: FotoVista[];
   /** As ofertas desta loja para a peça. */
-  ofertas: { id: string; marca: string; preco: number; prazoMin: number }[];
+  ofertas: { id: string; marca: string; preco: number; prazoMin: number; codigo: string | null }[];
   /** A oficina fechou esta peça com esta loja: a marca que vai no pedido. */
   pedida: string | null;
 };
@@ -125,6 +148,7 @@ export type EnvioNoBalcao = {
   /** A oficina já gerou o orçamento ou fez o pedido: a resposta não muda mais. */
   travada: boolean;
   veiculo: VeiculoCotado;
+  chassi: string;
   observacao: string;
   pecas: PecaNoBalcao[];
   /** Peças deste pedido que a oficina quer devolver (ou já devolveu). */
@@ -248,6 +272,52 @@ export function etapaDa(c: CotacaoVista): Etapa {
   return "AGUARDANDO";
 }
 
+// ─── Acertar a peça ─────────────────────────────────────────────────────────
+//
+// No balcão se erra pouco porque o mecânico leva a peça velha. Aqui o que faz esse papel
+// é o código (ou a medida), o recado de cada peça, as fotos e o chassi — todos
+// opcionais: obrigar travaria quem cota com o carro no elevador. Nas peças que mudam
+// muito de um carro para outro, o app só lembra de mandar.
+
+/**
+ * Peças em que a versão muda muito (lista inicial; o usuário vai trazer o levantamento
+ * das lojas). Cada entrada é um pedaço do nome, sem acento e em minúsculas.
+ */
+const PECAS_QUE_VARIAM = [
+  "correia",
+  "rolamento",
+  "retentor",
+  "junta",
+  "mangueira",
+  "sensor",
+] as const;
+
+function semAcento(texto: string): string {
+  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** A peça costuma vir errada sem o código, a medida ou uma foto. */
+export function pecaQueVaria(descricao: string): boolean {
+  const nome = semAcento(descricao);
+  return PECAS_QUE_VARIAM.some((p) => nome.includes(p));
+}
+
+/** Até quantas fotos cada peça (e cada devolução) leva. */
+export const FOTOS_POR_PECA = 2;
+
+/** Dias depois de a cotação fechar em que as fotos se apagam sozinhas. */
+export const DIAS_PARA_APAGAR_FOTOS = 30;
+
+/** Chassi como a loja digita no catálogo: maiúsculas, sem espaço nem traço. */
+export function normalizarChassi(chassi: string): string {
+  return chassi.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+/** Chassi (VIN) tem 17 caracteres e nunca usa I, O nem Q. */
+export function chassiValido(chassi: string): boolean {
+  return /^[A-HJ-NPR-Z0-9]{17}$/.test(chassi);
+}
+
 // ─── Devolução ──────────────────────────────────────────────────────────────
 //
 // Depois da entrega, a peça pode voltar: com defeito, sem uso (o diagnóstico mudou) ou
@@ -319,6 +389,8 @@ export type DevolucaoVista = {
   precoAceitoEm: string | null;
   oficinaRecebeuTrocaEm: string | null;
   canceladaEm: string | null;
+  /** Fotos da peça que volta (o defeito, a diferença). */
+  fotos: FotoVista[];
 };
 
 export type SituacaoDevolucao =
