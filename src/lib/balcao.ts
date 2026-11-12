@@ -22,8 +22,17 @@ import { mesmaCidade, rotuloDoMunicipio } from "@/lib/municipios";
 import { municipioOficial } from "@/lib/municipios-servidor";
 import {
   ENTREGAS_PARA_MEDIA,
+  ENTREGA_E_PAGAMENTO_PADRAO,
   diferencaDaTroca,
   ehEtapaEntrega,
+  ehFormaDePagamento,
+  ehTipoDeFrete,
+  freteDoEnvio,
+  lerFretePorCidade,
+  precoNaForma,
+  taxaDaCidade,
+  type EntregaEPagamento,
+  type FormaDePagamento,
   ehMotivoDevolucao,
   ehTroca,
   proximaEtapa,
@@ -176,20 +185,82 @@ export async function criarLoja(dados: DadosDaLoja) {
  * Edita o cadastro — inteiro, do painel admin, ou só o telefone e as cidades, da tela
  * do dono da loja — ou liga e desliga a loja. Loja inexistente devolve `null`.
  */
-export async function atualizarLoja(id: string, dados: Partial<DadosDaLoja> & { ativa?: boolean }) {
+export async function atualizarLoja(
+  id: string,
+  { entrega, ...dados }: Partial<DadosDaLoja> & { ativa?: boolean; entrega?: EntregaEPagamento }
+) {
   const atual = await prisma.loja.findUnique({ where: { id }, select: { cidade: true, uf: true, atende: true } });
   if (!atual) return null;
   const mexeNaCidade = dados.cidade !== undefined || dados.uf !== undefined || dados.atende !== undefined;
+  const cidades = mexeNaCidade
+    ? conferirCidades(dados.cidade ?? atual.cidade ?? "", dados.uf ?? atual.uf ?? "", dados.atende ?? atual.atende)
+    : null;
   return prisma.loja.update({
     where: { id },
     data: {
       ...dados,
-      ...(mexeNaCidade
-        ? conferirCidades(dados.cidade ?? atual.cidade ?? "", dados.uf ?? atual.uf ?? "", dados.atende ?? atual.atende)
-        : {}),
+      ...(cidades ?? {}),
+      ...(entrega ? colunasDaEntrega(entrega, cidades?.atende ?? atual.atende) : {}),
     },
     select: { id: true },
   });
+}
+
+/**
+ * A entrega e o pagamento como vão para o banco. A taxa por cidade fica só com as
+ * cidades que a loja atende, gravadas com o rótulo da região dela — cidade tirada da
+ * região some da tabela na próxima vez que o dono salvar.
+ */
+function colunasDaEntrega(e: EntregaEPagamento, atende: string[]) {
+  const porCidade: Record<string, number> = {};
+  if (e.freteTipo === "POR_CIDADE") {
+    for (const [cidade, valor] of Object.entries(e.fretePorCidade)) {
+      const daRegiao = atende.find((c) => mesmaCidade(c, cidade));
+      if (daRegiao) porCidade[daRegiao] = valor;
+    }
+  }
+  return {
+    freteTipo: e.freteTipo,
+    freteValor: e.freteTipo === "GRATIS" ? 0 : e.freteValor,
+    fretePorCidade: porCidade,
+    freteGratisAcima: e.freteTipo === "GRATIS" ? null : e.freteGratisAcima,
+    acrescimoCredito: e.acrescimoCredito,
+    debitoAVista: e.debitoAVista,
+  };
+}
+
+const CAMPOS_DA_ENTREGA = {
+  freteTipo: true,
+  freteValor: true,
+  fretePorCidade: true,
+  freteGratisAcima: true,
+  acrescimoCredito: true,
+  debitoAVista: true,
+} as const;
+
+/** A entrega e o pagamento da loja, para a tela "Loja" do dono. */
+export async function entregaEPagamentoDaLoja(lojaId: string): Promise<EntregaEPagamento> {
+  const l = await prisma.loja.findUnique({ where: { id: lojaId }, select: CAMPOS_DA_ENTREGA });
+  return l ? entregaEPagamentoDa(l) : ENTREGA_E_PAGAMENTO_PADRAO;
+}
+
+/** A entrega e o pagamento de uma loja lidos do banco, já conferidos. */
+export function entregaEPagamentoDa(l: {
+  freteTipo: string;
+  freteValor: number;
+  fretePorCidade: unknown;
+  freteGratisAcima: number | null;
+  acrescimoCredito: number;
+  debitoAVista: boolean;
+}): EntregaEPagamento {
+  return {
+    freteTipo: ehTipoDeFrete(l.freteTipo) ? l.freteTipo : "GRATIS",
+    freteValor: l.freteValor,
+    fretePorCidade: lerFretePorCidade(l.fretePorCidade),
+    freteGratisAcima: l.freteGratisAcima,
+    acrescimoCredito: l.acrescimoCredito,
+    debitoAVista: l.debitoAVista,
+  };
 }
 
 /** Link novo para o balcão: o antigo para de funcionar na hora (vazou, trocou de funcionário). */
@@ -289,13 +360,18 @@ const SELECAO_DO_ENVIO = {
   oficinaRecebeuEm: true,
   naoLidasLoja: true,
   conversaFechadaEm: true,
+  taxaEntrega: true,
+  freteGratisAcima: true,
+  debitoAVista: true,
+  formaPagamento: true,
   ofertas: {
     orderBy: { createdAt: "asc" },
-    select: { id: true, pecaId: true, marca: true, preco: true, prazoMin: true },
+    select: { id: true, pecaId: true, marca: true, preco: true, precoCredito: true, prazoMin: true },
   },
   devolucoes: { orderBy: { createdAt: "asc" }, select: CAMPOS_DA_DEVOLUCAO },
   cotacao: {
     select: {
+      formaPagamento: true,
       placa: true,
       marca: true,
       modelo: true,
@@ -321,17 +397,52 @@ function lerEnvios(where: { lojaId: string; id?: string }) {
   });
 }
 
-/** Nome da oficina, o mesmo que ela vê no menu. É tudo o que a loja sabe de quem pediu. */
-export async function nomesDasOficinas(ids: string[]) {
-  const nomes = new Map<string, string>();
+type OficinaNoBalcao = { nome: string; cidade: string | null };
+
+/**
+ * Nome da oficina, o mesmo que ela vê no menu, e a cidade dela ("Suzano - SP"). É tudo o
+ * que a loja sabe de quem pediu — a cidade só serve para a taxa de entrega da região.
+ */
+async function oficinasDosEnvios(ids: string[]) {
+  const oficinas = new Map<string, OficinaNoBalcao>();
   await Promise.all(
-    ids.map(async (id) => nomes.set(id, nomeDoMenu(await getConfiguracao(bancoDaOficina(id)))))
+    ids.map(async (id) => {
+      const config = await getConfiguracao(bancoDaOficina(id));
+      const cidade = config.cidade?.trim() || null;
+      const uf = config.estado?.trim() || null;
+      oficinas.set(id, { nome: nomeDoMenu(config), cidade: cidade && uf ? `${cidade} - ${uf}` : cidade });
+    })
   );
-  return nomes;
+  return oficinas;
 }
 
-function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
+/** Nome da oficina, o mesmo que ela vê no menu. */
+export async function nomesDasOficinas(ids: string[]) {
+  const oficinas = await oficinasDosEnvios(ids);
+  return new Map([...oficinas].map(([id, o]) => [id, o.nome]));
+}
+
+const OFICINA_SEM_NOME: OficinaNoBalcao = { nome: "Oficina", cidade: null };
+
+function paraOBalcao(e: EnvioDoBanco, oficina: OficinaNoBalcao, regra: EntregaEPagamento): EnvioNoBalcao {
   const c = e.cotacao;
+  // Respondida, valem a taxa e o pagamento que a loja mandou; antes, a regra dela agora.
+  const respondida = Boolean(e.respondidaEm);
+  const forma: FormaDePagamento = ehFormaDePagamento(e.formaPagamento)
+    ? e.formaPagamento
+    : ehFormaDePagamento(c.formaPagamento)
+      ? c.formaPagamento
+      : "PIX";
+  // O que o motoboy cobra: as peças pedidas a esta loja no preço da forma, mais a entrega.
+  let cobranca: EnvioNoBalcao["cobranca"] = null;
+  if (c.pedidoEm && e.entrega) {
+    const ofertas = new Map(e.ofertas.map((o) => [o.id, o]));
+    const pecas = c.pecas.reduce((s, p) => {
+      const o = p.ofertaId ? ofertas.get(p.ofertaId) : undefined;
+      return o ? s + precoNaForma(o, forma, e.debitoAVista) * p.quantidade : s;
+    }, 0);
+    cobranca = { pecas, entrega: freteDoEnvio(e, pecas) };
+  }
   const minhas = new Map(e.ofertas.map((o) => [o.id, o]));
   const fechouComigo = c.pecas.some((p) => p.ofertaId && minhas.has(p.ofertaId));
   const travada = Boolean(c.orcamentoId || c.pedidoEm);
@@ -343,7 +454,7 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
 
   return {
     id: e.id,
-    oficina,
+    oficina: oficina.nome,
     recebidoEm: e.createdAt.toISOString(),
     respondidaEm: e.respondidaEm?.toISOString() ?? null,
     situacao,
@@ -359,13 +470,20 @@ function paraOBalcao(e: EnvioDoBanco, oficina: string): EnvioNoBalcao {
       motor: c.motor ?? "",
     },
     observacao: c.observacao ?? "",
+    formaPagamento: forma,
+    debitoAVista: respondida ? e.debitoAVista : regra.debitoAVista,
+    taxaEntrega: e.taxaEntrega,
+    taxaSugerida: taxaDaCidade(regra, oficina.cidade),
+    freteGratisAcima: respondida ? e.freteGratisAcima : regra.freteGratisAcima,
+    acrescimoCredito: regra.acrescimoCredito,
+    cobranca,
     pecas: c.pecas.map((p) => ({
       id: p.id,
       descricao: p.descricao,
       quantidade: p.quantidade,
       ofertas: e.ofertas
         .filter((o) => o.pecaId === p.id)
-        .map(({ id, marca, preco, prazoMin }) => ({ id, marca, preco, prazoMin })),
+        .map(({ id, marca, preco, precoCredito, prazoMin }) => ({ id, marca, preco, precoCredito, prazoMin })),
       pedida: c.pedidoEm && p.ofertaId ? (minhas.get(p.ofertaId)?.marca ?? null) : null,
     })),
     devolucoes: e.devolucoes.map(devolucaoVista),
@@ -400,20 +518,20 @@ function enviosComDevolucaoPendente(lojaId: string, foraDe: string[]) {
 export async function caixaDaLoja(
   loja: Pick<LojaVista, "id" | "nome" | "cidade" | "entregaMedia">
 ): Promise<CaixaDoBalcao> {
-  const recentes = await lerEnvios({ lojaId: loja.id });
+  const [recentes, regra] = await Promise.all([lerEnvios({ lojaId: loja.id }), entregaEPagamentoDaLoja(loja.id)]);
   const envios = [...recentes, ...(await enviosComDevolucaoPendente(loja.id, recentes.map((e) => e.id)))];
-  const nomes = await nomesDasOficinas([...new Set(envios.map((e) => e.oficinaId))]);
+  const oficinas = await oficinasDosEnvios([...new Set(envios.map((e) => e.oficinaId))]);
   return {
     loja: { nome: loja.nome, cidade: loja.cidade, entregaMedia: loja.entregaMedia },
-    envios: envios.map((e) => paraOBalcao(e, nomes.get(e.oficinaId) ?? "Oficina")),
+    envios: envios.map((e) => paraOBalcao(e, oficinas.get(e.oficinaId) ?? OFICINA_SEM_NOME, regra)),
   };
 }
 
 export async function envioDaLoja(lojaId: string, envioId: string): Promise<EnvioNoBalcao | null> {
-  const [envio] = await lerEnvios({ lojaId, id: envioId });
+  const [[envio], regra] = await Promise.all([lerEnvios({ lojaId, id: envioId }), entregaEPagamentoDaLoja(lojaId)]);
   if (!envio) return null;
-  const nomes = await nomesDasOficinas([envio.oficinaId]);
-  return paraOBalcao(envio, nomes.get(envio.oficinaId) ?? "Oficina");
+  const oficinas = await oficinasDosEnvios([envio.oficinaId]);
+  return paraOBalcao(envio, oficinas.get(envio.oficinaId) ?? OFICINA_SEM_NOME, regra);
 }
 
 // ─── O que a loja grava ─────────────────────────────────────────────────────
@@ -425,30 +543,41 @@ export type ResultadoDoBalcao = "ok" | "nao-encontrado" | "travada" | "sem-pedid
  *
  * Oferta que já existia (veio com o `id`) é atualizada no lugar — assim a escolha que a
  * oficina já fez nela continua valendo. A que sumiu da resposta é apagada, e a escolha
- * nela cai junto (a chave estrangeira zera). Se o preço de uma oferta escolhida mudou,
- * o preço de venda digitado pela oficina para aquela peça deixa de valer.
+ * nela cai junto (a chave estrangeira zera). Se um preço de uma oferta escolhida mudou
+ * (o à vista ou o do crédito), o preço de venda digitado pela oficina para aquela peça
+ * deixa de valer.
+ *
+ * A taxa de entrega e o pagamento da loja (o "grátis acima de", o débito) ficam gravados
+ * no envio: a regra pode mudar depois sem mexer no que a loja já mandou. Sem taxa na
+ * resposta (o link antigo do balcão), vale a da regra para a cidade da oficina.
  */
 export async function responderEnvio(
   lojaId: string,
   envioId: string,
   itens: Record<string, (OfertaNova & { id?: string | null })[]>,
   /** Quem respondeu, no painel com login; nulo no link antigo. */
-  respondidoPor: string | null = null
+  respondidoPor: string | null = null,
+  taxaEntrega?: number | null
 ): Promise<ResultadoDoBalcao> {
+  const regra = await entregaEPagamentoDaLoja(lojaId);
   return prisma.$transaction(async (tx) => {
     const envio = await tx.cotacaoLoja.findFirst({
       where: { id: envioId, lojaId },
       select: {
         id: true,
         oficinaId: true,
-        ofertas: { select: { id: true, preco: true } },
+        ofertas: { select: { id: true, preco: true, precoCredito: true } },
         cotacao: { select: { orcamentoId: true, pedidoEm: true, pecas: { select: { id: true } } } },
       },
     });
     if (!envio) return "nao-encontrado";
     if (envio.cotacao.orcamentoId || envio.cotacao.pedidoEm) return "travada";
 
-    const precoAntes = new Map(envio.ofertas.map((o) => [o.id, o.preco]));
+    const taxa =
+      taxaEntrega ??
+      taxaDaCidade(regra, (await oficinasDosEnvios([envio.oficinaId])).get(envio.oficinaId)?.cidade ?? null);
+
+    const precoAntes = new Map(envio.ofertas.map((o) => [o.id, o]));
     const pecasDaCotacao = new Set(envio.cotacao.pecas.map((p) => p.id));
     const manter: string[] = [];
     const atualizar: { id: string; dados: OfertaNova }[] = [];
@@ -458,10 +587,11 @@ export async function responderEnvio(
     for (const [pecaId, ofertas] of Object.entries(itens)) {
       if (!pecasDaCotacao.has(pecaId)) continue;
       for (const { id, ...dados } of ofertas) {
-        if (id && precoAntes.has(id) && !manter.includes(id)) {
+        const antes = id ? precoAntes.get(id) : undefined;
+        if (id && antes && !manter.includes(id)) {
           manter.push(id);
           atualizar.push({ id, dados });
-          if (precoAntes.get(id) !== dados.preco) precoMudou.push(id);
+          if (antes.preco !== dados.preco || antes.precoCredito !== dados.precoCredito) precoMudou.push(id);
         } else {
           criar.push({ pecaId, dados });
         }
@@ -482,7 +612,16 @@ export async function responderEnvio(
     if (precoMudou.length > 0) {
       await tx.cotacaoPeca.updateMany({ where: { ofertaId: { in: precoMudou } }, data: { vendaUnit: null } });
     }
-    await tx.cotacaoLoja.update({ where: { id: envio.id }, data: { respondidaEm: new Date(), respondidoPor } });
+    await tx.cotacaoLoja.update({
+      where: { id: envio.id },
+      data: {
+        respondidaEm: new Date(),
+        respondidoPor,
+        taxaEntrega: taxa,
+        freteGratisAcima: regra.freteTipo === "GRATIS" ? null : regra.freteGratisAcima,
+        debitoAVista: regra.debitoAVista,
+      },
+    });
     return "ok";
   });
 }
@@ -729,13 +868,44 @@ export async function medirEntregasDaLoja(lojaId: string) {
   });
 }
 
-// ─── Resumo da loja ─────────────────────────────────────────────────────────
+// ─── Resultados da loja ─────────────────────────────────────────────────────
 //
-// O que o dono da autopeça vê do próprio balcão: quantas cotações chegaram, quantas a
-// loja respondeu e em quanto tempo, quantas viraram pedido e quanto valeram. Tudo a
-// partir dos envios para esta loja — nada de outra loja nem de dentro da oficina.
+// O que o dono da autopeça vê do próprio balcão: quanto vendeu, o que aconteceu com
+// cada cotação, se responder rápido faz diferença, a que horas o movimento aperta,
+// que peças saem e quais pediram e a loja não tinha, os melhores clientes e a equipe.
+// Tudo a partir dos envios para esta loja: as ofertas e os pedidos são dela. Da outra
+// loja sai só o que o balcão já mostra — "fechou com outra loja" —, nunca preço, marca
+// ou nome dela.
+//
+// As datas são as de São Paulo: o servidor roda em UTC, e a cotação das 22h de segunda
+// não pode cair na terça (nem no mês seguinte, no último dia).
+
+export const PERIODOS_DOS_RESULTADOS = [7, 30, 90] as const;
+export type PeriodoDosResultados = (typeof PERIODOS_DOS_RESULTADOS)[number];
 
 const MESES_DO_RESUMO = 6;
+const DIA_MS = 24 * 60 * 60 * 1000;
+const FUSO = "America/Sao_Paulo";
+
+/** "2026-11-11", no dia de São Paulo. */
+const formatoDoDia = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit" });
+const formatoDaHora = new Intl.DateTimeFormat("en-US", { timeZone: FUSO, weekday: "short", hour: "2-digit", hourCycle: "h23" });
+const DIAS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const diaEmSP = (d: Date) => formatoDoDia.format(d);
+
+/** Dia da semana (0 = domingo) e hora, em São Paulo. */
+function semanaEHora(d: Date): [number, number] {
+  const partes = formatoDaHora.formatToParts(d);
+  const semana = DIAS_EN.indexOf(partes.find((p) => p.type === "weekday")?.value ?? "");
+  const hora = Number(partes.find((p) => p.type === "hour")?.value ?? 0) % 24;
+  return [Math.max(0, semana), hora];
+}
+
+/** Pastilha de freio, "pastilha  de Freio" e "Pastilha de freio" são a mesma peça. */
+function chaveDoTexto(s: string) {
+  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
 
 export type MesDoResumo = {
   /** "2026-10" */
@@ -749,42 +919,135 @@ export type MesDoResumo = {
   devolvido: number;
 };
 
-export type ResumoDaLoja = {
-  /** Últimos 30 dias. */
+/**
+ * O fim de cada cotação, do ponto de vista da loja — o mesmo critério do balcão
+ * (`paraOBalcao`): vendeu, a oficina ainda decide, ficou sem resposta, ou a oficina
+ * fechou com outra loja.
+ */
+export type DesfechoDoEnvio = "VENDIDA" | "ABERTA" | "SEM_RESPOSTA" | "OUTRA_LOJA";
+
+export type NumerosDoPeriodo = {
   recebidas: number;
   respondidas: number;
-  pedidos: number;
-  /** Já sem o que foi devolvido. */
+  /** Cotações em que a oficina fechou alguma peça com a loja. */
+  vendidas: number;
+  /** Disputas que já se decidiram: vendidas mais as que foram para outra loja. */
+  decididas: number;
+  /** Peças pedidas à loja (preço dela × quantidade), já sem o que foi devolvido. */
   valor: number;
   /** Mediana, em minutos, entre a cotação chegar e a loja responder. */
   minutosParaResponder: number | null;
-  /** Devoluções pedidas nos últimos 30 dias (sem as canceladas), por motivo. */
-  devolucoes: number;
-  devolucoesPorMotivo: Record<MotivoDevolucao, number>;
-  /** O que a loja devolveu ou abateu nos últimos 30 dias. */
-  devolvido: number;
-  meses: MesDoResumo[];
-  /** Quem respondeu nos últimos 30 dias (no painel com login). */
-  quemRespondeu: { nome: string; respostas: number }[];
 };
 
-const chaveDoMes = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+export type FaixaDeRapidez = { faixa: string; decididas: number; vendidas: number };
 
-export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
+export type ResultadosDaLoja = {
+  dias: PeriodoDosResultados;
+  agora: NumerosDoPeriodo;
+  /** O período de mesmo tamanho logo antes, para comparar. */
+  antes: NumerosDoPeriodo;
+  desfechos: Record<DesfechoDoEnvio, number>;
+  /** Vendas por dia (por semana, no período de 90 dias), da mais antiga à de hoje. */
+  serie: { inicio: string; fim: string; valor: number; vendidas: number }[];
+  /** Quanto a loja ganha das disputas, conforme a rapidez da resposta. */
+  porRapidez: FaixaDeRapidez[];
+  /** Cotações recebidas: [dia da semana, 0 = domingo][hora, 0–23]. */
+  horarios: number[][];
+  maisVendidas: { descricao: string; quantidade: number; valor: number }[];
+  /** Peças que a loja ofereceu e a oficina comprou em outra loja. */
+  perdidas: { descricao: string; vezes: number }[];
+  /** Peças que pediram e a loja respondeu sem oferta. */
+  naoTinha: { descricao: string; vezes: number }[];
+  marcas: { marca: string; quantidade: number; valor: number }[];
+  clientes: { oficina: string; recebidas: number; vendidas: number; valor: number }[];
+  equipe: { nome: string; respostas: number; minutosParaResponder: number | null; vendidas: number; valor: number }[];
+  /** Do pedido até as peças chegarem, nas entregas do período. */
+  entrega: { minutos: number | null; entregas: number };
+  devolucoes: { pedidas: number; porMotivo: Record<MotivoDevolucao, number>; devolvido: number };
+  meses: MesDoResumo[];
+};
+
+export function ehPeriodoDosResultados(n: number): n is PeriodoDosResultados {
+  return (PERIODOS_DOS_RESULTADOS as readonly number[]).includes(n);
+}
+
+const FAIXAS_DE_RAPIDEZ = [
+  { faixa: "Até 5 min", ate: 5 },
+  { faixa: "5 a 15 min", ate: 15 },
+  { faixa: "15 min a 1 h", ate: 60 },
+  { faixa: "Mais de 1 h", ate: Infinity },
+] as const;
+
+type Acumulador = { recebidas: number; respondidas: number; vendidas: number; decididas: number; valor: number; tempos: number[] };
+const acumulador = (): Acumulador => ({ recebidas: 0, respondidas: 0, vendidas: 0, decididas: 0, valor: 0, tempos: [] });
+
+function fechar(a: Acumulador, devolvido: number): NumerosDoPeriodo {
+  const meio = mediana(a.tempos);
+  return {
+    recebidas: a.recebidas,
+    respondidas: a.respondidas,
+    vendidas: a.vendidas,
+    decididas: a.decididas,
+    valor: a.valor - devolvido,
+    minutosParaResponder: meio === null ? null : Math.round(meio),
+  };
+}
+
+/** Soma num grupo pelo texto normalizado, guardando o primeiro jeito em que foi escrito. */
+function somarNoGrupo(grupos: Map<string, { rotulo: string; n: number; valor: number }>, texto: string, n: number, valor = 0) {
+  const chave = chaveDoTexto(texto);
+  if (!chave) return;
+  const g = grupos.get(chave) ?? { rotulo: texto.trim(), n: 0, valor: 0 };
+  g.n += n;
+  g.valor += valor;
+  grupos.set(chave, g);
+}
+
+const LIMITE_DAS_LISTAS = 6;
+
+export async function resultadosDaLoja(lojaId: string, dias: PeriodoDosResultados = 30): Promise<ResultadosDaLoja> {
   const agora = new Date();
-  const inicio = new Date(agora.getFullYear(), agora.getMonth() - (MESES_DO_RESUMO - 1), 1);
-  const ha30dias = new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  // Os dias do período (0 = hoje) e os do período anterior, como chaves de São Paulo.
+  const indiceDoDia = new Map<string, number>();
+  for (let i = 0; i < dias * 2; i++) indiceDoDia.set(diaEmSP(new Date(agora.getTime() - i * DIA_MS)), i);
+  const periodo = (d: Date): "agora" | "antes" | null => {
+    const i = indiceDoDia.get(diaEmSP(d));
+    return i === undefined ? null : i < dias ? "agora" : "antes";
+  };
+
+  // Mês a mês: os últimos seis, também no calendário de São Paulo.
+  const [anoHoje, mesHoje] = diaEmSP(agora).split("-").map(Number);
+  const meses = new Map<string, MesDoResumo>();
+  for (let i = MESES_DO_RESUMO - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(anoHoje, mesHoje - 1 - i, 1));
+    const mes = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    meses.set(mes, { mes, recebidas: 0, respondidas: 0, pedidos: 0, valor: 0, devolvido: 0 });
+  }
+  const mesDe = (d: Date) => meses.get(diaEmSP(d).slice(0, 7));
+
+  const desde = new Date(
+    Math.min(agora.getTime() - (dias * 2 + 1) * DIA_MS, Date.UTC(anoHoje, mesHoje - MESES_DO_RESUMO, 1))
+  );
 
   const [envios, pessoas, devolucoes] = await Promise.all([
     prisma.cotacaoLoja.findMany({
-      where: { lojaId, createdAt: { gte: inicio } },
+      where: { lojaId, createdAt: { gte: desde } },
       select: {
+        oficinaId: true,
         createdAt: true,
         respondidaEm: true,
         entrega: true,
+        entregueEm: true,
         respondidoPor: true,
-        ofertas: { select: { id: true, preco: true } },
-        cotacao: { select: { pecas: { select: { ofertaId: true, quantidade: true } } } },
+        ofertas: { select: { id: true, pecaId: true, marca: true, preco: true } },
+        cotacao: {
+          select: {
+            pedidoEm: true,
+            orcamentoId: true,
+            pecas: { select: { id: true, descricao: true, quantidade: true, ofertaId: true } },
+          },
+        },
       },
     }),
     prisma.usuarioLoja.findMany({ where: { lojaId }, select: { id: true, nome: true } }),
@@ -792,80 +1055,189 @@ export async function resumoDaLoja(lojaId: string): Promise<ResumoDaLoja> {
       where: {
         envio: { lojaId },
         canceladaEm: null,
-        OR: [{ createdAt: { gte: inicio } }, { lojaRecebeuEm: { gte: inicio } }],
+        OR: [{ createdAt: { gte: desde } }, { lojaRecebeuEm: { gte: desde } }],
       },
       select: { createdAt: true, motivo: true, lojaRecebeuEm: true, valorDevolvido: true },
     }),
   ]);
 
-  const valorDoPedido = (e: (typeof envios)[number]) => {
-    if (!e.entrega) return 0;
-    const preco = new Map(e.ofertas.map((o) => [o.id, o.preco]));
-    return e.cotacao.pecas.reduce((s, p) => s + (p.ofertaId ? (preco.get(p.ofertaId) ?? 0) * p.quantidade : 0), 0);
+  // A série: um ponto por dia, ou por semana nos 90 dias. O índice 0 é o mais antigo.
+  const passo = dias > 30 ? 7 : 1;
+  const pontos = Math.ceil(dias / passo);
+  const serie = Array.from({ length: pontos }, (_, k) => {
+    const maisNovo = (pontos - 1 - k) * passo;
+    const maisVelho = Math.min(dias - 1, maisNovo + passo - 1);
+    return {
+      inicio: diaEmSP(new Date(agora.getTime() - maisVelho * DIA_MS)),
+      fim: diaEmSP(new Date(agora.getTime() - maisNovo * DIA_MS)),
+      valor: 0,
+      vendidas: 0,
+    };
+  });
+  const pontoDe = (d: Date) => {
+    const i = indiceDoDia.get(diaEmSP(d));
+    return i === undefined || i >= dias ? null : serie[pontos - 1 - Math.floor(i / passo)];
   };
 
-  const meses = new Map<string, MesDoResumo>();
-  for (let i = 0; i < MESES_DO_RESUMO; i++) {
-    const mes = chaveDoMes(new Date(inicio.getFullYear(), inicio.getMonth() + i, 1));
-    meses.set(mes, { mes, recebidas: 0, respondidas: 0, pedidos: 0, valor: 0, devolvido: 0 });
-  }
-
-  let recebidas = 0;
-  let respondidas = 0;
-  let pedidos = 0;
-  let valor = 0;
-  const tempos: number[] = [];
-  const respostasPorPessoa = new Map<string, number>();
+  const totais = { agora: acumulador(), antes: acumulador() };
+  const desfechos: Record<DesfechoDoEnvio, number> = { VENDIDA: 0, ABERTA: 0, SEM_RESPOSTA: 0, OUTRA_LOJA: 0 };
+  const porRapidez: FaixaDeRapidez[] = FAIXAS_DE_RAPIDEZ.map((f) => ({ faixa: f.faixa, decididas: 0, vendidas: 0 }));
+  const horarios = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  const vendidasPorPeca = new Map<string, { rotulo: string; n: number; valor: number }>();
+  const perdidasPorPeca = new Map<string, { rotulo: string; n: number; valor: number }>();
+  const faltouPorPeca = new Map<string, { rotulo: string; n: number; valor: number }>();
+  const porMarca = new Map<string, { rotulo: string; n: number; valor: number }>();
+  const porOficina = new Map<string, { recebidas: number; vendidas: number; valor: number }>();
+  const porPessoa = new Map<string, { respostas: number; tempos: number[]; vendidas: number; valor: number }>();
+  const temposDeEntrega: number[] = [];
+  const nomesDePessoa = new Map(pessoas.map((p) => [p.id, p.nome]));
 
   for (const e of envios) {
-    const mes = meses.get(chaveDoMes(e.createdAt));
-    const v = valorDoPedido(e);
+    const c = e.cotacao;
+    const minhas = new Map(e.ofertas.map((o) => [o.id, o]));
+    const ofereci = new Set(e.ofertas.map((o) => o.pecaId));
+    const comigo = c.pecas.flatMap((p) => {
+      const oferta = p.ofertaId ? minhas.get(p.ofertaId) : undefined;
+      return oferta ? [{ peca: p, oferta }] : [];
+    });
+
+    const desfecho: DesfechoDoEnvio = e.entrega
+      ? "VENDIDA"
+      : !e.respondidaEm
+        ? "SEM_RESPOSTA"
+        : c.pedidoEm || (c.orcamentoId && comigo.length === 0)
+          ? "OUTRA_LOJA"
+          : "ABERTA";
+    const valor = e.entrega ? comigo.reduce((s, { peca, oferta }) => s + oferta.preco * peca.quantidade, 0) : 0;
+    const minutos = e.respondidaEm ? Math.max(0, (e.respondidaEm.getTime() - e.createdAt.getTime()) / 60000) : null;
+
+    const mes = mesDe(e.createdAt);
     if (mes) {
       mes.recebidas += 1;
       if (e.respondidaEm) mes.respondidas += 1;
       if (e.entrega) mes.pedidos += 1;
-      mes.valor += v;
+      mes.valor += valor;
     }
-    if (e.createdAt < ha30dias) continue;
-    recebidas += 1;
-    if (e.respondidaEm) {
-      respondidas += 1;
-      tempos.push((e.respondidaEm.getTime() - e.createdAt.getTime()) / 60000);
+
+    const qual = periodo(e.createdAt);
+    if (!qual) continue;
+    const t = totais[qual];
+    t.recebidas += 1;
+    if (minutos !== null) {
+      t.respondidas += 1;
+      t.tempos.push(minutos);
     }
-    if (e.entrega) pedidos += 1;
-    valor += v;
-    if (e.respondidoPor) respostasPorPessoa.set(e.respondidoPor, (respostasPorPessoa.get(e.respondidoPor) ?? 0) + 1);
+    if (desfecho === "VENDIDA") t.vendidas += 1;
+    if (desfecho === "VENDIDA" || desfecho === "OUTRA_LOJA") t.decididas += 1;
+    t.valor += valor;
+    if (qual === "antes") continue;
+
+    // Daqui para baixo, só o período escolhido.
+    desfechos[desfecho] += 1;
+    const [semana, hora] = semanaEHora(e.createdAt);
+    horarios[semana][hora] += 1;
+
+    const ponto = pontoDe(e.createdAt);
+    if (ponto && desfecho === "VENDIDA") {
+      ponto.valor += valor;
+      ponto.vendidas += 1;
+    }
+
+    if (minutos !== null && (desfecho === "VENDIDA" || desfecho === "OUTRA_LOJA")) {
+      const f = porRapidez[FAIXAS_DE_RAPIDEZ.findIndex((x) => minutos <= x.ate)];
+      f.decididas += 1;
+      if (desfecho === "VENDIDA") f.vendidas += 1;
+    }
+
+    for (const { peca, oferta } of desfecho === "VENDIDA" ? comigo : []) {
+      somarNoGrupo(vendidasPorPeca, peca.descricao, peca.quantidade, oferta.preco * peca.quantidade);
+      somarNoGrupo(porMarca, oferta.marca.toUpperCase(), peca.quantidade, oferta.preco * peca.quantidade);
+    }
+    for (const p of c.pecas) {
+      if (e.respondidaEm && !ofereci.has(p.id)) somarNoGrupo(faltouPorPeca, p.descricao, 1);
+      // Perdida: a loja ofereceu, a oficina escolheu, e não foi a desta loja.
+      const decidiu = desfecho === "VENDIDA" || desfecho === "OUTRA_LOJA";
+      if (decidiu && ofereci.has(p.id) && p.ofertaId && !minhas.has(p.ofertaId)) somarNoGrupo(perdidasPorPeca, p.descricao, 1);
+    }
+
+    const oficina = porOficina.get(e.oficinaId) ?? { recebidas: 0, vendidas: 0, valor: 0 };
+    oficina.recebidas += 1;
+    if (desfecho === "VENDIDA") oficina.vendidas += 1;
+    oficina.valor += valor;
+    porOficina.set(e.oficinaId, oficina);
+
+    if (e.respondidoPor && minutos !== null) {
+      // Conta que já não existe vira uma linha só ("Alguém da loja"), não uma por id.
+      const quem = nomesDePessoa.has(e.respondidoPor) ? e.respondidoPor : "";
+      const pessoa = porPessoa.get(quem) ?? { respostas: 0, tempos: [], vendidas: 0, valor: 0 };
+      pessoa.respostas += 1;
+      pessoa.tempos.push(minutos);
+      if (desfecho === "VENDIDA") pessoa.vendidas += 1;
+      pessoa.valor += valor;
+      porPessoa.set(quem, pessoa);
+    }
+
+    if (e.entregueEm && c.pedidoEm) temposDeEntrega.push(Math.max(0, (e.entregueEm.getTime() - c.pedidoEm.getTime()) / 60000));
   }
 
-  // O dinheiro devolvido sai do mês em que a peça voltou; a contagem é do mês em que a
-  // devolução foi pedida. Na troca não volta dinheiro (`valorDevolvido` nulo).
+  // O dinheiro devolvido sai do período (e do mês) em que a peça voltou; a contagem é
+  // de quando a devolução foi pedida. Na troca não volta dinheiro (`valorDevolvido` nulo).
   const porMotivo: Record<MotivoDevolucao, number> = { DEFEITO: 0, ERRADA: 0, NAO_USADA: 0 };
-  let devolvido = 0;
+  const devolvido = { agora: 0, antes: 0 };
   for (const d of devolucoes) {
-    if (d.createdAt >= ha30dias && ehMotivoDevolucao(d.motivo)) porMotivo[d.motivo] += 1;
+    if (periodo(d.createdAt) === "agora" && ehMotivoDevolucao(d.motivo)) porMotivo[d.motivo] += 1;
     if (!d.lojaRecebeuEm || !d.valorDevolvido) continue;
-    const mes = meses.get(chaveDoMes(d.lojaRecebeuEm));
+    const mes = mesDe(d.lojaRecebeuEm);
     if (mes) {
       mes.devolvido += d.valorDevolvido;
       mes.valor -= d.valorDevolvido;
     }
-    if (d.lojaRecebeuEm >= ha30dias) devolvido += d.valorDevolvido;
+    const qual = periodo(d.lojaRecebeuEm);
+    if (qual) devolvido[qual] += d.valorDevolvido;
   }
 
-  const nomes = new Map(pessoas.map((p) => [p.id, p.nome]));
-  const meio = mediana(tempos);
+  const maiores = <T extends { rotulo: string; n: number; valor: number }>(grupos: Map<string, T>, porValor: boolean) =>
+    [...grupos.values()]
+      .sort((a, b) => (porValor ? b.valor - a.valor || b.n - a.n : b.n - a.n))
+      .slice(0, LIMITE_DAS_LISTAS);
+
+  const melhoresOficinas = [...porOficina.entries()]
+    .sort(([, a], [, b]) => b.valor - a.valor || b.vendidas - a.vendidas || b.recebidas - a.recebidas)
+    .slice(0, 5);
+  const nomesDeOficina = await nomesDasOficinas(melhoresOficinas.map(([id]) => id));
+  const meioDaEntrega = mediana(temposDeEntrega);
+
   return {
-    recebidas,
-    respondidas,
-    pedidos,
-    valor: valor - devolvido,
-    minutosParaResponder: meio === null ? null : Math.round(meio),
-    devolucoes: porMotivo.DEFEITO + porMotivo.ERRADA + porMotivo.NAO_USADA,
-    devolucoesPorMotivo: porMotivo,
-    devolvido,
-    meses: [...meses.values()],
-    quemRespondeu: [...respostasPorPessoa.entries()]
-      .map(([id, respostas]) => ({ nome: nomes.get(id) ?? "Alguém da loja", respostas }))
+    dias,
+    agora: fechar(totais.agora, devolvido.agora),
+    antes: fechar(totais.antes, devolvido.antes),
+    desfechos,
+    serie,
+    porRapidez,
+    horarios,
+    maisVendidas: maiores(vendidasPorPeca, true).map((g) => ({ descricao: g.rotulo, quantidade: g.n, valor: g.valor })),
+    perdidas: maiores(perdidasPorPeca, false).map((g) => ({ descricao: g.rotulo, vezes: g.n })),
+    naoTinha: maiores(faltouPorPeca, false).map((g) => ({ descricao: g.rotulo, vezes: g.n })),
+    marcas: maiores(porMarca, true).map((g) => ({ marca: g.rotulo, quantidade: g.n, valor: g.valor })),
+    clientes: melhoresOficinas.map(([id, o]) => ({ oficina: nomesDeOficina.get(id) ?? "Oficina", ...o })),
+    equipe: [...porPessoa.entries()]
+      .map(([id, p]) => {
+        const meio = mediana(p.tempos);
+        return {
+          nome: nomesDePessoa.get(id) ?? "Alguém da loja",
+          respostas: p.respostas,
+          minutosParaResponder: meio === null ? null : Math.round(meio),
+          vendidas: p.vendidas,
+          valor: p.valor,
+        };
+      })
       .sort((a, b) => b.respostas - a.respostas),
+    entrega: { minutos: meioDaEntrega === null ? null : Math.max(1, Math.round(meioDaEntrega)), entregas: temposDeEntrega.length },
+    devolucoes: {
+      pedidas: porMotivo.DEFEITO + porMotivo.ERRADA + porMotivo.NAO_USADA,
+      porMotivo,
+      devolvido: devolvido.agora,
+    },
+    meses: [...meses.values()],
   };
 }

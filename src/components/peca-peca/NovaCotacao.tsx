@@ -11,9 +11,16 @@ import { useConfirmar } from "@/components/ui/Avisos";
 import { Busca, Confere, Fechar, Lapis, Lixeira, Mais } from "@/components/ui/Icones";
 import { EsqueletoLista } from "@/components/ui/Dados";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
-import { normalizarPlaca, prazoDaLoja, type CotacaoVista, type LojasDaOficina, type VeiculoCotado } from "./regras";
+import {
+  normalizarPlaca,
+  prazoDaLoja,
+  type CotacaoVista,
+  type FormaDePagamento,
+  type LojasDaOficina,
+  type VeiculoCotado,
+} from "./regras";
 import { buscar, enviarJson, useAoVivo } from "./aoVivo";
-import { Cabecalho, InformarCidade } from "./ui";
+import { Cabecalho, EscolhaDaForma, InformarCidade } from "./ui";
 
 // As peças que mais se pedem no balcão: um toque e entram na lista.
 const SUGESTOES = [
@@ -76,6 +83,9 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
   const [erro, setErro] = useState("");
 
   const lojas = marcadas ?? (lojasDisponiveis ?? []).map((l) => l.id);
+  // Nula até a pessoa mexer: aí vale a da última cotação.
+  const [formaEscolhida, setFormaEscolhida] = useState<FormaDePagamento | null>(null);
+  const forma = formaEscolhida ?? daOficina?.formaPagamento ?? "PIX";
   // Vindo da devolução: a loja que não tinha a peça sai das marcadas, e o aviso diz de onde veio.
   const [deOnde, setDeOnde] = useState<{ numero: number; lojaId: string } | null>(null);
 
@@ -209,6 +219,7 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
       const r = await enviarJson("/api/peca-peca/cotacoes", "POST", {
         veiculo: { placa: normalizarPlaca(placa), marca, modelo, ano, motor },
         observacao,
+        formaPagamento: forma,
         veiculoId: veiculoId ?? null,
         pecas,
         lojas,
@@ -456,6 +467,13 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
             );
           })}
         </div>
+      </Painel>
+
+      <Painel
+        titulo="4. Como vai pagar?"
+        ajuda="A loja usa isso para dar o desconto: Pix e dinheiro costumam sair mais barato que o cartão. Dá para mudar até fazer o pedido."
+      >
+        <EscolhaDaForma valor={forma} onChange={setFormaEscolhida} />
       </Painel>
 
       {erro && <Aviso>{erro}</Aviso>}

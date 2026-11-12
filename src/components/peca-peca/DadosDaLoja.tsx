@@ -9,18 +9,22 @@ import { Painel } from "@/components/ui/Dados";
 import { useAvisar } from "@/components/ui/Avisos";
 import { buscar } from "./aoVivo";
 import { CidadesAtendidas, outrasCidades } from "./CidadesAtendidas";
-import { ENTREGAS_PARA_MEDIA, ENTREGA_PADRAO } from "./regras";
+import { EntregaEPagamento } from "./EntregaEPagamento";
+import { ENTREGAS_PARA_MEDIA, ENTREGA_PADRAO, type EntregaEPagamento as RegraDeEntrega } from "./regras";
 
 // O que o dono da autopeça mexe no cadastro da loja: o telefone, as cidades que atende
-// — é por elas que as oficinas alcançam a loja — e o prazo para devolver peça sem uso.
-// O tempo de entrega só aparece: é medido nas entregas da loja, ninguém digita (ver
-// regras.ts). A cidade onde a loja fica é da plataforma.
+// — é por elas que as oficinas alcançam a loja —, como cobra a entrega e o crédito, e o
+// prazo para devolver peça sem uso. O tempo de entrega só aparece: é medido nas
+// entregas da loja, ninguém digita (ver regras.ts). A cidade onde a loja fica é da
+// plataforma.
 
-type Bloco = "telefone" | "cidades" | "prazo";
+type Bloco = "telefone" | "cidades" | "entrega" | "prazo";
 
 export function DadosDaLoja({
   loja,
+  entrega,
 }: {
+  entrega: RegraDeEntrega;
   loja: {
     nome: string;
     cidade: string | null;
@@ -128,6 +132,16 @@ export function DadosDaLoja({
           </Botao>
         </div>
       </Painel>
+
+      <EntregaEPagamento
+        // As cidades salvas mudam a tabela por cidade: remonta com elas.
+        key={loja.atende.join("|")}
+        regra={entrega}
+        atende={loja.atende}
+        salvando={salvando === "entrega"}
+        erro={erro?.bloco === "entrega" ? erro.texto : null}
+        onSalvar={(regra) => salvar("entrega", { entrega: regra }, "Entrega e pagamento salvos")}
+      />
 
       <Painel
         titulo="Devolução de peça sem uso"

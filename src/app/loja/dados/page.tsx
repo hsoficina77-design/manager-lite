@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { exigirContaLoja } from "@/lib/conta-loja";
+import { entregaEPagamentoDaLoja } from "@/lib/balcao";
 import { DadosDaLoja } from "@/components/peca-peca/DadosDaLoja";
 
 export const metadata: Metadata = { title: "Loja · Peça Peça" };
 
 export default async function DadosDaLojaPage() {
   const { loja } = await exigirContaLoja("loja.dados");
+  const entrega = await entregaEPagamentoDaLoja(loja.id);
   return (
     <div className="mx-auto max-w-3xl px-4 py-5">
-      <DadosDaLoja loja={loja} />
+      <DadosDaLoja loja={loja} entrega={entrega} />
     </div>
   );
 }

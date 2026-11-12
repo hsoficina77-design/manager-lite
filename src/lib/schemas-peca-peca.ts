@@ -29,7 +29,13 @@ const inteiro = (rotulo: string, min: number, max: number) =>
     .min(min, `${rotulo}: mínimo de ${min}`)
     .max(max, `${rotulo}: máximo de ${max}`);
 
+const formaDePagamento = z.enum(["PIX", "DEBITO", "CREDITO"], {
+  errorMap: () => ({ message: "Escolha como vai pagar" }),
+});
+
 export const cotacaoCriarSchema = z.object({
+  /** Como a oficina pretende pagar: a loja lê no balcão. */
+  formaPagamento: formaDePagamento.optional().default("PIX"),
   veiculo: z.object({
     placa: texto("Placa", LIMITES.identidade),
     // O balconista precisa dos quatro para acertar a aplicação.
@@ -59,6 +65,7 @@ export const cotacaoAlterarSchema = z.object({
   escolha: z.object({ pecaId: id("Peça"), ofertaId: idNulavel("Oferta") }).optional(),
   venda: z.object({ pecaId: id("Peça"), valor: dinheiroNulavel("Preço de venda") }).optional(),
   menorPreco: z.literal(true).optional(),
+  formaPagamento: formaDePagamento.optional(),
 });
 
 /** A oficina confirma que as peças de uma loja do pedido chegaram. */
@@ -190,6 +197,30 @@ export const dadosDaLojaSchema = z.object({
   telefone: camposDaLoja.telefone.optional(),
   atende: camposDaLoja.atende.optional(),
   prazoDevolucao: inteiro("Prazo para devolver", 0, 90).optional(),
+  /** Entrega e pagamento vão juntos: é um quadro só na tela. */
+  entrega: z
+    .object({
+      freteTipo: z.enum(["GRATIS", "FIXO", "POR_CIDADE"], {
+        errorMap: () => ({ message: "Escolha como a loja cobra a entrega" }),
+      }),
+      freteValor: dinheiro("Taxa de entrega"),
+      /** Cidade atendida → taxa. O servidor descarta cidade que a loja não atende. */
+      fretePorCidade: z
+        .record(z.string().max(LIMITES.cidade + 5), dinheiro("Taxa da cidade"))
+        .refine((r) => Object.keys(r).length <= 30, "No máximo 30 cidades"),
+      freteGratisAcima: dinheiroNulavel("Entrega grátis acima de"),
+      acrescimoCredito: z.coerce
+        .number({ invalid_type_error: "Acréscimo no crédito deve ser um número" })
+        .finite("Acréscimo no crédito deve ser um número")
+        .min(0, "Acréscimo no crédito não pode ser negativo")
+        .max(100, "Acréscimo no crédito: máximo de 100%"),
+      debitoAVista: z.boolean(),
+    })
+    .refine((e) => e.freteTipo !== "FIXO" || e.freteValor > 0, {
+      message: "Informe o valor da taxa fixa",
+      path: ["freteValor"],
+    })
+    .optional(),
 });
 
 /** Aceitar o convite (ou o "novo acesso"): nome, e-mail e a senha. */
@@ -205,13 +236,24 @@ export const respostaDoBalcaoSchema = z.object({
     id("Peça"),
     z
       .array(
-        z.object({
-          id: idNulavel("Oferta").optional(),
-          marca: obrigatorio("Marca", LIMITES.nomeCurto),
-          preco: dinheiroPositivo("Preço"),
-          prazoMin: inteiro("Prazo", 0, 7 * 24 * 60),
-        })
+        z
+          .object({
+            id: idNulavel("Oferta").optional(),
+            marca: obrigatorio("Marca", LIMITES.nomeCurto),
+            /** À vista (Pix ou dinheiro). */
+            preco: dinheiroPositivo("Preço à vista"),
+            /** Vazio: o mesmo do à vista. */
+            precoCredito: dinheiroNulavel("Preço no crédito").optional().default(null),
+            prazoMin: inteiro("Prazo", 0, 7 * 24 * 60),
+          })
+          // Crédito igual ao à vista (ou zerado) é "mesmo preço": não se guarda.
+          .transform((o) => ({
+            ...o,
+            precoCredito: o.precoCredito && Math.abs(o.precoCredito - o.preco) >= 0.005 ? o.precoCredito : null,
+          }))
       )
       .max(10, "No máximo 10 marcas por peça")
   ),
+  /** A taxa de entrega desta cotação. Ausente: vale a regra da loja. */
+  taxaEntrega: dinheiroNulavel("Taxa de entrega").optional(),
 });

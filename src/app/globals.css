@@ -310,13 +310,16 @@
      (constantes em marca/LogoPecaPeca.tsx):
 
        Azul Peça   #2563EB  a marca: botões, item ativo (o 600 da escala)
-       Azul Noite  #0B1F4D  texto e menu escuro
-       Azul Névoa  #EAF1FE  áreas de apoio: o fundo atrás dos cartões
-       Cinza Graxa #475569  texto secundário e legendas
-       Branco               os cartões
+       Azul Noite  #0B1F4D  títulos e números
+       Prata       #E8EBEF  o fundo da página (era o Azul Névoa, até 2026-11-12)
+       Grafite     #2E3642  o texto corrido
+       Cinza Graxa #525C6B  legendas (um passo mais escuro, para ler sobre a prata)
+       Branco               as folhas de conteúdo
 
-     O semáforo e as pílulas de status não mudam: são significado, não marca. Sobre
-     o 600 o texto é branco (5,2:1). */
+     Prata e grafite são o metal do balcão e da prateleira; o azul fica só para o que é
+     da marca e para o que se toca. O tema escuro sai do grafite, não do Azul Noite.
+     O semáforo não muda: é significado, não marca. Sobre o 600 o texto é branco
+     (5,2:1); a legenda tem 5,7:1 sobre a prata. */
   :root[data-produto="peca-peca"] {
     --brand-50: 234 241 254;
     --brand-100: 219 234 254;
@@ -334,27 +337,27 @@
 
     --menu-bg: 255 255 255;
     --menu-fg: 11 31 77;
-    --menu-borda: 226 232 240;
-    --menu-hover: 234 241 254;
-    --menu-texto: 71 85 105;
+    --menu-borda: 220 224 230;
+    --menu-hover: 238 240 243;
+    --menu-texto: 82 92 107;
 
-    --fundo: 234 241 254;
+    --fundo: 232 235 239;
     --superficie: 255 255 255;
-    --superficie-2: 244 247 254;
-    --superficie-3: 226 234 248;
+    --superficie-2: 245 246 248;
+    --superficie-3: 225 229 235;
 
     --tinta: 11 31 77;
-    --tinta-2: 51 65 85;
-    --tinta-3: 71 85 105;
+    --tinta-2: 46 54 66;
+    --tinta-3: 82 92 107;
 
-    --linha: 226 232 240;
-    --linha-forte: 203 213 225;
+    --linha: 220 224 230;
+    --linha-forte: 184 191 201;
 
     --contraste: 11 31 77;
     --contraste-fg: 255 255 255;
   }
 
-  /* Escuro: os fundos saem do Azul Noite, e o texto é o Azul Névoa. */
+  /* Escuro: grafite, com o texto em prata clara. */
   @media (prefers-color-scheme: dark) {
     :root[data-produto="peca-peca"]:not([data-tema="claro"]) {
       --brand-50: 20 33 64;
@@ -363,26 +366,26 @@
       --brand-300: 39 74 145;
       --brand-texto: 96 165 250;
 
-      --menu-bg: 11 31 77;
+      --menu-bg: 24 28 35;
       --menu-fg: 255 255 255;
-      --menu-borda: 30 52 102;
-      --menu-hover: 27 48 98;
-      --menu-texto: 176 190 216;
+      --menu-borda: 43 49 59;
+      --menu-hover: 36 41 50;
+      --menu-texto: 170 178 190;
 
-      --fundo: 7 16 38;
-      --superficie: 13 27 58;
-      --superficie-2: 18 34 70;
-      --superficie-3: 27 46 88;
+      --fundo: 16 19 24;
+      --superficie: 24 28 35;
+      --superficie-2: 31 36 44;
+      --superficie-3: 42 48 58;
 
-      --tinta: 234 241 254;
-      --tinta-2: 186 199 222;
-      --tinta-3: 143 160 192;
+      --tinta: 234 237 241;
+      --tinta-2: 196 202 211;
+      --tinta-3: 150 159 172;
 
-      --linha: 31 48 86;
-      --linha-forte: 47 68 112;
+      --linha: 43 49 59;
+      --linha-forte: 64 72 85;
 
-      --contraste: 234 241 254;
-      --contraste-fg: 11 31 77;
+      --contraste: 234 237 241;
+      --contraste-fg: 16 19 24;
     }
   }
 
@@ -393,26 +396,51 @@
     --brand-300: 39 74 145;
     --brand-texto: 96 165 250;
 
-    --menu-bg: 11 31 77;
+    --menu-bg: 24 28 35;
     --menu-fg: 255 255 255;
-    --menu-borda: 30 52 102;
-    --menu-hover: 27 48 98;
-    --menu-texto: 176 190 216;
+    --menu-borda: 43 49 59;
+    --menu-hover: 36 41 50;
+    --menu-texto: 170 178 190;
 
-    --fundo: 7 16 38;
-    --superficie: 13 27 58;
-    --superficie-2: 18 34 70;
-    --superficie-3: 27 46 88;
+    --fundo: 16 19 24;
+    --superficie: 24 28 35;
+    --superficie-2: 31 36 44;
+    --superficie-3: 42 48 58;
 
-    --tinta: 234 241 254;
-    --tinta-2: 186 199 222;
-    --tinta-3: 143 160 192;
+    --tinta: 234 237 241;
+    --tinta-2: 196 202 211;
+    --tinta-3: 150 159 172;
 
-    --linha: 31 48 86;
-    --linha-forte: 47 68 112;
+    --linha: 43 49 59;
+    --linha-forte: 64 72 85;
 
-    --contraste: 234 241 254;
-    --contraste-fg: 11 31 77;
+    --contraste: 234 237 241;
+    --contraste-fg: 16 19 24;
+  }
+
+  /* Gráficos dos Resultados da loja (Peça Peça). Cada cor é um desfecho da cotação e
+     vale para a tela inteira: verde = vendeu (o Verde Chegou, um passo mais escuro para
+     ler sobre o branco), azul = a oficina ainda decide (e a série única), âmbar = ficou
+     sem resposta, roxo = fechou com outra loja. Conferidas no validador de paleta do
+     dataviz (daltonismo e contraste), uma escala para cada tema; nessa ordem, vizinhas
+     no gráfico, nenhum par se confunde. */
+  :root {
+    --gr-vendida: 101 163 13;
+    --gr-aberta: 37 99 235;
+    --gr-sem-resposta: 245 158 11;
+    --gr-outra-loja: 168 85 247;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tema="claro"]) {
+      --gr-aberta: 76 141 246;
+      --gr-sem-resposta: 194 133 10;
+      --gr-outra-loja: 176 100 232;
+    }
+  }
+  :root[data-tema="escuro"] {
+    --gr-aberta: 76 141 246;
+    --gr-sem-resposta: 194 133 10;
+    --gr-outra-loja: 176 100 232;
   }
 
   /* Fontes do pacote: Inter no texto, preços e botões; Baloo 2 ExtraBold nos títulos.
@@ -535,6 +563,29 @@
   .status-entregue  { --bg: rgb(var(--st-entregue-bg));  --fg: rgb(var(--st-entregue-fg));  --anel: rgb(var(--st-entregue-anel)); }
   .status-inerte    { --bg: rgb(var(--st-inerte-bg));    --fg: rgb(var(--st-inerte-fg));    --anel: rgb(var(--st-inerte-anel)); }
   .status-chegou    { --bg: rgb(var(--st-chegou-bg));    --fg: rgb(var(--st-chegou-fg));    --anel: rgb(var(--st-chegou-anel)); }
+
+  /* No Peça Peça a situação é um ponto e o texto, sem a pílula pastel: em lista longa,
+     quatro cores de fundo com contorno brigavam com o conteúdo. O ponto carrega a cor;
+     o texto fica na tinta, legível em qualquer tema. */
+  :root[data-produto="peca-peca"] .status {
+    gap: 0.4rem;
+    padding: 0;
+    background-color: transparent;
+    box-shadow: none;
+    color: rgb(var(--tinta-2));
+  }
+  :root[data-produto="peca-peca"] .status::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background-color: var(--ponto, var(--fg));
+  }
+  :root[data-produto="peca-peca"] .status-andamento { --ponto: rgb(var(--brand-600)); }
+  :root[data-produto="peca-peca"] .status-peca      { --ponto: rgb(var(--gr-sem-resposta)); }
+  :root[data-produto="peca-peca"] .status-chegou    { --ponto: rgb(var(--gr-vendida)); }
+  :root[data-produto="peca-peca"] .status-inerte    { --ponto: rgb(var(--linha-forte)); }
 
   /* Faixa de tempo em aberto. `--ponto` colore a bolinha que antecede o rótulo. */
   .idade {

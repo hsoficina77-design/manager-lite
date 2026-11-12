@@ -11,13 +11,16 @@ import { Confere, Conversa as IconeConversa, Lixeira, Mais, Voltar } from "@/com
 import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 import {
   ETAPAS_ENTREGA,
+  FORMAS_DE_PAGAMENTO,
   SITUACOES_NO_BALCAO,
   descricaoDoVeiculo,
   diferencaDaTroca,
   ehTroca,
   lojaPrecisaAgir,
   prazoSugerido,
+  precoNoCredito,
   proximaEtapa,
+  textoDaForma,
   rotuloDaEntrega,
   rotuloDoMotivo,
   situacaoDaDevolucao,
@@ -380,6 +383,10 @@ export function EnvioDoBalcaoTela({
             <p className="whitespace-pre-line font-medium text-tinta">{envio.observacao}</p>
           </div>
         )}
+        <div className="mt-3 rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm">
+          <p className="text-xs text-tinta-3">Como a oficina vai pagar</p>
+          <p className="font-medium text-tinta">{textoDaForma(envio.formaPagamento, envio.debitoAVista)}</p>
+        </div>
       </Painel>
 
       {envio.travada || !pode.responder ? (
@@ -459,6 +466,25 @@ function PedidoNoBalcao({
           </li>
         ))}
       </ul>
+      {envio.cobranca && (
+        // O que o motoboy cobra na entrega, e como: é por isso que a loja precisa saber a forma.
+        <div className="rounded-lg bg-superficie p-3 text-sm">
+          <div className="flex justify-between text-tinta-3">
+            <span>Peças</span>
+            <span className="tabular-nums">{formatCurrency(envio.cobranca.pecas)}</span>
+          </div>
+          <div className="flex justify-between text-tinta-3">
+            <span>Entrega</span>
+            <span className="tabular-nums">
+              {envio.cobranca.entrega > 0 ? formatCurrency(envio.cobranca.entrega) : "grátis"}
+            </span>
+          </div>
+          <div className="mt-1 flex justify-between border-t border-linha pt-1.5 font-semibold text-tinta">
+            <span>Cobrar no {FORMAS_DE_PAGAMENTO[envio.formaPagamento].rotulo.toLowerCase()}</span>
+            <span className="tabular-nums">{formatCurrency(envio.cobranca.pecas + envio.cobranca.entrega)}</span>
+          </div>
+        </div>
+      )}
       <ol className="grid grid-cols-4 gap-1">
         {ETAPAS_ENTREGA.map((e, i) => (
           <li key={e.value} className="min-w-0">
@@ -816,7 +842,8 @@ function RespostaFechada({ envio, semAcesso = false }: { envio: EnvioNoBalcao; s
               ) : (
                 p.ofertas.map((o) => (
                   <p key={o.id} className="text-xs text-tinta-3">
-                    {o.marca} · {formatCurrency(o.preco)} · {o.prazoMin} min
+                    {o.marca} · {formatCurrency(o.preco)} à vista
+                    {o.precoCredito !== null && ` · ${formatCurrency(o.precoCredito)} no crédito`} · {o.prazoMin} min
                     {p.pedida === o.marca && <span className="ml-1 font-semibold text-ok">pedida</span>}
                   </p>
                 ))
@@ -824,12 +851,30 @@ function RespostaFechada({ envio, semAcesso = false }: { envio: EnvioNoBalcao; s
             </li>
           ))}
         </ul>
+        {envio.respondidaEm && (
+          <p className="mt-3 border-t border-linha pt-2.5 text-xs text-tinta-3">
+            Entrega: {envio.taxaEntrega ? formatCurrency(envio.taxaEntrega) : "grátis"}
+            {envio.taxaEntrega && envio.freteGratisAcima !== null
+              ? ` (grátis acima de ${formatCurrency(envio.freteGratisAcima)})`
+              : ""}
+          </p>
+        )}
       </Painel>
     </>
   );
 }
 
-type OfertaEmEdicao = { chave: string; id?: string; marca: string; preco: string; prazo: string };
+type OfertaEmEdicao = {
+  chave: string;
+  id?: string;
+  marca: string;
+  /** À vista. */
+  preco: string;
+  /** No crédito. Enquanto o vendedor não mexe nele, acompanha o à vista com o acréscimo da loja. */
+  credito: string;
+  creditoMexido: boolean;
+  prazo: string;
+};
 type Rascunho = Record<string, { naoTem: boolean; ofertas: OfertaEmEdicao[] }>;
 
 let contador = 0;
@@ -851,7 +896,16 @@ function FormResposta({
 }) {
   const avisar = useAvisar();
   const prazoPadrao = String(prazoSugerido(loja));
-  const vazia = (): OfertaEmEdicao => ({ chave: chaveNova(), marca: "", preco: "", prazo: prazoPadrao });
+  const vazia = (): OfertaEmEdicao => ({
+    chave: chaveNova(),
+    marca: "",
+    preco: "",
+    credito: "",
+    creditoMexido: false,
+    prazo: prazoPadrao,
+  });
+  const creditoDe = (preco: string) =>
+    Number(preco) > 0 ? String(precoNoCredito(Number(preco), envio.acrescimoCredito)) : "";
 
   const [rascunho, setRascunho] = useState<Rascunho>(() =>
     Object.fromEntries(
@@ -865,6 +919,10 @@ function FormResposta({
                 id: o.id,
                 marca: o.marca,
                 preco: String(o.preco),
+                credito: String(o.precoCredito ?? o.preco),
+                // Crédito próprio que a loja já mandou não se recalcula sozinho; o "mesmo
+                // preço" volta a seguir a regra se o à vista mudar.
+                creditoMexido: o.precoCredito !== null,
                 prazo: String(o.prazoMin),
               })),
             }
@@ -872,14 +930,21 @@ function FormResposta({
       ])
     )
   );
+  const taxaInicial = envio.taxaEntrega ?? envio.taxaSugerida;
+  const [taxa, setTaxa] = useState(taxaInicial > 0 ? String(taxaInicial) : "");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [enviada, setEnviada] = useState(false);
 
-  function mudarOferta(pecaId: string, chave: string, campo: "marca" | "preco" | "prazo", valor: string) {
+  function mudarOferta(pecaId: string, chave: string, campo: "marca" | "preco" | "credito" | "prazo", valor: string) {
+    const mudar = (o: OfertaEmEdicao): OfertaEmEdicao => {
+      if (campo === "credito") return { ...o, credito: valor, creditoMexido: valor !== "" };
+      if (campo === "preco" && !o.creditoMexido) return { ...o, preco: valor, credito: creditoDe(valor) };
+      return { ...o, [campo]: valor };
+    };
     setRascunho((r) => ({
       ...r,
-      [pecaId]: { ...r[pecaId], ofertas: r[pecaId].ofertas.map((o) => (o.chave === chave ? { ...o, [campo]: valor } : o)) },
+      [pecaId]: { ...r[pecaId], ofertas: r[pecaId].ofertas.map((o) => (o.chave === chave ? mudar(o) : o)) },
     }));
   }
 
@@ -891,7 +956,10 @@ function FormResposta({
   }
 
   async function enviar() {
-    const itens: Record<string, { id?: string; marca: string; preco: number; prazoMin: number }[]> = {};
+    const itens: Record<
+      string,
+      { id?: string; marca: string; preco: number; precoCredito: number | null; prazoMin: number }[]
+    > = {};
     for (const p of envio.pecas) {
       const r = rascunho[p.id];
       if (r.naoTem) {
@@ -907,12 +975,17 @@ function FormResposta({
         id: o.id,
         marca: o.marca.trim(),
         preco: Number(o.preco),
+        // Crédito em branco: o mesmo preço do à vista.
+        precoCredito: Number(o.credito) > 0 ? Number(o.credito) : null,
         prazoMin: Math.max(0, Math.round(Number(o.prazo) || 0)),
       }));
     }
     setErro("");
     setEnviando(true);
-    const r = await gravar(enviarJson(`${url}/resposta`, "POST", { itens }), { devolveDado: true });
+    const r = await gravar(
+      enviarJson(`${url}/resposta`, "POST", { itens, taxaEntrega: Number(taxa) > 0 ? Number(taxa) : 0 }),
+      { devolveDado: true }
+    );
     setEnviando(false);
     if (!r.ok) return setErro(r.erro);
     avisar("Resposta enviada para a oficina");
@@ -944,7 +1017,13 @@ function FormResposta({
 
   return (
     <>
-      <p className="text-sm text-tinta-3">Mais de uma marca? Mande as duas: a oficina escolhe.</p>
+      <p className="text-sm text-tinta-3">
+        Mais de uma marca? Mande as duas: a oficina escolhe. O preço no crédito
+        {envio.acrescimoCredito > 0
+          ? ` vem com os ${envio.acrescimoCredito.toLocaleString("pt-BR")}% da loja`
+          : " vem igual ao à vista"}
+        ; mude se precisar.
+      </p>
 
       {envio.pecas.map((p) => {
         const r = rascunho[p.id];
@@ -963,21 +1042,37 @@ function FormResposta({
             {!r.naoTem && (
               <div className="space-y-2">
                 {r.ofertas.map((o) => (
-                  <div key={o.chave} className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:grid-cols-[1fr_8rem_6rem_auto]">
+                  <div
+                    key={o.chave}
+                    // No celular: marca; à vista e crédito lado a lado; prazo e lixeira embaixo.
+                    className="grid grid-cols-2 items-end gap-2 border-b border-linha pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_8rem_8rem_6rem_auto] sm:border-0 sm:pb-0"
+                  >
                     <Entrada
                       value={o.marca}
                       onChange={(e) => mudarOferta(p.id, o.chave, "marca", e.target.value)}
                       placeholder="Marca (ex.: Cobreq)"
                       aria-label="Marca"
-                      className="col-span-3 sm:col-span-1"
+                      className="col-span-2 sm:col-span-1"
                     />
-                    <CampoDinheiro
-                      valor={o.preco}
-                      onChange={(v) => mudarOferta(p.id, o.chave, "preco", v)}
-                      placeholder="Preço"
-                      aria-label={`Preço${p.quantidade > 1 ? " de cada unidade" : ""}`}
-                    />
-                    <div className="relative">
+                    <label className="block min-w-0">
+                      <span className="mb-0.5 block text-[0.7rem] text-tinta-3">À vista</span>
+                      <CampoDinheiro
+                        valor={o.preco}
+                        onChange={(v) => mudarOferta(p.id, o.chave, "preco", v)}
+                        placeholder="0,00"
+                        aria-label={`Preço à vista${p.quantidade > 1 ? " de cada unidade" : ""}`}
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="mb-0.5 block text-[0.7rem] text-tinta-3">No crédito</span>
+                      <CampoDinheiro
+                        valor={o.credito}
+                        onChange={(v) => mudarOferta(p.id, o.chave, "credito", v)}
+                        placeholder={o.preco ? "igual" : "0,00"}
+                        aria-label={`Preço no crédito${p.quantidade > 1 ? " de cada unidade" : ""}`}
+                      />
+                    </label>
+                    <div className="relative max-w-[8rem] sm:max-w-none">
                       <Entrada
                         value={o.prazo}
                         onChange={(e) => mudarOferta(p.id, o.chave, "prazo", e.target.value.replace(/\D/g, ""))}
@@ -1000,7 +1095,7 @@ function FormResposta({
                       }
                       disabled={r.ofertas.length === 1}
                       aria-label="Tirar esta marca"
-                      className="text-perigo"
+                      className="justify-self-end text-perigo"
                     >
                       <Lixeira tamanho={16} />
                     </Botao>
@@ -1021,6 +1116,19 @@ function FormResposta({
           </Painel>
         );
       })}
+
+      <Painel
+        titulo="Entrega"
+        ajuda={
+          envio.freteGratisAcima !== null
+            ? `Vem com a regra da loja. Pedido a partir de ${formatCurrency(envio.freteGratisAcima)} não paga entrega.`
+            : "Vem com a regra da loja para a cidade desta oficina. Em branco: entrega grátis."
+        }
+      >
+        <Campo rotulo="Taxa de entrega desta cotação">
+          <CampoDinheiro valor={taxa} onChange={setTaxa} placeholder="grátis" className="max-w-[10rem]" />
+        </Campo>
+      </Painel>
 
       {erro && <Aviso>{erro}</Aviso>}
 

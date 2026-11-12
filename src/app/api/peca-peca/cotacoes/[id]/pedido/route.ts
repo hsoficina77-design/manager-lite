@@ -33,7 +33,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (c.orcamento) {
       await tx.orcamento.updateMany({ where: { id: c.orcamento.id, status: "PENDENTE" }, data: { status: "APROVADO" } });
     }
-    await tx.cotacaoLoja.updateMany({ where: { id: { in: comPedido } }, data: { entrega: "ENVIADO" } });
+    // A forma de pagamento vai junto: o balcão sabe se manda a maquininha, e os preços
+    // do pedido ficam presos a ela.
+    await tx.cotacaoLoja.updateMany({
+      where: { id: { in: comPedido } },
+      data: { entrega: "ENVIADO", formaPagamento: c.formaPagamento },
+    });
     // Com a loja que ficou de fora do pedido não há mais o que conversar.
     await fecharConversas(
       tx,

@@ -2,6 +2,9 @@
 // estes tipos e a tela faz as contas com as mesmas funções. Sem React e sem banco
 // aqui — o arquivo é importado por rotas de API e por componentes.
 
+import { mesmaCidade } from "@/lib/municipios";
+import { formatCurrency } from "@/lib/utils";
+
 // ─── O que a API devolve ────────────────────────────────────────────────────
 
 export type VeiculoCotado = {
@@ -30,12 +33,33 @@ export type LojaVista = {
 };
 
 /** O que `/api/peca-peca/lojas` devolve: a cidade da oficina e as lojas que a atendem. */
-export type LojasDaOficina = { cidade: string | null; estado: string | null; lojas: LojaVista[] };
+export type LojasDaOficina = {
+  cidade: string | null;
+  estado: string | null;
+  lojas: LojaVista[];
+  /** A forma de pagamento da última cotação: a nova já vem com ela. */
+  formaPagamento: FormaDePagamento;
+};
 
-export type OfertaVista = { id: string; pecaId: string; marca: string; preco: number; prazoMin: number };
+export type OfertaVista = {
+  id: string;
+  pecaId: string;
+  marca: string;
+  /**
+   * O que a oficina paga por unidade NA FORMA DE PAGAMENTO EM VIGOR (a do pedido, ou a
+   * da cotação antes dele). É o número de toda conta da oficina: comparação, custo,
+   * orçamento, devolução. O servidor monta (`precoNaForma`).
+   */
+  preco: number;
+  /** Os dois preços que a loja mandou, para mostrar. */
+  precoAVista: number;
+  /** Nulo: o mesmo do à vista. */
+  precoCredito: number | null;
+  prazoMin: number;
+};
 
 /** O que o balconista manda para uma peça. */
-export type OfertaNova = { marca: string; preco: number; prazoMin: number };
+export type OfertaNova = { marca: string; preco: number; precoCredito: number | null; prazoMin: number };
 
 export type EnvioVista = {
   id: string;
@@ -49,6 +73,14 @@ export type EnvioVista = {
   entregueEm: string | null;
   /** Dias que a loja dá para devolver peça sem uso (zero = não aceita). */
   prazoDevolucao: number;
+  /** Taxa de entrega que a loja mandou. Nula: não respondeu, ou respondeu antes da taxa existir. */
+  taxaEntrega: number | null;
+  /** Com o pedido nesta loja a partir deste valor, a entrega sai grátis. */
+  freteGratisAcima: number | null;
+  /** Na loja, o débito paga o preço à vista. */
+  debitoAVista: boolean;
+  /** Como a oficina paga esta loja — só depois do pedido. */
+  formaPagamento: FormaDePagamento | null;
   ofertas: OfertaVista[];
   /** Mensagens da loja que ninguém da oficina leu ainda. */
   naoLidas: number;
@@ -76,6 +108,8 @@ export type CotacaoVista = {
   veiculoId: string | null;
   clienteNome: string | null;
   margem: number;
+  /** Como a oficina pretende pagar. Antes do pedido, é a forma da comparação. */
+  formaPagamento: FormaDePagamento;
   orcamento: { id: string; numero: number; status: string } | null;
   pedidoEm: string | null;
   pecas: PecaVista[];
@@ -111,8 +145,8 @@ export type PecaNoBalcao = {
   id: string;
   descricao: string;
   quantidade: number;
-  /** As ofertas desta loja para a peça. */
-  ofertas: { id: string; marca: string; preco: number; prazoMin: number }[];
+  /** As ofertas desta loja para a peça: `preco` é o à vista. */
+  ofertas: { id: string; marca: string; preco: number; precoCredito: number | null; prazoMin: number }[];
   /** A oficina fechou esta peça com esta loja: a marca que vai no pedido. */
   pedida: string | null;
 };
@@ -132,6 +166,20 @@ export type EnvioNoBalcao = {
   pedidoEm: string | null;
   veiculo: VeiculoCotado;
   observacao: string;
+  /** Como a oficina vai pagar: a do pedido, ou a que ela disse na cotação. */
+  formaPagamento: FormaDePagamento;
+  /** O débito paga o preço à vista: o que a loja mandou, ou a regra dela agora. */
+  debitoAVista: boolean;
+  /** A taxa que a loja mandou, ou nula se ainda não respondeu. */
+  taxaEntrega: number | null;
+  /** A taxa que vem preenchida: a regra da loja para a cidade desta oficina. */
+  taxaSugerida: number;
+  /** O "grátis acima de": o que a loja mandou, ou a regra dela agora. */
+  freteGratisAcima: number | null;
+  /** O acréscimo no crédito da regra da loja, para preencher o preço do crédito. */
+  acrescimoCredito: number;
+  /** Com o pedido nesta loja: o que cobrar da oficina na entrega — peças e entrega. */
+  cobranca: { pecas: number; entrega: number } | null;
   pecas: PecaNoBalcao[];
   /** Peças deste pedido que a oficina quer devolver (ou já devolveu). */
   devolucoes: DevolucaoVista[];
@@ -496,6 +544,136 @@ export function totaisDa(c: CotacaoVista) {
     venda += precoDaPeca(p, o.preco, c.margem) * p.quantidade;
   }
   return { custo, venda, ganho: venda - custo, escolhidas };
+}
+
+// ─── Entrega e pagamento da loja ────────────────────────────────────────────
+//
+// Cada autopeça cobra a entrega de um jeito: há a que não cobra, a de taxa fixa e a que
+// cobra pela distância — aqui, pela cidade da oficina (a lista de cidades atendidas já
+// existe; distância em km pediria o endereço de toda oficina e um serviço de mapa).
+// A regra só preenche: no balcão o vendedor muda a taxa e o preço do crédito em cada
+// resposta, e o que ele mandar é o que vale.
+
+export type TipoDeFrete = "GRATIS" | "FIXO" | "POR_CIDADE";
+
+export const TIPOS_DE_FRETE: Record<TipoDeFrete, { rotulo: string; explicacao: string }> = {
+  GRATIS: { rotulo: "Não cobro entrega", explicacao: "A entrega sai grátis para todas as oficinas." },
+  FIXO: { rotulo: "Taxa fixa", explicacao: "O mesmo valor em toda entrega." },
+  POR_CIDADE: { rotulo: "Pela distância", explicacao: "Um valor para cada cidade que a loja atende." },
+};
+
+export type EntregaEPagamento = {
+  freteTipo: TipoDeFrete;
+  /** Taxa fixa; por cidade, o valor das cidades sem taxa própria. */
+  freteValor: number;
+  /** "Suzano - SP" → taxa. Só vale no `POR_CIDADE`. */
+  fretePorCidade: Record<string, number>;
+  /** Pedido a partir deste valor não paga entrega. */
+  freteGratisAcima: number | null;
+  /** O crédito custa este tanto a mais que o à vista, em %. */
+  acrescimoCredito: number;
+  /** O débito paga o preço à vista. */
+  debitoAVista: boolean;
+};
+
+export const ENTREGA_E_PAGAMENTO_PADRAO: EntregaEPagamento = {
+  freteTipo: "GRATIS",
+  freteValor: 0,
+  fretePorCidade: {},
+  freteGratisAcima: null,
+  acrescimoCredito: 0,
+  debitoAVista: true,
+};
+
+export function ehTipoDeFrete(v: unknown): v is TipoDeFrete {
+  return v === "GRATIS" || v === "FIXO" || v === "POR_CIDADE";
+}
+
+/** O `fretePorCidade` como sai do banco (jsonb): só os pares cidade → valor que fazem sentido. */
+export function lerFretePorCidade(bruto: unknown): Record<string, number> {
+  if (!bruto || typeof bruto !== "object" || Array.isArray(bruto)) return {};
+  const certo: Record<string, number> = {};
+  for (const [cidade, valor] of Object.entries(bruto)) {
+    if (typeof valor === "number" && Number.isFinite(valor) && valor >= 0) certo[cidade] = valor;
+  }
+  return certo;
+}
+
+/** A taxa da cidade da oficina, como a loja configurou (sem o "grátis acima de"). */
+export function taxaDaCidade(regra: EntregaEPagamento, cidadeDaOficina: string | null): number {
+  if (regra.freteTipo === "GRATIS") return 0;
+  if (regra.freteTipo === "FIXO" || !cidadeDaOficina) return regra.freteValor;
+  const propria = Object.entries(regra.fretePorCidade).find(([c]) => mesmaCidade(c, cidadeDaOficina));
+  return propria ? propria[1] : regra.freteValor;
+}
+
+/**
+ * A taxa que vem preenchida no balcão: a da cidade da oficina, zerada quando o pedido
+ * (no preço da loja) chega ao "grátis acima de".
+ */
+export function freteSugerido(regra: EntregaEPagamento, cidadeDaOficina: string | null, totalDoPedido: number): number {
+  if (regra.freteGratisAcima !== null && totalDoPedido >= regra.freteGratisAcima) return 0;
+  return taxaDaCidade(regra, cidadeDaOficina);
+}
+
+/** O preço no crédito que vem preenchido: o à vista mais o acréscimo da loja, em centavos certos. */
+export function precoNoCredito(precoAVista: number, acrescimo: number): number {
+  return Math.round(precoAVista * (1 + acrescimo / 100) * 100) / 100;
+}
+
+/**
+ * A taxa que a oficina paga a uma loja com o pedido neste valor (no preço da loja). A
+ * loja que respondeu antes de a taxa existir conta como entrega grátis — era o combinado.
+ */
+export function freteDoEnvio(e: Pick<EnvioVista, "taxaEntrega" | "freteGratisAcima">, totalDoPedido: number): number {
+  if (!e.taxaEntrega) return 0;
+  if (e.freteGratisAcima !== null && totalDoPedido >= e.freteGratisAcima) return 0;
+  return e.taxaEntrega;
+}
+
+/** "entrega R$ 8,00 (grátis acima de R$ 300,00)" — o frete de uma loja, dito para a oficina. */
+export function textoDoFrete(e: Pick<EnvioVista, "taxaEntrega" | "freteGratisAcima">): string {
+  if (!e.taxaEntrega) return "entrega grátis";
+  return `entrega ${formatCurrency(e.taxaEntrega)}${
+    e.freteGratisAcima !== null ? ` (grátis acima de ${formatCurrency(e.freteGratisAcima)})` : ""
+  }`;
+}
+
+// ─── Forma de pagamento ─────────────────────────────────────────────────────
+//
+// O pagamento é na entrega, na maquininha do motoboy, fora do app. Aqui fica só COMO a
+// oficina vai pagar: é o que decide o desconto do balcão (Pix e dinheiro pagam o preço à
+// vista; o crédito, o preço do crédito; o débito, o que a loja disser).
+
+export type FormaDePagamento = "PIX" | "DEBITO" | "CREDITO";
+
+export const FORMAS_DE_PAGAMENTO: Record<FormaDePagamento, { rotulo: string }> = {
+  PIX: { rotulo: "Pix ou dinheiro" },
+  DEBITO: { rotulo: "Débito" },
+  CREDITO: { rotulo: "Crédito" },
+};
+
+export function ehFormaDePagamento(v: unknown): v is FormaDePagamento {
+  return v === "PIX" || v === "DEBITO" || v === "CREDITO";
+}
+
+/** Esta forma paga o preço do crédito nesta loja. */
+export function pagaPrecoDoCredito(forma: FormaDePagamento, debitoAVista: boolean): boolean {
+  return forma === "CREDITO" || (forma === "DEBITO" && !debitoAVista);
+}
+
+/** "Crédito: paga o preço do crédito" — a forma dita para o balconista, com o preço que vale. */
+export function textoDaForma(forma: FormaDePagamento, debitoAVista: boolean): string {
+  return `${FORMAS_DE_PAGAMENTO[forma].rotulo}: paga o preço ${pagaPrecoDoCredito(forma, debitoAVista) ? "do crédito" : "à vista"}`;
+}
+
+/** O preço por unidade de uma oferta pago desta forma, nesta loja. */
+export function precoNaForma(
+  o: { preco: number; precoCredito: number | null },
+  forma: FormaDePagamento,
+  debitoAVista: boolean
+): number {
+  return pagaPrecoDoCredito(forma, debitoAVista) ? (o.precoCredito ?? o.preco) : o.preco;
 }
 
 export function descricaoDoVeiculo(v: Pick<VeiculoCotado, "marca" | "modelo" | "ano">): string {

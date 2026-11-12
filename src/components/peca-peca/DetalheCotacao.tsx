@@ -13,6 +13,7 @@ import { useUsaBoxOS } from "@/components/UsuarioProvider";
 import { useLinkDoBoxOS } from "@/components/ProdutoProvider";
 import {
   ETAPAS_ENTREGA,
+  FORMAS_DE_PAGAMENTO,
   aConferir,
   descricaoDoVeiculo,
   escolhaDa,
@@ -24,13 +25,15 @@ import {
   precoDaPeca,
   rotuloDaEntrega,
   situacaoDaDevolucao,
+  textoDoFrete,
   totaisDa,
   tudoRecebido,
   type CotacaoVista,
   type Etapa,
+  type FormaDePagamento,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
-import { AvisoSemConexao, Cabecalho, PilulaEtapa, horaCurta } from "./ui";
+import { AvisoSemConexao, Cabecalho, EscolhaDaForma, PilulaEtapa, horaCurta } from "./ui";
 import { VitrineBoxOS } from "./VitrineBoxOS";
 import { DevolucoesDaLoja, ModalDevolucao, temOQueDevolver } from "./Devolucoes";
 import { ContadorDeMensagens, Conversa, useConversaDoEndereco, type EventoDaConversa } from "./Conversa";
@@ -416,6 +419,9 @@ function Conteudo({
             onSalvarMargem={salvarMargem}
             onGerar={() => setGerando(true)}
             onPedir={pedir}
+            onForma={(formaPagamento) =>
+              alterar({ formaPagamento }, (d) => ({ ...d, formaPagamento }))
+            }
           />
           <Botao variante="fantasma" tamanho="denso" onClick={excluir} className="w-full text-perigo">
             Excluir cotação
@@ -460,7 +466,7 @@ function PainelLojas({ c, onConversar }: { c: CotacaoVista; onConversar: (envioI
                 <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
                 <p className="text-xs text-tinta-3">
                   {e.respondidaEm
-                    ? `Respondeu às ${horaCurta(e.respondidaEm)} · tem ${temQuantas} de ${c.pecas.length} peças`
+                    ? `Respondeu às ${horaCurta(e.respondidaEm)} · tem ${temQuantas} de ${c.pecas.length} peças · ${textoDoFrete(e)}`
                     : "Esperando o balconista responder"}
                 </p>
               </div>
@@ -592,8 +598,16 @@ function PainelEscolha({
                         <span className="shrink-0 text-right">
                           <span className="block text-sm font-semibold tabular-nums text-tinta">
                             {formatCurrency(o.preco)}
+                            {p.quantidade > 1 && <span className="font-normal text-tinta-3"> cada</span>}
                           </span>
-                          {p.quantidade > 1 && <span className="block text-[0.7rem] text-tinta-3">cada</span>}
+                          {/* O outro preço da loja, quando há dois: para ver quanto a forma pesa. */}
+                          {o.precoCredito !== null && (
+                            <span className="block text-[0.7rem] tabular-nums text-tinta-3">
+                              {o.preco === o.precoAVista
+                                ? `${formatCurrency(o.precoCredito)} no crédito`
+                                : `${formatCurrency(o.precoAVista)} à vista`}
+                            </span>
+                          )}
                         </span>
                       </label>
                     );
@@ -721,6 +735,7 @@ function Resumo({
   onSalvarMargem,
   onGerar,
   onPedir,
+  onForma,
 }: {
   c: CotacaoVista;
   usaBoxOS: boolean;
@@ -730,6 +745,7 @@ function Resumo({
   onSalvarMargem: () => void;
   onGerar: () => void;
   onPedir: () => void;
+  onForma: (forma: FormaDePagamento) => void;
 }) {
   const linkDoBoxOS = useLinkDoBoxOS();
   const t = totaisDa(c);
@@ -745,6 +761,17 @@ function Resumo({
         <span className="text-xs text-tinta-3">
           {t.escolhidas} de {c.pecas.length} peças escolhidas
         </span>
+      </div>
+
+      {/* A forma muda o preço de cada oferta: vem antes dos números. Depois do orçamento ou
+          do pedido, fica fixa (o custo já saiu com ela). */}
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-tinta-2">Como vai pagar</p>
+        {c.pedidoEm || c.orcamento ? (
+          <p className="text-sm font-semibold text-tinta">{FORMAS_DE_PAGAMENTO[c.formaPagamento].rotulo}</p>
+        ) : (
+          <EscolhaDaForma valor={c.formaPagamento} onChange={onForma} />
+        )}
       </div>
 
       <div className="space-y-1.5 text-sm">

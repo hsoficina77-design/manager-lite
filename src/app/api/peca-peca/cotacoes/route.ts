@@ -52,6 +52,7 @@ export async function POST(request: Request) {
           ano: v.ano,
           motor: v.motor,
           observacao: dados.observacao || null,
+          formaPagamento: dados.formaPagamento,
           veiculoId: doCadastro?.id ?? null,
           clienteId: doCadastro?.clienteId ?? null,
           pecas: {

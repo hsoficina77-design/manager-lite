@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
 import { todasAsLojas } from "@/lib/balcao";
-import { confirmarRecebimento, lerCotacao, medirSeEntregou } from "@/lib/cotacoes";
+import { confirmarRecebimento, formaDa, lerCotacao, medirSeEntregou } from "@/lib/cotacoes";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { devolucaoCriarSchema } from "@/lib/schemas-peca-peca";
-import { MOTIVOS_DEVOLUCAO, podeDevolver, prazoParaDevolver, quantasDaParaDevolver } from "@/components/peca-peca/regras";
+import {
+  MOTIVOS_DEVOLUCAO,
+  podeDevolver,
+  prazoParaDevolver,
+  precoNaForma,
+  quantasDaParaDevolver,
+} from "@/components/peca-peca/regras";
 
 /**
  * A oficina pede para devolver uma peça que a loja entregou. Pedir a devolução também
@@ -36,7 +42,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           entrega: true,
           oficinaRecebeuEm: true,
           entregueEm: true,
-          ofertas: { select: { id: true, preco: true } },
+          formaPagamento: true,
+          debitoAVista: true,
+          ofertas: { select: { id: true, preco: true, precoCredito: true } },
           devolucoes: { select: { pecaId: true, quantidade: true, recusadaEm: true, canceladaEm: true } },
         },
       });
@@ -92,7 +100,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           detalhe: dados.detalhe || null,
           // Peça sem uso volta por dinheiro: não há "a certa" para mandar no lugar.
           querTroca: dados.motivo === "NAO_USADA" ? false : dados.querTroca,
-          valor: Math.round(oferta.preco * dados.quantidade * 100) / 100,
+          // O que a oficina pagou: o preço da forma do pedido.
+          valor:
+            Math.round(
+              precoNaForma(oferta, formaDa(envio.formaPagamento ?? "PIX"), envio.debitoAVista) * dados.quantidade * 100
+            ) / 100,
         },
       });
       return { entregou };

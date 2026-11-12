@@ -847,6 +847,23 @@ model Loja {
   /// Dias, contados da entrega, para a oficina devolver peça que não usou. Zero = a loja
   /// não aceita devolução de peça sem uso. Defeito e peça errada não têm prazo no app.
   prazoDevolucao  Int      @default(7)
+
+  // ── Entrega e pagamento: o dono configura na tela "Loja". A regra só preenche o
+  // balcão — o balconista muda a taxa e o preço do crédito em cada resposta. As contas
+  // estão em components/peca-peca/regras.ts (`freteSugerido`, `precoNoCredito`).
+  /// Como a loja cobra a entrega: GRATIS | FIXO | POR_CIDADE.
+  freteTipo        String   @default("GRATIS")
+  /// Na taxa fixa, o valor. Por cidade, o das cidades sem taxa própria.
+  freteValor       Float    @default(0)
+  /// Por cidade: rótulo "Nome - UF" → taxa, em reais.
+  fretePorCidade   Json     @default("{}")
+  /// Pedido a partir deste valor (preço da loja) não paga entrega. Nulo = sempre paga.
+  freteGratisAcima Float?
+  /// Quanto o crédito custa a mais que o preço à vista, em %.
+  acrescimoCredito Float    @default(0)
+  /// O débito paga o preço à vista (o comum) ou o do crédito.
+  debitoAVista     Boolean  @default(true)
+
   ativa           Boolean  @default(true)
   createdAt       DateTime @default(now())
 
@@ -944,6 +961,10 @@ model Cotacao {
   veiculoId   String?
   /// Margem sobre o preço da loja, em %. Vale para a peça sem preço de venda digitado.
   margem      Int       @default(30)
+  /// Como a oficina pretende pagar: PIX (Pix ou dinheiro) | DEBITO | CREDITO. A loja lê
+  /// no balcão — é o que decide o desconto — e a comparação usa o preço dessa forma.
+  /// No pedido, vai para cada envio (`CotacaoLoja.formaPagamento`).
+  formaPagamento String  @default("PIX")
   orcamentoId String?   @unique
   /// O cliente aprovou e o pedido foi para as lojas.
   pedidoEm    DateTime?
@@ -1002,6 +1023,18 @@ model CotacaoLoja {
   /// Id do `UsuarioLoja` que respondeu (nulo no balcão antigo, por link). Sem chave
   /// estrangeira: é só para o resumo do dono da loja.
   respondidoPor    String?
+  // ── Entrega e pagamento, gravados na resposta: mudar a regra da loja depois não
+  // mexe no que ela já mandou.
+  /// A taxa de entrega que a loja mandou (vem da regra dela, o vendedor pode mudar).
+  /// Nula: a loja ainda não respondeu, ou respondeu antes de existir a taxa.
+  taxaEntrega      Float?
+  /// O "grátis acima de" da loja na hora da resposta: com o pedido a partir dele, a
+  /// taxa não é cobrada.
+  freteGratisAcima Float?
+  /// O débito paga o preço à vista, como a loja dizia na hora da resposta.
+  debitoAVista     Boolean   @default(true)
+  /// Como a oficina paga esta loja — copiado da cotação no pedido. Nulo antes dele.
+  formaPagamento   String?
   createdAt        DateTime  @default(now())
 
   // ── Conversa (ver `Mensagem`): o resumo fica aqui para as caixas de entrada e os
@@ -1101,7 +1134,10 @@ model Oferta {
   envioId   String
   pecaId    String
   marca     String
+  /// Preço à vista (Pix ou dinheiro), por unidade.
   preco     Float
+  /// Preço no crédito, por unidade. Nulo: o mesmo do à vista.
+  precoCredito Float?
   prazoMin  Int
   createdAt DateTime @default(now())
 

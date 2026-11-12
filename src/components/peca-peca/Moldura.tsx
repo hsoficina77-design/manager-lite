@@ -321,7 +321,7 @@ export function MolduraDaLoja({
   const itens: ItemDaMoldura[] = [
     { href: "/loja", label: "Balcão", Icone: Recibo },
     { href: "/loja/conversas", label: "Conversas", Icone: IconeConversa, contador: naoLidas },
-    ...(pode("loja.resumo") ? [{ href: "/loja/resumo", label: "Resumo", Icone: Grafico }] : []),
+    ...(pode("loja.resumo") ? [{ href: "/loja/resumo", label: "Resultados", Icone: Grafico }] : []),
     ...(pode("loja.equipe") ? [{ href: "/loja/equipe", label: "Equipe", Icone: Pessoas }] : []),
     ...(pode("loja.dados") ? [{ href: "/loja/dados", label: "Loja", Icone: Engrenagem }] : []),
   ];

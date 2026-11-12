@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
-import { lerCotacao } from "@/lib/cotacoes";
+import { formaDa, lerCotacao } from "@/lib/cotacoes";
+import { precoNaForma } from "@/components/peca-peca/regras";
 import { registroNaoEncontrado } from "@/lib/db-oficina";
 import { lerJson, respostaDeValidacao } from "@/lib/validacao";
 import { cotacaoAlterarSchema } from "@/lib/schemas-peca-peca";
@@ -19,7 +20,8 @@ export async function GET(_request: Request, { params }: Params) {
 
 /**
  * O que a oficina mexe na cotação: a oferta escolhida de uma peça, "menor preço em
- * tudo", e — para o orçamento do boxOS — a margem e o preço de venda de uma peça.
+ * tudo", como vai pagar, e — para o orçamento do boxOS — a margem e o preço de venda
+ * de uma peça.
  * Trocar a oferta de uma peça descarta o preço de venda digitado para ela — o custo
  * mudou.
  *
@@ -41,8 +43,15 @@ export async function PATCH(request: Request, { params }: Params) {
         select: {
           orcamentoId: true,
           pedidoEm: true,
+          formaPagamento: true,
           pecas: {
-            select: { id: true, ofertaId: true, ofertas: { select: { id: true, preco: true, prazoMin: true } } },
+            select: {
+              id: true,
+              ofertaId: true,
+              ofertas: {
+                select: { id: true, preco: true, precoCredito: true, prazoMin: true, envio: { select: { debitoAVista: true } } },
+              },
+            },
           },
         },
       });
@@ -53,7 +62,7 @@ export async function PATCH(request: Request, { params }: Params) {
           { status: 409 }
         );
       }
-      if (c.pedidoEm && (dados.escolha || dados.menorPreco)) {
+      if (c.pedidoEm && (dados.escolha || dados.menorPreco || dados.formaPagamento)) {
         return NextResponse.json(
           { error: "O pedido já foi feito: as lojas estão separando estas peças." },
           { status: 409 }
@@ -62,6 +71,12 @@ export async function PATCH(request: Request, { params }: Params) {
 
       if (dados.margem !== undefined) {
         await tx.cotacao.update({ where: { id }, data: { margem: dados.margem } });
+      }
+
+      // A forma muda o custo de cada oferta, mas não a escolha: a oficina decide se troca.
+      const forma = dados.formaPagamento ?? formaDa(c.formaPagamento);
+      if (dados.formaPagamento) {
+        await tx.cotacao.update({ where: { id }, data: { formaPagamento: dados.formaPagamento } });
       }
 
       if (dados.escolha) {
@@ -78,7 +93,8 @@ export async function PATCH(request: Request, { params }: Params) {
 
       if (dados.menorPreco) {
         for (const peca of c.pecas) {
-          const [melhor] = [...peca.ofertas].sort((a, b) => a.preco - b.preco || a.prazoMin - b.prazoMin);
+          const custo = (o: (typeof peca.ofertas)[number]) => precoNaForma(o, forma, o.envio.debitoAVista);
+          const [melhor] = [...peca.ofertas].sort((a, b) => custo(a) - custo(b) || a.prazoMin - b.prazoMin);
           if (melhor && melhor.id !== peca.ofertaId) {
             await tx.cotacaoPeca.update({ where: { id: peca.id }, data: { ofertaId: melhor.id, vendaUnit: null } });
           }

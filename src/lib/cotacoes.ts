@@ -16,11 +16,19 @@ import {
 import { fecharConversas } from "@/lib/conversa";
 import {
   ehEtapaEntrega,
+  ehFormaDePagamento,
   precoDaPeca,
+  precoNaForma,
   situacaoDaConversa,
   type CotacaoVista,
+  type FormaDePagamento,
   type LojaVista,
 } from "@/components/peca-peca/regras";
+
+/** A forma da cotação, como está no banco. Texto estranho vale Pix, o padrão. */
+export function formaDa(v: string): FormaDePagamento {
+  return ehFormaDePagamento(v) ? v : "PIX";
+}
 
 const INCLUIR = {
   cliente: { select: { nome: true } },
@@ -52,6 +60,7 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
     veiculoId: c.veiculoId,
     clienteNome: c.cliente?.nome ?? null,
     margem: c.margem,
+    formaPagamento: formaDa(c.formaPagamento),
     orcamento: c.orcamento,
     pedidoEm: c.pedidoEm?.toISOString() ?? null,
     pecas: c.pecas.map((p) => ({
@@ -63,6 +72,8 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
     })),
     envios: c.envios.map((e) => {
       const loja = lojas.get(e.lojaId);
+      // A forma que vale para os preços: a do pedido desta loja, ou a da cotação.
+      const forma = ehFormaDePagamento(e.formaPagamento) ? e.formaPagamento : formaDa(c.formaPagamento);
       return {
         id: e.id,
         lojaId: e.lojaId,
@@ -72,7 +83,19 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
         oficinaRecebeuEm: e.oficinaRecebeuEm?.toISOString() ?? null,
         entregueEm: e.entregueEm?.toISOString() ?? null,
         prazoDevolucao: loja?.prazoDevolucao ?? 0,
-        ofertas: e.ofertas.map((o) => ({ id: o.id, pecaId: o.pecaId, marca: o.marca, preco: o.preco, prazoMin: o.prazoMin })),
+        taxaEntrega: e.taxaEntrega,
+        freteGratisAcima: e.freteGratisAcima,
+        debitoAVista: e.debitoAVista,
+        formaPagamento: ehFormaDePagamento(e.formaPagamento) ? e.formaPagamento : null,
+        ofertas: e.ofertas.map((o) => ({
+          id: o.id,
+          pecaId: o.pecaId,
+          marca: o.marca,
+          preco: precoNaForma(o, forma, e.debitoAVista),
+          precoAVista: o.preco,
+          precoCredito: o.precoCredito,
+          prazoMin: o.prazoMin,
+        })),
         naoLidas: e.naoLidasOficina,
         conversaFechada: !situacaoDaConversa({ ...e, pedidoEm: c.pedidoEm }).aberta,
       };

@@ -26,7 +26,7 @@ export const PERMISSOES_DA_LOJA = [
     rotulo: "Cuidar das devoluções",
     ajuda: "Aceitar ou recusar, mandar a troca e confirmar a peça que voltou.",
   },
-  { chave: "loja.resumo", rotulo: "Ver o resumo de vendas", ajuda: "Cotações, pedidos e valores da loja." },
+  { chave: "loja.resumo", rotulo: "Ver os resultados da loja", ajuda: "Vendas, clientes, peças mais pedidas e tempo de resposta." },
   { chave: "loja.equipe", rotulo: "Cuidar da equipe", ajuda: "Convidar pessoas, mudar acessos e dar novo acesso." },
   { chave: "loja.dados", rotulo: "Editar os dados da loja", ajuda: "Telefone, cidades atendidas e prazo de devolução." },
 ] as const;

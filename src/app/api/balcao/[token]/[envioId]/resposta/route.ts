@@ -5,7 +5,10 @@ import { respostaDoBalcaoSchema } from "@/lib/schemas-peca-peca";
 
 type Params = { params: Promise<{ token: string; envioId: string }> };
 
-/** O balconista manda marca, preço e prazo de cada peça (lista vazia = não tenho). */
+/**
+ * O balconista manda marca, preços e prazo de cada peça (lista vazia = não tenho), e a
+ * taxa de entrega da cotação.
+ */
 export async function POST(request: Request, { params }: Params) {
   const { token, envioId } = await params;
   const loja = await lojaPeloToken(token);
@@ -13,8 +16,8 @@ export async function POST(request: Request, { params }: Params) {
   if (loja.comLogin) return NextResponse.json({ error: MENSAGEM_BALCAO_COM_LOGIN }, { status: 410 });
 
   try {
-    const { itens } = await lerJson(request, respostaDoBalcaoSchema);
-    const resultado = await responderEnvio(loja.id, envioId, itens);
+    const { itens, taxaEntrega } = await lerJson(request, respostaDoBalcaoSchema);
+    const resultado = await responderEnvio(loja.id, envioId, itens, null, taxaEntrega);
     if (resultado === "nao-encontrado") {
       return NextResponse.json({ error: "Cotação não encontrada" }, { status: 404 });
     }

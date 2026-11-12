@@ -11,7 +11,44 @@ import { Voltar } from "@/components/ui/Icones";
 import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 import { useProduto } from "@/components/ProdutoProvider";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
-import { ETAPAS, etapaDa, type CotacaoVista } from "./regras";
+import { ETAPAS, FORMAS_DE_PAGAMENTO, etapaDa, type CotacaoVista, type FormaDePagamento } from "./regras";
+
+/**
+ * Como a oficina vai pagar: três botões lado a lado. A loja lê no balcão — é o que decide
+ * o desconto —, e a comparação dos preços usa a forma marcada.
+ */
+export function EscolhaDaForma({
+  valor,
+  onChange,
+  desligado = false,
+}: {
+  valor: FormaDePagamento;
+  onChange: (forma: FormaDePagamento) => void;
+  desligado?: boolean;
+}) {
+  return (
+    <div role="radiogroup" aria-label="Como vai pagar" className="grid grid-cols-3 gap-1.5">
+      {(Object.keys(FORMAS_DE_PAGAMENTO) as FormaDePagamento[]).map((forma) => (
+        <button
+          key={forma}
+          type="button"
+          role="radio"
+          aria-checked={valor === forma}
+          disabled={desligado}
+          onClick={() => valor !== forma && onChange(forma)}
+          className={cn(
+            "min-h-11 rounded-lg border px-2 text-sm font-medium leading-tight transition-colors disabled:cursor-default",
+            valor === forma
+              ? "border-brand-500 bg-brand-50 text-tinta"
+              : "border-linha text-tinta-2 enabled:hover:border-brand-500 disabled:opacity-60"
+          )}
+        >
+          {FORMAS_DE_PAGAMENTO[forma].rotulo}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Nome do produto, com as cores dele — também dentro do boxOS: é outro produto. */
 export function MarcaPecaPeca({ className }: { className?: string }) {
