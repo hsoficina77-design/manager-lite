@@ -8,7 +8,7 @@ import type { Papel } from "@/lib/permissoes";
 import { LogoBoxOS, SimboloBoxOS } from "../marca/LogoBoxOS";
 import { NotificacaoSino } from "../ui/Notificacoes";
 import { SeletorTema } from "../ui/Tema";
-import { Chave, Dinheiro, Fechar, Grafico, Mais, Menu as IconeMenu, Patio, PecaPeca, Sair } from "../ui/Icones";
+import { Chave, Conversa, Dinheiro, Fechar, Grafico, Mais, Menu as IconeMenu, Patio, PecaPeca, Sair } from "../ui/Icones";
 
 // Menu do painel admin do boxOS. Mesmo desenho do menu da oficina (Sidebar.tsx) —
 // lateral no computador, cabeçalho e barra inferior no celular —, com os destinos
@@ -19,6 +19,8 @@ type Item = { href: string; label: string; Icone: typeof Patio; exato?: boolean 
 const ITENS: Item[] = [
   { href: "/admin", label: "Visão geral", Icone: Patio, exato: true },
   { href: "/admin/oficinas", label: "Oficinas", Icone: Chave },
+  // CRM: oficinas do Google Maps abordadas pelo WhatsApp, e as tarefas do dia.
+  { href: "/admin/prospeccao", label: "Prospecção", Icone: Conversa },
   { href: "/admin/convites", label: "Convites", Icone: Mais },
   { href: "/admin/receita", label: "Receita", Icone: Dinheiro },
   // O Peça Peça: contas grátis, uso e a procura por cidade.

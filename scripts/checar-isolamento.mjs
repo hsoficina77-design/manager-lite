@@ -29,6 +29,9 @@ const PERMITIDOS = new Set([
   // Contas de quem trabalha nas autopeças: login, sessão, convite e equipe — tabelas do
   // sistema, como a própria loja. Não lê nada de oficina.
   "src/lib/conta-loja.ts",
+  // Prospecção (CRM do painel admin): tabelas do sistema. Da oficina só lê a casca, e
+  // por `listarOficinas` (sistema.ts).
+  "src/lib/prospeccao-banco.ts",
 ]);
 
 const RAIZ = process.cwd();

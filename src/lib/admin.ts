@@ -89,6 +89,9 @@ export type ResumoDaPlataforma = ReturnType<typeof resumoDaPlataforma>;
 
 /** De onde vieram: `?origem=` do link, ou o caminho de entrada quando não há. */
 export function origemDa(o: Pick<OficinaResumo, "origem" | "whatsapp">): string {
+  // Link mandado pela prospecção: leva o id do lead (`wa-<id>`), um por oficina — no
+  // painel conta como uma origem só.
+  if (o.origem?.startsWith("wa-")) return "prospecção (WhatsApp)";
   if (o.origem) return o.origem;
   return o.whatsapp ? "link sem origem" : "convite";
 }

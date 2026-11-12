@@ -84,6 +84,7 @@ model Oficina {
   ofertas            Oferta[]
   devolucoes         Devolucao[]
   mensagens          Mensagem[]
+  leads              Lead[]
 }
 
 // Convite para uma oficina nova entrar. O link leva um segredo aleatório; aqui fica só
@@ -1167,4 +1168,108 @@ model Devolucao {
   @@index([oficinaId])
   @@index([envioId])
   @@index([pecaId])
+}
+
+// ─── Prospecção (CRM do painel admin) ────────────────────────────────────────
+//
+// Oficinas achadas no Google Maps (CSV do scraper) que o boxOS aborda pelo WhatsApp,
+// à mão. Tabelas do sistema, como `Convite`: só o painel admin lê e grava
+// (lib/prospeccao-banco.ts), nenhuma oficina enxerga. RLS ligada só para fechar a API
+// pública do Supabase.
+//
+// A etapa depois do cadastro não é guardada: sai da conta ligada (teste, OS, pagamento)
+// a cada leitura — `etapaDoLead` em lib/prospeccao.ts. Como o plano da oficina, não
+// depende de job nenhum.
+
+/// Uma importação de CSV: de onde vieram os leads, para comparar qual busca rende mais.
+model LoteProspeccao {
+  id          String   @id @default(cuid())
+  nome        String
+  arquivo     String?
+  linhas      Int
+  novos       Int
+  atualizados Int
+  descartados Int
+  criadoPor   String
+  createdAt   DateTime @default(now())
+
+  leads Lead[]
+}
+
+model Lead {
+  id              String    @id @default(cuid())
+  loteId          String?
+  /// Identidade do lugar no Google. É a chave contra duplicata entre importações.
+  placeId         String?   @unique
+  /// "OFICINA" (cliente do boxOS) ou "AUTOPECA" (cliente do Peça Peça).
+  publico         String    @default("OFICINA")
+  nome            String
+  categoria       String?
+  /// Só dígitos, com 55 e DDD — o formato do wa.me e do `Oficina.whatsapp`.
+  telefone        String?
+  /// "CELULAR", "FIXO" ou "SEM". Fixo pode ter WhatsApp Business: ver `temWhatsapp`.
+  tipoTelefone    String    @default("SEM")
+  /// Conferido ao abrir o WhatsApp. Nulo = ainda não testado.
+  temWhatsapp     Boolean?
+  email           String?
+  site            String?
+  instagram       String?
+  facebook        String?
+  rua             String?
+  bairro          String?
+  cidade          String?
+  cep             String?
+  uf              String?
+  latitude        Float?
+  longitude       Float?
+  linkMaps        String?
+  nota            Float?
+  avaliacoes      Int?
+  /// % das avaliações com 1 ou 2 estrelas.
+  pctNegativas    Float?
+  horario         String?
+  /// Abertura na segunda ("08:00"): a hora boa de mandar mensagem é pouco antes.
+  abreSeg         String?
+  /// Palavras de reclamação achadas nas avaliações. Pista, não verdade.
+  sinaisDeDor     String?
+  /// Trechos das avaliações ruins (sem o nome de quem avaliou). Só para quem aborda ler.
+  avaliacoesRuins String?
+  fotoUrl         String?
+  /// Etapa antes do cadastro: "NOVO", "ABORDADO", "RESPONDEU" ou "PERDIDO".
+  etapa           String    @default("NOVO")
+  motivoPerda     String?
+  /// Pediu para não ser procurado: nunca mais entra na fila, nem reimportado.
+  naoContatar     Boolean   @default(false)
+  /// Conta ligada à mão. Fora isso, a ligação sai do `?origem=wa-<id>` do link ou do
+  /// telefone igual ao WhatsApp do cadastro.
+  oficinaId       String?
+  ultimoContato   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lote       LoteProspeccao? @relation(fields: [loteId], references: [id], onDelete: SetNull)
+  oficina    Oficina?        @relation(fields: [oficinaId], references: [id], onDelete: SetNull)
+  interacoes InteracaoLead[]
+
+  @@index([telefone])
+  @@index([cidade])
+  @@index([loteId])
+}
+
+/// Histórico do lead: anotação, mensagem enviada (e a tarefa do dia que ela cumpriu),
+/// tarefa pulada e troca de etapa.
+model InteracaoLead {
+  id        String   @id @default(cuid())
+  leadId    String
+  /// "NOTA", "MENSAGEM", "PULOU" ou "ETAPA".
+  tipo      String
+  /// Id da regra da tarefa do dia (ver `REGRAS` em lib/prospeccao.ts).
+  regra     String?
+  texto     String
+  criadoPor String
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
 }
