@@ -18,6 +18,7 @@ import CabecalhoDocumento from "@/components/CabecalhoDocumento";
 import Fotos, { type Foto } from "@/components/Fotos";
 import { usePodeFinanceiro, usePodeExcluir } from "@/components/UsuarioProvider";
 import { TextoFormatado } from "@/components/ui/TextoFormatado";
+import { useSaidaBloqueada } from "@/components/plano/Bloqueio";
 
 const BaixarOrcamento = dynamic(() => import("@/components/BaixarOrcamento"), {
   ssr: false,
@@ -66,6 +67,7 @@ export default function OrcamentoDetailPage() {
   const podeExcluir = usePodeExcluir();
   const confirmar = useConfirmar();
   const avisar = useAvisar();
+  const saidaBloqueada = useSaidaBloqueada();
   const [orc, setOrc] = useState<Orcamento | null>(null);
   const config = useConfiguracao();
   const [loading, setLoading] = useState(true);
@@ -212,7 +214,7 @@ export default function OrcamentoDetailPage() {
               />
             </div>
           )}
-          <Botao variante="secundario" tamanho="denso" onClick={() => window.print()}>
+          <Botao variante="secundario" tamanho="denso" onClick={() => { if (!saidaBloqueada()) window.print(); }}>
             Imprimir
           </Botao>
           <BaixarOrcamento orc={orc} />

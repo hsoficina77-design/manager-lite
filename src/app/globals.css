@@ -652,6 +652,19 @@
     background: #ffffff !important;
   }
 
+  /* Teste encerrado: os botões de baixar e imprimir já recusam, e o Ctrl+P do
+     navegador também não leva o documento — sai só o aviso. */
+  html[data-somente-leitura] body > * {
+    display: none !important;
+  }
+  html[data-somente-leitura] body::after {
+    content: "O teste grátis do boxOS terminou. Para imprimir documentos, assine o boxOS.";
+    display: block;
+    padding: 2rem;
+    font-size: 14pt;
+    color: #14181d;
+  }
+
   /* Esconde elementos do layout (sidebar etc.) que não fazem parte do documento */
   .print-hide-layout {
     display: none !important;

@@ -8,6 +8,7 @@ import { toDataUrl } from "@/lib/foto-pdf";
 import { PRAZO, comPrazo } from "@/lib/tempo-limite";
 import { cn } from "@/lib/utils";
 import { Botao } from "@/components/ui/Botao";
+import { useSaidaBloqueada } from "@/components/plano/Bloqueio";
 import { ComprovantePagamentoPdfDocument, type ComprovanteDados } from "./ComprovantePagamentoPdfDocument";
 
 /**
@@ -28,8 +29,10 @@ export default function BaixarComprovante({
 }) {
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const saidaBloqueada = useSaidaBloqueada();
 
   const baixar = useCallback(async () => {
+    if (saidaBloqueada()) return;
     setGerando(true);
     setErro(null);
     try {
@@ -65,7 +68,7 @@ export default function BaixarComprovante({
     } finally {
       setGerando(false);
     }
-  }, [dados]);
+  }, [dados, saidaBloqueada]);
 
   return (
     <div className="relative">

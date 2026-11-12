@@ -213,6 +213,8 @@ export default async function RootLayout({
       className={`${poppins.variable} ${baloo.variable} ${inter.variable}`}
       data-produto={cara}
       data-conta-loja={contaLoja?.id}
+      // Teste encerrado: o Ctrl+P do navegador sai só com o aviso (ver globals.css).
+      data-somente-leitura={usuario?.somenteLeitura ? "" : undefined}
     >
       <head>
         {/* Claro ou escuro antes da primeira pintura — senão a tela nasce

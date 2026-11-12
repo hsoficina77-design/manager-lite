@@ -59,7 +59,7 @@ function montarAviso(usuario: UsuarioSessao): { texto: string; acao: string; tom
 
     case "SOMENTE_LEITURA":
       return {
-        texto: "Seu período de teste terminou. Você continua vendo tudo o que registrou, mas não pode alterar nada.",
+        texto: "Seu período de teste terminou. Você continua vendo tudo o que registrou, mas não pode alterar nada nem baixar ou imprimir documentos.",
         acao: "Assinar e voltar a registrar",
         tom: "perigo",
       };

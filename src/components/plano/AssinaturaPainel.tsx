@@ -61,7 +61,7 @@ function resumoDaSituacao(p: {
         tom: "atencao",
         titulo: "O acesso está só para consulta",
         texto:
-          "Nada foi apagado: você ainda vê tudo. Assinando, a oficina volta a registrar assim que o pagamento é confirmado.",
+          "Nada foi apagado: você ainda vê tudo. Assinando, a oficina volta a registrar, baixar e imprimir assim que o pagamento é confirmado.",
       };
     case "ASSINANTE":
       return p.assinaturaAutomatica
@@ -424,7 +424,7 @@ export default function AssinaturaPainel(props: {
             </Pergunta>
             <Pergunta titulo="O que acontece com meus dados se eu não assinar?">
               Nada é apagado. A oficina fica só para consulta: você continua vendo clientes, OS e o financeiro, só não
-              registra coisas novas. Assinando, tudo volta a funcionar como antes.
+              registra coisas novas nem baixa ou imprime documentos. Assinando, tudo volta a funcionar como antes.
             </Pergunta>
             <Pergunta titulo="E se o pagamento atrasar um pouco?">
               {`Você tem ${CARENCIA_DIAS} dias de tolerância depois do vencimento, com acesso completo. No Pix, avisamos aqui ${AVISO_VENCIMENTO_DIAS} dias antes de vencer.`}

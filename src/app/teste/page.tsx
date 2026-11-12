@@ -87,7 +87,8 @@ export default async function TestePage({
         ))}
       </ul>
       <p className="mb-5 rounded-lg bg-superficie-2 px-3 py-2 text-xs text-tinta-3">
-        Depois dos {DIAS_TESTE} dias, nada é apagado: você continua vendo tudo o que registrou e decide se quer assinar.
+        Depois dos {DIAS_TESTE} dias, nada é apagado: você continua vendo tudo o que registrou. Para voltar a
+        registrar, baixar e imprimir documentos, é só assinar.
       </p>
       <CadastroOficinaForm teste={{ origem: origem?.slice(0, 40) ?? null }} />
     </TelaDeEntrada>

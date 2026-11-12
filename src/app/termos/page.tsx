@@ -18,7 +18,7 @@ export default function TermosPage() {
         <li>O teste é limitado a um por pessoa (e-mail e WhatsApp).</li>
         <li>
           Ao fim do teste, o acesso não é apagado: a oficina continua entrando e consultando tudo o que registrou, mas
-          não pode criar nem alterar registros até assinar.
+          não pode criar nem alterar registros, nem baixar ou imprimir documentos (PDF e imagem), até assinar.
         </li>
       </ul>
 

@@ -1,10 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useUsuario } from "@/components/UsuarioProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { CODIGO_SOMENTE_LEITURA, linkWhatsappBoxOS } from "@/lib/plano";
+
+/** Evento da janela que abre o aviso sem passar pela API (ver `useSaidaBloqueada`). */
+const EVENTO_BLOQUEIO = "boxos:somente-leitura";
+
+/**
+ * Para os botões que tiram o documento do sistema (baixar PDF/imagem, imprimir).
+ * O PDF é montado no próprio navegador, então não há rota da API para recusar: quem
+ * barra é o botão. Devolve uma função que, em modo só leitura, abre o aviso e responde
+ * `true` — o botão então não gera nada.
+ */
+export function useSaidaBloqueada(): () => boolean {
+  const usuario = useUsuario();
+  const bloqueada = Boolean(usuario?.plano.somenteLeitura);
+  return useCallback(() => {
+    if (bloqueada) window.dispatchEvent(new Event(EVENTO_BLOQUEIO));
+    return bloqueada;
+  }, [bloqueada]);
+}
 
 /**
  * O que dizer a quem esbarrou no modo só leitura — no modal e no lugar dos formulários.
@@ -19,12 +37,13 @@ export function TextoDoBloqueio() {
     <div className="space-y-4 text-sm text-tinta-2">
       <p>
         O teste grátis desta oficina terminou. <strong className="text-tinta">Nada foi apagado</strong>: clientes,
-        OS, orçamentos e o financeiro continuam aqui para consulta, e os PDFs seguem saindo normalmente.
+        OS, orçamentos e o financeiro continuam aqui para consulta. Só não dá para registrar nada novo, nem baixar ou
+        imprimir documentos.
       </p>
       <p>
         {ehDono
-          ? "Para voltar a criar e alterar registros, é só assinar. A liberação é automática assim que o pagamento é confirmado."
-          : "Para voltar a criar e alterar registros, o dono da oficina precisa assinar o boxOS."}
+          ? "Para voltar a usar tudo, é só assinar. A liberação é automática assim que o pagamento é confirmado."
+          : "Para voltar a usar tudo, o dono da oficina precisa assinar o boxOS."}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         {ehDono && (
@@ -75,7 +94,10 @@ export function BloqueioDeAcao() {
       return resposta;
     };
     window.fetch = embrulhado;
+    const abrir = () => setAberto(true);
+    window.addEventListener(EVENTO_BLOQUEIO, abrir);
     return () => {
+      window.removeEventListener(EVENTO_BLOQUEIO, abrir);
       // Só desfaz se ninguém embrulhou por cima depois.
       if (window.fetch === embrulhado) window.fetch = original;
     };

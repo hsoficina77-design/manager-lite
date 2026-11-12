@@ -9,6 +9,7 @@ import {
   type FormatoDownload,
 } from "@/lib/formato-download";
 import { PRAZO, comPrazo } from "@/lib/tempo-limite";
+import { useSaidaBloqueada } from "@/components/plano/Bloqueio";
 
 /**
  * Botão de baixar com escolha de formato — usado pela OS e pelo orçamento.
@@ -45,6 +46,7 @@ export default function BaixarDocumento({
   // passo travou é a diferença entre relatar o problema e adivinhar.
   const [erro, setErro] = useState<string | null>(null);
   const caixa = useRef<HTMLDivElement>(null);
+  const saidaBloqueada = useSaidaBloqueada();
 
   // A preferência só é lida no navegador: ler durante a renderização quebraria a
   // primeira pintura da tela.
@@ -70,6 +72,8 @@ export default function BaixarDocumento({
 
   const baixar = useCallback(
     async (alvo: FormatoDownload) => {
+      // Teste encerrado: consulta sim, levar o documento embora não.
+      if (saidaBloqueada()) return;
       const info = FORMATOS.find((f) => f.valor === alvo)!;
       setGerando(alvo);
       setProgresso(null);
@@ -101,7 +105,7 @@ export default function BaixarDocumento({
         setProgresso(null);
       }
     },
-    [gerarPdf, nomeBase]
+    [gerarPdf, nomeBase, saidaBloqueada]
   );
 
   function escolher(alvo: FormatoDownload) {
