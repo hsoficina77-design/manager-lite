@@ -74,8 +74,8 @@ function Moldura({
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
           <LogoPecaPeca className="text-base text-tinta" />
           <p className="min-w-0 flex-1 truncate text-xs text-tinta-3">
-            Balcão · {loja.nome}
-            {loja.cidade && ` · ${loja.cidade}`}
+            <span className="font-medium text-tinta-2">{loja.nome}</span>
+            {loja.cidade && <span className="ml-2">{loja.cidade}</span>}
           </p>
         </div>
       </header>
@@ -181,10 +181,13 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-tinta">
-                          {envio.oficina} · {d.quantidade}× {envio.pecas.find((p) => p.id === d.pecaId)?.descricao ?? "peça"}
+                          {d.quantidade}× {envio.pecas.find((p) => p.id === d.pecaId)?.descricao ?? "peça"}
                         </p>
-                        <p className="truncate text-xs text-tinta-3">
-                          {rotuloDoMotivo(d.motivo)} · {descricaoDoVeiculo(envio.veiculo)} · pedida {haQuanto(d.pedidaEm)}
+                        <p className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
+                          <span className="text-tinta-2">{envio.oficina}</span>
+                          <span>{rotuloDoMotivo(d.motivo)}</span>
+                          <span>{descricaoDoVeiculo(envio.veiculo)}</span>
+                          <span>pedida {haQuanto(d.pedidaEm)}</span>
                         </p>
                       </div>
                       <span className={cn(situacao.cor, "self-start sm:self-auto")}>{situacao.rotulo}</span>
@@ -240,11 +243,15 @@ function Lista({ envios, telas }: { envios: EnvioNoBalcao[]; telas: string }) {
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-tinta">
-              {e.oficina} · {descricaoDoVeiculo(e.veiculo)}
-              {e.veiculo.motor && <span className="text-tinta-3"> · {e.veiculo.motor}</span>}
+              {descricaoDoVeiculo(e.veiculo)}
+              {e.veiculo.motor && <span className="ml-2 font-normal text-tinta-3">{e.veiculo.motor}</span>}
             </p>
-            <p className="truncate text-xs text-tinta-3">
-              {e.pecas.length} {e.pecas.length === 1 ? "peça" : "peças"} · chegou {haQuanto(e.recebidoEm)}
+            <p className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
+              <span className="text-tinta-2">{e.oficina}</span>
+              <span>
+                {e.pecas.length} {e.pecas.length === 1 ? "peça" : "peças"}
+              </span>
+              <span>chegou {haQuanto(e.recebidoEm)}</span>
             </p>
           </div>
           <span className="flex items-center gap-2 self-start sm:self-auto">
@@ -321,7 +328,7 @@ export function EnvioDoBalcaoTela({
           <h1 className="text-xl font-bold text-tinta">Cotação de {envio.oficina}</h1>
           <p className="mt-0.5 text-sm text-tinta-3">
             Chegou às {horaCurta(envio.recebidoEm)}
-            {envio.respondidaEm && ` · respondida às ${horaCurta(envio.respondidaEm)}`}
+            {envio.respondidaEm && `, respondida às ${horaCurta(envio.respondidaEm)}`}
           </p>
         </div>
         {/* Conversa que já acabou (e foi apagada) não tem o que abrir. */}
@@ -344,7 +351,7 @@ export function EnvioDoBalcaoTela({
         <Conversa
           api={`${url}/conversa`}
           titulo={envio.oficina}
-          subtitulo={[descricaoDoVeiculo(envio.veiculo), envio.veiculo.motor].filter(Boolean).join(" · ")}
+          subtitulo={[descricaoDoVeiculo(envio.veiculo), envio.veiculo.motor].filter(Boolean).join(", ")}
           eu="LOJA"
           podeEscrever={pode.conversa}
           semAcessoTexto="Seu acesso não inclui conversar com as oficinas. Quem cuida da equipe da loja libera."
@@ -436,10 +443,13 @@ function PedidoNoBalcao({
   }
 
   return (
-    <section className="space-y-3 rounded-xl border-2 border-ok-linha bg-ok-fraco p-4">
+    <section className="space-y-3 rounded-xl border border-linha bg-superficie p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-semibold text-ok">Pedido fechado</p>
+          <p className="flex items-center gap-2 font-semibold text-tinta">
+            <span className="h-2.5 w-2.5 rounded-full bg-[rgb(var(--gr-vendida))]" aria-hidden />
+            Pedido fechado
+          </p>
           <p className="text-sm text-tinta-2">Separe e mande para {envio.oficina}:</p>
         </div>
         {!proxima ? (
@@ -543,12 +553,17 @@ function DevolucoesNoBalcao({
   return (
     <section
       className={cn(
-        "space-y-3 rounded-xl p-4",
-        esperando.length > 0 ? "border-2 border-atencao-linha bg-atencao-fraco" : "border border-linha bg-superficie-2"
+        "space-y-3 rounded-xl border border-linha p-4",
+        esperando.length > 0 ? "bg-superficie" : "bg-superficie-2"
       )}
     >
       <div>
-        <p className={cn("font-semibold", esperando.length > 0 ? "text-atencao" : "text-tinta")}>Devolução</p>
+        <p className="flex items-center gap-2 font-semibold text-tinta">
+          {esperando.length > 0 && (
+            <span className="h-2.5 w-2.5 rounded-full bg-[rgb(var(--gr-sem-resposta))]" aria-hidden />
+          )}
+          Devolução
+        </p>
         <p className="text-sm text-tinta-2">
           {esperando.length > 0
             ? `${envio.oficina} quer devolver ${esperando.length === 1 ? "uma peça" : "peças"} deste pedido.`
@@ -841,10 +856,12 @@ function RespostaFechada({ envio, semAcesso = false }: { envio: EnvioNoBalcao; s
                 <p className="text-xs text-tinta-3">Não tinha.</p>
               ) : (
                 p.ofertas.map((o) => (
-                  <p key={o.id} className="text-xs text-tinta-3">
-                    {o.marca} · {formatCurrency(o.preco)} à vista
-                    {o.precoCredito !== null && ` · ${formatCurrency(o.precoCredito)} no crédito`} · {o.prazoMin} min
-                    {p.pedida === o.marca && <span className="ml-1 font-semibold text-ok">pedida</span>}
+                  <p key={o.id} className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
+                    <span className="font-medium text-tinta-2">{o.marca}</span>
+                    <span>{formatCurrency(o.preco)} à vista</span>
+                    {o.precoCredito !== null && <span>{formatCurrency(o.precoCredito)} no crédito</span>}
+                    <span>{o.prazoMin} min</span>
+                    {p.pedida === o.marca && <span className="font-semibold text-ok">pedida</span>}
                   </p>
                 ))
               )}
@@ -994,9 +1011,9 @@ function FormResposta({
 
   if (enviada) {
     return (
-      <div className="space-y-3 rounded-xl border border-ok-linha bg-ok-fraco p-5">
-        <p className="flex items-center gap-2 font-semibold text-ok">
-          <Confere tamanho={18} />
+      <div className="space-y-3 rounded-xl border border-linha bg-superficie p-5">
+        <p className="flex items-center gap-2 font-semibold text-tinta">
+          <Confere tamanho={18} className="text-ok" />
           Resposta enviada
         </p>
         <p className="text-sm text-tinta-2">

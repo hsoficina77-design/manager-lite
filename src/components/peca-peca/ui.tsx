@@ -92,13 +92,43 @@ export function Cabecalho({
   );
 }
 
+const REGUA_DO_RECADO = {
+  atencao: "border-[rgb(var(--gr-sem-resposta))]",
+  ok: "border-[rgb(var(--gr-vendida))]",
+  marca: "border-brand-600",
+} as const;
+
+/**
+ * Recado no meio da tela: uma régua de cor à esquerda e o texto na tinta de sempre.
+ * Substitui as caixas pastel (fundo âmbar ou verde com contorno), que eram a mesma
+ * caixa em toda tela e brigavam com o conteúdo. A régua diz o tom; a frase, o resto.
+ */
+export function Recado({
+  tom = "atencao",
+  titulo,
+  className,
+  children,
+  role,
+}: {
+  tom?: keyof typeof REGUA_DO_RECADO;
+  titulo?: React.ReactNode;
+  className?: string;
+  children?: React.ReactNode;
+  role?: "status" | "alert";
+}) {
+  return (
+    <div role={role} className={cn("border-l-[3px] py-0.5 pl-3.5", REGUA_DO_RECADO[tom], className)}>
+      {titulo && <p className="text-sm font-semibold text-tinta">{titulo}</p>}
+      {children && <div className={cn("text-sm text-tinta-2", titulo && "mt-1")}>{children}</div>}
+    </div>
+  );
+}
+
 /** Aparece quando a conexão cai: os dados na tela podem estar velhos. */
 export function AvisoSemConexao({ ativo }: { ativo: boolean }) {
   if (!ativo) return null;
   return (
-    <p role="status" className="rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-xs text-atencao">
-      Sem conexão agora. A tela volta a se atualizar sozinha quando a internet voltar.
-    </p>
+    <Recado role="status">Sem conexão agora. A tela volta a se atualizar sozinha quando a internet voltar.</Recado>
   );
 }
 
@@ -135,8 +165,8 @@ export function InformarCidade({ cidadeAtual, onSalva }: { cidadeAtual?: string 
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-2 rounded-xl border border-atencao-linha bg-atencao-fraco p-4">
-      <p className="text-sm font-semibold text-atencao">
+    <form onSubmit={salvar} className="space-y-2 border-l-[3px] border-[rgb(var(--gr-sem-resposta))] py-0.5 pl-3.5">
+      <p className="text-sm font-semibold text-tinta">
         {cidadeAtual ? "Confirme a cidade da oficina" : "Em que cidade fica a oficina?"}
       </p>
       <p className="text-sm text-tinta-2">

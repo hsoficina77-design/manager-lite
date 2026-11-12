@@ -330,8 +330,8 @@ export function DevolucoesDaLoja({
           <li
             key={d.id}
             className={cn(
-              "space-y-2 rounded-lg border p-3",
-              s === "PRECO_NOVO" || s === "TROCA_A_CAMINHO" ? "border-atencao-linha bg-atencao-fraco" : "border-linha bg-superficie-2"
+              "space-y-2 rounded-lg border border-linha p-3",
+              s === "PRECO_NOVO" || s === "TROCA_A_CAMINHO" ? "bg-superficie" : "bg-superficie-2"
             )}
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -340,13 +340,14 @@ export function DevolucoesDaLoja({
               </p>
               <span className={cn(SITUACOES_DEVOLUCAO[s].cor, "shrink-0")}>{SITUACOES_DEVOLUCAO[s].rotulo}</span>
             </div>
-            <p className="text-xs text-tinta-3">
-              {rotuloDoMotivo(d.motivo)}
-              {d.detalhe && ` · "${d.detalhe}"`} · {d.querTroca ? "pediu troca" : "pediu o valor"}
+            <p className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
+              <span>{rotuloDoMotivo(d.motivo)}</span>
+              {d.detalhe && <span>&ldquo;{d.detalhe}&rdquo;</span>}
+              <span>{d.querTroca ? "pediu troca" : "pediu o valor"}</span>
             </p>
             {d.trocaMarca || d.trocaPreco !== null ? (
               <p className="text-xs text-tinta-2">
-                Peça da troca: {[d.trocaMarca, d.trocaPreco !== null && `${formatCurrency(d.trocaPreco)} cada`].filter(Boolean).join(" · ")}
+                Peça da troca: {[d.trocaMarca, d.trocaPreco !== null && `${formatCurrency(d.trocaPreco)} cada`].filter(Boolean).join(", ")}
               </p>
             ) : null}
             <p className={cn("text-sm", s === "RECUSADA" ? "text-perigo" : "text-tinta-2")}>{oQueFaltaNaDevolucao(d)}</p>

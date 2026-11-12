@@ -286,8 +286,8 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
         </div>
 
         {busca.tipo === "achou" && (
-          <p className="mt-3 flex items-start gap-2 rounded-lg border border-ok-linha bg-ok-fraco px-3 py-2 text-sm text-ok">
-            <Confere tamanho={16} className="mt-0.5 shrink-0" />
+          <p className="mt-3 flex items-start gap-2 border-l-[3px] border-[rgb(var(--gr-vendida))] py-0.5 pl-3 text-sm text-tinta-2">
+            <Confere tamanho={16} className="mt-0.5 shrink-0 text-ok" />
             <span>
               Achei no boxOS{busca.clienteNome ? <>: carro de <strong>{busca.clienteNome}</strong></> : ""}. O
               orçamento já sai no nome dele.
@@ -295,7 +295,7 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
           </p>
         )}
         {busca.tipo === "nao-achou" && (
-          <p className="mt-3 rounded-lg border border-atencao-linha bg-atencao-fraco px-3 py-2 text-sm text-atencao">
+          <p className="mt-3 border-l-[3px] border-[rgb(var(--gr-sem-resposta))] py-0.5 pl-3 text-sm text-tinta-2">
             Essa placa ainda não passou pela oficina. Preencha os dados do carro abaixo.
           </p>
         )}
@@ -460,7 +460,7 @@ export function NovaCotacao({ recotar = null }: { recotar?: Recotar | null }) {
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-tinta">{l.nome}</span>
                   <span className="block text-xs text-tinta-3">
-                    {l.cidade ?? "—"} · entrega em {prazoDaLoja(l)}
+                    {l.cidade ?? "Cidade não informada"}, entrega em {prazoDaLoja(l)}
                   </span>
                 </span>
               </label>

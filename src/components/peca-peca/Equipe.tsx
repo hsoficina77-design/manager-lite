@@ -168,7 +168,7 @@ export function Equipe({
                   <p className="text-sm font-medium text-tinta">
                     {c.novoAcesso ? "Novo acesso" : (c.nome ?? c.email ?? "Convite")}
                     {!c.novoAcesso && (
-                      <span className="text-tinta-3"> · {PERFIS_DA_LOJA[c.perfil as PerfilLoja]?.rotulo ?? c.perfil}</span>
+                      <span className="ml-2 font-normal text-tinta-3">{PERFIS_DA_LOJA[c.perfil as PerfilLoja]?.rotulo ?? c.perfil}</span>
                     )}
                   </p>
                   <p className="text-xs text-tinta-3">
@@ -239,9 +239,11 @@ function LinhaDaPessoa({
             {ehVoce && <span className="ml-1.5 text-xs font-normal text-tinta-3">(você)</span>}
           </p>
           <p className="truncate text-xs text-tinta-3">{p.email}</p>
-          <p className="text-xs text-tinta-3">
-            {p.ativo ? rotuloDosAcessos(p.permissoes) : "Acesso desligado"} ·{" "}
-            {p.ultimoAcesso ? `entrou em ${new Date(p.ultimoAcesso).toLocaleDateString("pt-BR")}` : "ainda não entrou"}
+          <p className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
+            <span>{p.ativo ? rotuloDosAcessos(p.permissoes) : "Acesso desligado"}</span>
+            <span>
+              {p.ultimoAcesso ? `Entrou em ${new Date(p.ultimoAcesso).toLocaleDateString("pt-BR")}` : "Ainda não entrou"}
+            </span>
           </p>
         </div>
         <Botao variante="secundario" tamanho="denso" onClick={() => setAberta((v) => !v)}>

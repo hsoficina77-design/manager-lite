@@ -308,7 +308,7 @@ export function Conversa({
             if (l.tipo === "evento") {
               return (
                 <p key={`ev-${l.ev.em}-${i}`} className="py-1 text-center text-xs text-tinta-3">
-                  {l.ev.texto} · {horaCurta(l.ev.em)}
+                  {l.ev.texto}, às {horaCurta(l.ev.em)}
                 </p>
               );
             }
@@ -341,7 +341,7 @@ export function Conversa({
         </div>
 
         {erroLeitura && (
-          <p role="status" className="border-t border-atencao-linha bg-atencao-fraco px-4 py-2 text-xs text-atencao">
+          <p role="status" className="border-t-2 border-[rgb(var(--gr-sem-resposta))] px-4 py-2 text-xs text-tinta-2">
             {erroLeitura}
           </p>
         )}

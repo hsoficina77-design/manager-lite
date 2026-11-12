@@ -1040,7 +1040,9 @@ export async function resultadosDaLoja(lojaId: string, dias: PeriodoDosResultado
         entrega: true,
         entregueEm: true,
         respondidoPor: true,
-        ofertas: { select: { id: true, pecaId: true, marca: true, preco: true } },
+        formaPagamento: true,
+        debitoAVista: true,
+        ofertas: { select: { id: true, pecaId: true, marca: true, preco: true, precoCredito: true } },
         cotacao: {
           select: {
             pedidoEm: true,
@@ -1094,7 +1096,12 @@ export async function resultadosDaLoja(lojaId: string, dias: PeriodoDosResultado
 
   for (const e of envios) {
     const c = e.cotacao;
-    const minhas = new Map(e.ofertas.map((o) => [o.id, o]));
+    // O valor de venda é o que a oficina pagou: o preço da forma do pedido (o do crédito,
+    // quando ela pagou no cartão). Sem pedido, a forma não importa — não há valor.
+    const forma = ehFormaDePagamento(e.formaPagamento) ? e.formaPagamento : "PIX";
+    const minhas = new Map(
+      e.ofertas.map((o) => [o.id, { ...o, preco: precoNaForma(o, forma, e.debitoAVista) }])
+    );
     const ofereci = new Set(e.ofertas.map((o) => o.pecaId));
     const comigo = c.pecas.flatMap((p) => {
       const oferta = p.ofertaId ? minhas.get(p.ofertaId) : undefined;

@@ -93,7 +93,7 @@ function vista(c: CotacaoDoBanco, lojas: Map<string, LojaVista>): CotacaoVista {
           marca: o.marca,
           preco: precoNaForma(o, forma, e.debitoAVista),
           precoAVista: o.preco,
-          precoCredito: o.precoCredito,
+          precoCredito: o.precoCredito ?? null,
           prazoMin: o.prazoMin,
         })),
         naoLidas: e.naoLidasOficina,

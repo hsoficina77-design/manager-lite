@@ -84,7 +84,7 @@ export function DetalheCotacao({ id }: { id: string }) {
         <Conversa
           api={`${url}/conversa/${envioDaConversa.id}`}
           titulo={envioDaConversa.lojaNome}
-          subtitulo={`Cotação #${cotacao.numero} · ${descricaoDoVeiculo(cotacao.veiculo)}`}
+          subtitulo={`Cotação ${cotacao.numero}, ${descricaoDoVeiculo(cotacao.veiculo)}`}
           eu="OFICINA"
           eventos={eventosDaConversa(cotacao, envioDaConversa)}
           pushApi="/api/peca-peca/push"
@@ -320,10 +320,10 @@ function Conteudo({
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>
               {descricaoDoVeiculo(c.veiculo)}
-              {c.veiculo.motor && ` · ${c.veiculo.motor}`}
+              {c.veiculo.motor && `, ${c.veiculo.motor}`}
             </span>
             {c.veiculo.placa && (
-              <span className="rounded border border-linha-forte bg-superficie px-1.5 font-mono text-xs tracking-widest text-tinta-2">
+              <span className="rounded-[3px] border border-linha-forte bg-superficie px-1.5 text-[11px] font-semibold uppercase leading-[18px] tracking-[0.08em] text-tinta-2">
                 {c.veiculo.placa}
               </span>
             )}
@@ -464,11 +464,17 @@ function PainelLojas({ c, onConversar }: { c: CotacaoVista; onConversar: (envioI
               />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
-                <p className="text-xs text-tinta-3">
-                  {e.respondidaEm
-                    ? `Respondeu às ${horaCurta(e.respondidaEm)} · tem ${temQuantas} de ${c.pecas.length} peças · ${textoDoFrete(e)}`
-                    : "Esperando o balconista responder"}
-                </p>
+                {e.respondidaEm ? (
+                  <p className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
+                    <span>Respondeu às {horaCurta(e.respondidaEm)}</span>
+                    <span>
+                      Tem {temQuantas} de {c.pecas.length} peças
+                    </span>
+                    <span>{textoDoFrete(e)}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-tinta-3">Esperando o balconista responder</p>
+                )}
               </div>
               {/* Conversa que já acabou (e foi apagada) não tem o que abrir. */}
               {!e.conversaFechada && (
@@ -580,7 +586,7 @@ function PainelEscolha({
                         />
                         <span className="min-w-0 flex-1">
                           <span className="text-sm font-semibold text-tinta">{o.marca}</span>
-                          <span className="text-sm text-tinta-3"> · {o.lojaNome}</span>
+                          <span className="ml-2 text-sm text-tinta-3">{o.lojaNome}</span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-tinta-3">
                             chega em ~{o.prazoMin} min
                             {!travado && i === 0 && ofertas.length > 1 && (
@@ -678,7 +684,8 @@ function PainelPrecos({
               </div>
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <p className="min-w-0 text-xs text-tinta-3">
-                  {oferta.marca} · {oferta.lojaNome}
+                  <span className="font-medium text-tinta-2">{oferta.marca}</span>
+                  <span className="ml-2">{oferta.lojaNome}</span>
                   <br />
                   custo {formatCurrency(oferta.preco)}
                   {peca.quantidade > 1 && " cada"}
@@ -830,9 +837,9 @@ function Resumo({
       </div>
 
       {c.orcamento && (
-        <div className="space-y-2 rounded-lg border border-ok-linha bg-ok-fraco p-3">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-ok">
-            <Confere tamanho={16} />
+        <div className="space-y-2 border-l-[3px] border-[rgb(var(--gr-vendida))] py-0.5 pl-3.5">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-tinta">
+            <Confere tamanho={16} className="text-ok" />
             Orçamento #{c.orcamento.numero} criado
           </p>
           <BotaoLink
@@ -1071,9 +1078,12 @@ function PainelEntrega({
           return (
             <div
               key={e.id}
-              className={cn("rounded-lg border p-3", conferir ? "border-atencao-linha bg-atencao-fraco" : "border-linha")}
+              className="rounded-lg border border-linha p-3"
             >
-              <p className="text-sm font-semibold text-tinta">{e.lojaNome}</p>
+              <p className="flex items-center gap-2 text-sm font-semibold text-tinta">
+                {conferir && <span className="h-2 w-2 rounded-full bg-[rgb(var(--gr-sem-resposta))]" aria-hidden />}
+                {e.lojaNome}
+              </p>
               <ul className="mt-1 text-xs text-tinta-3">
                 {pecas.map((p) => (
                   <li key={p.id}>
@@ -1142,8 +1152,8 @@ function PainelEntrega({
         )}
 
         {tudoEntregue && (
-          <div className="space-y-2 rounded-lg border border-ok-linha bg-ok-fraco p-3">
-            <p className="text-sm font-semibold text-ok">Peças na oficina.</p>
+          <div className="space-y-2 border-l-[3px] border-[rgb(var(--gr-vendida))] py-0.5 pl-3.5">
+            <p className="text-sm font-semibold text-tinta">Peças na oficina.</p>
             {c.orcamento ? (
               <>
                 <p className="text-sm text-tinta-2">Agora é converter o orçamento em OS. Só falta o telefone do cliente.</p>

@@ -57,8 +57,8 @@ export function AtivarBoxOS({ diasTeste }: { diasTeste: number }) {
 
   if (pronto) {
     return (
-      <div className="space-y-3 rounded-xl border border-ok-linha bg-ok-fraco p-4">
-        <p className="text-sm font-semibold text-ok">Pronto! O boxOS está ativo por {diasTeste} dias grátis.</p>
+      <div className="space-y-3 border-l-[3px] border-[rgb(var(--gr-vendida))] py-0.5 pl-4">
+        <p className="text-sm font-semibold text-tinta">Pronto! O boxOS está ativo por {diasTeste} dias grátis.</p>
         <p className="text-sm text-tinta-2">Entre no boxOS com o mesmo e-mail e a mesma senha daqui.</p>
         <a
           href={pronto}

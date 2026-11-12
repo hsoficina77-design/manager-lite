@@ -330,7 +330,7 @@ export function MolduraDaLoja({
   return (
     <Moldura
       nome={loja}
-      pessoa={{ nome: pessoa.nome, papel: `${rotuloDosAcessos(pessoa.permissoes)} · ${acessos.length} acessos` }}
+      pessoa={{ nome: pessoa.nome, papel: `${rotuloDosAcessos(pessoa.permissoes)}, ${acessos.length} acessos` }}
       itens={itens}
     >
       {children}
