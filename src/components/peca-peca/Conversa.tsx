@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Botao } from "@/components/ui/Botao";
-import { Enviar, Fechar, Sino } from "@/components/ui/Icones";
+import Link from "next/link";
+import { Avancar, Enviar, Fechar, Sino } from "@/components/ui/Icones";
 import { LIMITE_MENSAGEM, type ConversaVista, type LadoDaConversa, type MensagemVista } from "./regras";
 import { buscar, tocarAviso } from "./aoVivo";
 import { horaCurta } from "./ui";
@@ -164,6 +165,10 @@ function useConversa(api: string, eu: LadoDaConversa, podeEscrever: boolean) {
 
 // ─── A janela ───────────────────────────────────────────────────────────────
 
+/** O que mais se diz no balcão, para quem digita pouco no celular. */
+const RAPIDAS_OFICINA = ["Pode mandar", "Vou ver e já respondo", "Tem de outra marca?", "Qual o prazo?", "Obrigado!"];
+const RAPIDAS_LOJA = ["Tenho sim", "Não tenho essa", "Manda foto da peça velha?", "Já respondi a cotação", "Obrigado!"];
+
 export function Conversa({
   api,
   titulo,
@@ -173,6 +178,7 @@ export function Conversa({
   semAcessoTexto,
   eventos = [],
   pushApi,
+  link,
   onFechar,
 }: {
   /** A rota da conversa (GET, POST, PATCH). */
@@ -186,6 +192,8 @@ export function Conversa({
   eventos?: EventoDaConversa[];
   /** A rota do aviso no celular; sem ela (link antigo do balcão), o botão some. */
   pushApi?: string;
+  /** Atalho no topo (aberta fora da cotação, na caixa de conversas): "Ver cotação". */
+  link?: { href: string; rotulo: string };
   onFechar: () => void;
 }) {
   const { conversa, erroLeitura, pendentes, maisAntigas, enviar, reenviar } = useConversa(api, eu, podeEscrever);
@@ -256,12 +264,21 @@ export function Conversa({
         role="dialog"
         aria-modal="true"
         aria-label={`Conversa com ${titulo}`}
-        className="flex h-[100dvh] w-full flex-col bg-superficie shadow-xl sm:h-[min(44rem,calc(100dvh-2rem))] sm:max-w-lg sm:rounded-2xl"
+        className="flex h-[100dvh] w-full flex-col bg-superficie shadow-xl max-sm:animate-subir sm:h-[min(44rem,calc(100dvh-2rem))] sm:max-w-lg sm:rounded-2xl sm:linha-entra"
       >
         <div className="flex items-start gap-2 border-b border-linha px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="truncate font-semibold text-tinta">{titulo}</h2>
             {subtitulo && <p className="truncate text-xs text-tinta-3">{subtitulo}</p>}
+            {link && (
+              <Link
+                href={link.href}
+                className="mt-0.5 inline-flex items-center gap-0.5 text-xs font-medium text-brand-texto underline-offset-4 hover:underline"
+              >
+                {link.rotulo}
+                <Avancar tamanho={12} />
+              </Link>
+            )}
           </div>
           {pushApi && <AvisoNoCelular api={pushApi} compacto />}
           <button
@@ -333,6 +350,7 @@ export function Conversa({
               nome={null}
               texto={p.texto}
               pendente={!p.falhou}
+              entrando
               rodape={p.falhou ?? "enviando…"}
               falhou={Boolean(p.falhou)}
               onTentarDeNovo={p.falhou ? () => void reenviar(p) : undefined}
@@ -355,6 +373,25 @@ export function Conversa({
             </p>
           ) : (
             <>
+              {/* Respostas de balcão, um toque e entram no campo (não mandam sozinhas:
+                  dá para completar antes). Somem quando a pessoa começa a escrever. */}
+              {!texto && conversa && (
+                <div className="-mx-3 mb-2 flex gap-1.5 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none]">
+                  {(eu === "OFICINA" ? RAPIDAS_OFICINA : RAPIDAS_LOJA).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        setTexto(r);
+                        campo.current?.focus();
+                      }}
+                      className="aperta min-h-9 shrink-0 rounded-full border border-linha bg-superficie-2 px-3 text-xs font-medium text-tinta-2 hover:border-brand-500 hover:text-tinta"
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <textarea
                   ref={campo}
@@ -390,6 +427,7 @@ function Balao({
   rodape,
   pendente = false,
   falhou = false,
+  entrando = false,
   onTentarDeNovo,
 }: {
   minha: boolean;
@@ -399,6 +437,8 @@ function Balao({
   rodape: string;
   pendente?: boolean;
   falhou?: boolean;
+  /** A mensagem que acabei de mandar: entra deslizando. */
+  entrando?: boolean;
   onTentarDeNovo?: () => void;
 }) {
   const conteudo = (
@@ -415,7 +455,7 @@ function Balao({
     </>
   );
   return (
-    <div className={cn("flex flex-col", minha ? "items-end" : "items-start")}>
+    <div className={cn("flex flex-col", minha ? "items-end" : "items-start", entrando && "linha-entra")}>
       {nome && <p className="mb-0.5 px-1 text-[0.7rem] font-medium text-tinta-3">{nome}</p>}
       {onTentarDeNovo ? (
         <button

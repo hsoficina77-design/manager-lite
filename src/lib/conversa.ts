@@ -342,16 +342,21 @@ export async function conversasDaOficina(db: Db): Promise<ConversaNaLista[]> {
     }),
     todasAsLojas(),
   ]);
-  return envios.map((e) => ({
-    envioId: e.id,
-    link: `/peca-peca/${e.cotacaoId}?conversa=${e.id}`,
-    titulo: lojas.get(e.lojaId)?.nome ?? "Loja",
-    subtitulo: `Cotação #${e.cotacao.numero} · ${descricaoDoVeiculo({ marca: e.cotacao.marca ?? "", modelo: e.cotacao.modelo, ano: e.cotacao.ano ?? "" })}`,
-    ultima: e.ultimaMensagem,
-    ultimaDe: e.ultimaMensagemDe === "LOJA" ? "LOJA" : "OFICINA",
-    em: (e.ultimaMensagemEm ?? new Date()).toISOString(),
-    naoLidas: e.naoLidasOficina,
-  }));
+  return envios.map((e) => {
+    const carro = descricaoDoVeiculo({ marca: e.cotacao.marca ?? "", modelo: e.cotacao.modelo, ano: e.cotacao.ano ?? "" });
+    return {
+      envioId: e.id,
+      link: `/peca-peca/${e.cotacaoId}?conversa=${e.id}`,
+      titulo: lojas.get(e.lojaId)?.nome ?? "Loja",
+      subtitulo: `Cotação #${e.cotacao.numero} · ${carro}`,
+      ultima: e.ultimaMensagem,
+      ultimaDe: e.ultimaMensagemDe === "LOJA" ? "LOJA" : "OFICINA",
+      em: (e.ultimaMensagemEm ?? new Date()).toISOString(),
+      naoLidas: e.naoLidasOficina,
+      api: `/api/peca-peca/cotacoes/${e.cotacaoId}/conversa/${e.id}`,
+      cotacao: { id: e.cotacaoId, numero: e.cotacao.numero, carro },
+    };
+  });
 }
 
 /** Quantas mensagens das lojas a oficina não leu — o número no menu. */

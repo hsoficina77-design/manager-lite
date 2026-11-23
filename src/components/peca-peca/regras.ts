@@ -731,6 +731,12 @@ export type ConversaNaLista = {
   ultimaDe: LadoDaConversa;
   em: string;
   naoLidas: number;
+  /**
+   * Só do lado da oficina: a rota da conversa (a caixa abre o chat ali mesmo, sem sair
+   * dela) e a cotação, para agrupar as lojas do mesmo carro.
+   */
+  api?: string;
+  cotacao?: { id: string; numero: number; carro: string };
 };
 
 /** Tamanho máximo de uma mensagem: o que cabe numa dúvida de balcão. */
