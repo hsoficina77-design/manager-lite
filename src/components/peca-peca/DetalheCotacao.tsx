@@ -8,7 +8,7 @@ import { Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { Modal } from "@/components/ui/Modal";
 import { useAvisar, useConfirmar } from "@/components/ui/Avisos";
-import { Confere, Conversa as IconeConversa } from "@/components/ui/Icones";
+import { Chevron, Confere, Conversa as IconeConversa } from "@/components/ui/Icones";
 import { useUsaBoxOS } from "@/components/UsuarioProvider";
 import { useLinkDoBoxOS } from "@/components/ProdutoProvider";
 import {
@@ -33,7 +33,7 @@ import {
   type FormaDePagamento,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo } from "./aoVivo";
-import { AvisoSemConexao, Cabecalho, EscolhaDaForma, PilulaEtapa, horaCurta } from "./ui";
+import { AvisoSemConexao, Cabecalho, EscolhaDaForma, Recado, horaCurta } from "./ui";
 import { VitrineBoxOS } from "./VitrineBoxOS";
 import { DevolucoesDaLoja, ModalDevolucao, temOQueDevolver } from "./Devolucoes";
 import { ContadorDeMensagens, Conversa, useConversaDoEndereco, type EventoDaConversa } from "./Conversa";
@@ -311,48 +311,69 @@ function Conteudo({
     router.push("/peca-peca");
   }
 
+  const t = totaisDa(c);
+  const semEscolha = t.escolhidas === 0;
+  // A barra de baixo do celular: só enquanto há escolha a fazer e um botão para apertar.
+  const comBarra = respondeu && !c.pedidoEm;
+  const acaoPrincipal =
+    usaBoxOS && !c.orcamento
+      ? { rotulo: "Gerar orçamento", fazer: () => setGerando(true) }
+      : { rotulo: c.orcamento ? "Cliente aprovou: pedir" : "Fazer o pedido", fazer: pedir };
+
   return (
     <div className="space-y-5 p-4 sm:p-6">
+      {/* O carro em cima, como na lista: é como o mecânico lembra. O número vem junto, menor. */}
       <Cabecalho
-        titulo={`Cotação #${c.numero}`}
+        titulo={descricaoDoVeiculo(c.veiculo)}
         voltar="/peca-peca"
         subtitulo={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>
-              {descricaoDoVeiculo(c.veiculo)}
-              {c.veiculo.motor && `, ${c.veiculo.motor}`}
-            </span>
             {c.veiculo.placa && (
               <span className="rounded-[3px] border border-linha-forte bg-superficie px-1.5 text-[11px] font-semibold uppercase leading-[18px] tracking-[0.08em] text-tinta-2">
                 {c.veiculo.placa}
               </span>
             )}
+            <span>
+              {c.veiculo.motor && `Motor ${c.veiculo.motor} · `}
+              Cotação <span className="font-pecapeca font-bold">nº {c.numero}</span>
+            </span>
             {c.clienteNome && <span>· {c.clienteNome}</span>}
           </span>
         }
-        acao={<PilulaEtapa cotacao={c} />}
       />
 
-      {/* Onde a cotação está no caminho até as peças chegarem. */}
-      <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${linha.rotulos.length}, minmax(0, 1fr))` }}>
-        {linha.rotulos.map((rotulo, i) => (
-          <li key={rotulo} className="min-w-0">
-            <div className={cn("h-1.5 rounded-full", i <= posicao ? "bg-brand-600" : "bg-superficie-3")} />
-            <p
-              className={cn(
-                "mt-1.5 text-[0.7rem] leading-tight sm:text-xs",
-                i === posicao ? "font-semibold text-tinta" : "text-tinta-3"
-              )}
-            >
-              {rotulo}
-            </p>
-          </li>
-        ))}
-      </ol>
+      {/* Onde a cotação está e, em palavras, o que fazer agora. */}
+      <div>
+        <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${linha.rotulos.length}, minmax(0, 1fr))` }}>
+          {linha.rotulos.map((rotulo, i) => (
+            <li key={rotulo} className="min-w-0">
+              <div className="h-1.5 overflow-hidden rounded-full bg-superficie-3">
+                <div
+                  className={cn(
+                    "h-full origin-left rounded-full bg-brand-600 transition-transform duration-500 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]",
+                    i <= posicao ? "scale-x-100" : "scale-x-0"
+                  )}
+                />
+              </div>
+              <p
+                className={cn(
+                  "mt-1.5 text-[0.7rem] leading-tight sm:text-xs",
+                  i === posicao ? "font-semibold text-tinta" : "text-tinta-3"
+                )}
+              >
+                {rotulo}
+              </p>
+            </li>
+          ))}
+        </ol>
+        <Recado tom="marca" titulo="Agora" className="mt-4">
+          {proximoPasso(c, usaBoxOS, pendentes.length)}
+        </Recado>
+      </div>
 
       {c.observacao && (
         <div className="rounded-lg border border-linha bg-superficie-2 px-3 py-2 text-sm">
-          <p className="text-xs text-tinta-3">Observação enviada às lojas</p>
+          <p className="text-xs text-tinta-3">Recado enviado às lojas</p>
           <p className="whitespace-pre-line text-tinta">{c.observacao}</p>
         </div>
       )}
@@ -366,7 +387,8 @@ function Conteudo({
             <PainelEntrega c={{ ...c, pedidoEm: c.pedidoEm }} url={url} gravar={gravar} onGerar={() => setGerando(true)} />
           )}
 
-          <PainelLojas c={c} onConversar={onConversar} />
+          {/* Sem resposta ainda, as lojas são a notícia; com resposta, a escolha vem primeiro. */}
+          {!respondeu && <PainelLojas c={c} onConversar={onConversar} />}
 
           {respondeu ? (
             <PainelEscolha
@@ -391,6 +413,8 @@ function Conteudo({
               texto="Quando o balconista responder, os preços aparecem aqui sozinhos, lado a lado. Com esta tela aberta, toca um aviso quando uma loja responder."
             />
           )}
+
+          {respondeu && <PainelLojas c={c} onConversar={onConversar} />}
 
           {/* Preço para o cliente: é o orçamento, coisa do boxOS. */}
           {usaBoxOS && !c.orcamento && (
@@ -422,12 +446,35 @@ function Conteudo({
             onForma={(formaPagamento) =>
               alterar({ formaPagamento }, (d) => ({ ...d, formaPagamento }))
             }
+            principalSoNoComputador={comBarra}
           />
           <Botao variante="fantasma" tamanho="denso" onClick={excluir} className="w-full text-perigo">
             Excluir cotação
           </Botao>
         </aside>
       </div>
+
+      {/* Celular: o total e o próximo botão sempre à mão, acima da barra de navegação.
+          No computador, o resumo ao lado já fica parado na tela. */}
+      {comBarra && (
+        <div className="sticky bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] z-20 -mx-4 flex items-center gap-3 border-t border-linha bg-fundo/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 md:bottom-0 lg:hidden">
+          <div className="min-w-0">
+            <p className="text-xs text-tinta-3">
+              {usaBoxOS ? "Cliente paga" : "Total"} · {t.escolhidas} de {c.pecas.length}{" "}
+              {c.pecas.length === 1 ? "peça" : "peças"}
+            </p>
+            <Valor valor={usaBoxOS ? t.venda : t.custo} className="text-lg font-bold text-tinta" />
+          </div>
+          <Botao
+            variante={c.orcamento ? "sucesso" : "primario"}
+            onClick={acaoPrincipal.fazer}
+            disabled={semEscolha || pedindo}
+            className="aperta ml-auto"
+          >
+            {pedindo ? "Pedindo..." : acaoPrincipal.rotulo}
+          </Botao>
+        </div>
+      )}
 
       {gerando && (
         <ModalOrcamento
@@ -451,7 +498,7 @@ function PainelLojas({ c, onConversar }: { c: CotacaoVista; onConversar: (envioI
   return (
     <Painel
       titulo="Lojas"
-      ajuda="Atualiza sozinho. O balconista confere a aplicação de cada peça antes de responder. Dúvida sobre a peça? Converse com a loja."
+      ajuda="Atualiza sozinho. Dúvida sobre a peça? Converse com a loja."
     >
       <ul className="divide-y divide-linha">
         {c.envios.map((e) => {
@@ -571,7 +618,7 @@ function PainelEscolha({
                       <label
                         key={o.id}
                         className={cn(
-                          "flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
+                          "aperta flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2",
                           marcada ? "border-brand-500 bg-brand-50" : "border-linha",
                           travado ? "cursor-default" : "cursor-pointer hover:bg-superficie-2"
                         )}
@@ -655,19 +702,35 @@ function PainelPrecos({
   });
   if (linhas.length === 0) return null;
   const editadas = linhas.filter((l) => l.editado).length;
+  const totalVenda = linhas.reduce((s, l) => s + l.venda * l.peca.quantidade, 0);
 
+  // A margem do resumo já dá o preço de tudo; mexer peça por peça é exceção. Por isso a
+  // lista fica dobrada, e só abre sozinha quando já tem preço mexido à mão.
   return (
-    <Painel
-      titulo="Preço para o cliente"
-      ajuda={`Já vem com a sua margem de ${c.margem}%. Mude o preço de qualquer peça antes de gerar o orçamento.`}
-      acao={
-        editadas > 0 && (
-          <Botao variante="secundario" tamanho="denso" onClick={onTudoNaMargem}>
-            Tudo em {c.margem}%
-          </Botao>
-        )
-      }
-    >
+    <details open={editadas > 0} className="group/precos rounded-xl border border-linha bg-superficie">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 sm:px-5 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-tinta">Preço para o cliente, peça por peça</span>
+          <span className="block text-xs text-tinta-3">
+            {editadas > 0
+              ? `${editadas === 1 ? "1 peça" : `${editadas} peças`} com preço seu · ${formatCurrency(totalVenda)}`
+              : `Tudo com a margem de ${c.margem}% · ${formatCurrency(totalVenda)}`}
+          </span>
+        </span>
+        <Chevron
+          tamanho={18}
+          className="shrink-0 text-tinta-3 transition-transform duration-200 group-open/precos:rotate-180"
+        />
+      </summary>
+      <div className="border-t border-linha px-4 pb-4 pt-3 sm:px-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-tinta-3">Mude o preço de qualquer peça antes de gerar o orçamento.</p>
+          {editadas > 0 && (
+            <Botao variante="secundario" tamanho="denso" onClick={onTudoNaMargem}>
+              Tudo em {c.margem}%
+            </Botao>
+          )}
+        </div>
       <ul className="divide-y divide-linha">
         {linhas.map(({ peca, oferta, venda, editado }) => {
           // Mesma conta da margem do resumo: quanto o preço está acima do custo.
@@ -727,7 +790,61 @@ function PainelPrecos({
           );
         })}
       </ul>
-    </Painel>
+      </div>
+    </details>
+  );
+}
+
+/** O que fazer agora, numa frase: a barra de etapas diz onde está; isto diz o próximo passo. */
+function proximoPasso(c: CotacaoVista, usaBoxOS: boolean, faltam: number): string {
+  switch (etapaDa(c)) {
+    case "AGUARDANDO":
+      return "Esperar as lojas responderem. Os preços aparecem aqui sozinhos, e toca um aviso.";
+    case "RESPONDIDA": {
+      if (faltam > 0) {
+        const fazer = usaBoxOS ? "gerar o orçamento" : "fazer o pedido";
+        const falta = faltam === 1 ? "1 loja ainda não respondeu" : `${faltam} lojas ainda não responderam`;
+        return `Escolha as peças e já dá para ${fazer}. ${falta}; se responder, o preço aparece aqui.`;
+      }
+      return `Todas as lojas responderam. Escolha as peças e ${usaBoxOS ? "gere o orçamento para o cliente" : "faça o pedido"}.`;
+    }
+    case "ORCAMENTO":
+      return "O orçamento está com o cliente. Quando ele aprovar, peça as peças aqui.";
+    case "PEDIDO":
+      return "Pedido feito. Acompanhe a entrega de cada loja logo abaixo.";
+    case "CONFERIR":
+      return "A loja entregou. Confira as peças e confirme o recebimento.";
+    case "DEVOLUCAO":
+      return "Tem devolução em andamento. Veja o que falta na loja dela, logo abaixo.";
+    case "ENTREGUE":
+      return c.orcamento ? "Peças na oficina. Agora é converter o orçamento em OS." : "Peças na oficina. Cotação concluída.";
+  }
+}
+
+/**
+ * Valor em reais que rola um pouco quando muda: escolher outra oferta mexe no total, e
+ * o movimento mostra onde a conta mudou. Parado na primeira vez que aparece.
+ */
+function Valor({ valor, className }: { valor: number; className?: string }) {
+  const el = useRef<HTMLSpanElement>(null);
+  const antes = useRef(valor);
+  useEffect(() => {
+    const era = antes.current;
+    antes.current = valor;
+    if (era === valor || !el.current) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    el.current.animate(
+      [
+        { opacity: 0.2, transform: `translateY(${valor > era ? 35 : -35}%)` },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration: 280, easing: "cubic-bezier(0.23, 1, 0.32, 1)" }
+    );
+  }, [valor]);
+  return (
+    <span ref={el} className={cn("inline-block tabular-nums", className)}>
+      {formatCurrency(valor)}
+    </span>
   );
 }
 
@@ -743,6 +860,7 @@ function Resumo({
   onGerar,
   onPedir,
   onForma,
+  principalSoNoComputador = false,
 }: {
   c: CotacaoVista;
   usaBoxOS: boolean;
@@ -753,7 +871,10 @@ function Resumo({
   onGerar: () => void;
   onPedir: () => void;
   onForma: (forma: FormaDePagamento) => void;
+  /** No celular o botão principal mora na barra de baixo: aqui ele some, para não ter dois. */
+  principalSoNoComputador?: boolean;
 }) {
+  const soNoComputador = principalSoNoComputador ? "max-lg:hidden" : "";
   const linkDoBoxOS = useLinkDoBoxOS();
   const t = totaisDa(c);
   const porLoja = pedidoPorLoja(c);
@@ -796,7 +917,7 @@ function Resumo({
           )}
         >
           <span>{usaBoxOS ? "Custo nas lojas" : "Total das peças"}</span>
-          <span className="tabular-nums">{formatCurrency(t.custo)}</span>
+          <Valor valor={t.custo} />
         </div>
 
         {usaBoxOS && (
@@ -826,11 +947,11 @@ function Resumo({
             </div>
             <div className="mt-1 flex justify-between border-t border-linha pt-2 text-lg font-bold text-tinta">
               <span>Cliente paga</span>
-              <span className="tabular-nums">{formatCurrency(t.venda)}</span>
+              <Valor valor={t.venda} />
             </div>
             <div className="flex justify-between font-semibold text-ok">
               <span>Você ganha nas peças</span>
-              <span className="tabular-nums">{formatCurrency(t.ganho)}</span>
+              <Valor valor={t.ganho} />
             </div>
           </>
         )}
@@ -859,7 +980,7 @@ function Resumo({
               pedido direto fica como segunda opção. Sem ele, pedir é a ação. */}
           {usaBoxOS && !c.orcamento ? (
             <>
-              <Botao onClick={onGerar} disabled={semEscolha} className="w-full">
+              <Botao onClick={onGerar} disabled={semEscolha} className={cn("aperta w-full", soNoComputador)}>
                 Gerar orçamento
               </Botao>
               <Botao variante="secundario" onClick={onPedir} disabled={semEscolha || pedindo} className="w-full">
@@ -871,7 +992,7 @@ function Resumo({
               variante={c.orcamento ? "sucesso" : "primario"}
               onClick={onPedir}
               disabled={semEscolha || pedindo}
-              className="w-full"
+              className={cn("aperta w-full", soNoComputador)}
             >
               {pedindo ? "Pedindo..." : c.orcamento ? "O cliente aprovou: pedir as peças" : "Fazer o pedido"}
             </Botao>
@@ -1067,7 +1188,7 @@ function PainelEntrega({
   return (
     <Painel
       titulo="Pedido das peças"
-      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. O balconista avança a entrega do painel dele, e aqui atualiza sozinho. Quando as peças chegarem, confirme o recebimento. Peça com defeito, errada ou que não vai usar: devolva por aqui.`}
+      ajuda={`Pedido feito às ${horaCurta(c.pedidoEm)}. A entrega atualiza sozinha, conforme a loja avança.`}
     >
       <div className="space-y-4">
         {doPedido.map((e) => {
