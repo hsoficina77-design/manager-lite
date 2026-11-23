@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { guardaPecaPeca } from "@/lib/peca-peca";
 import { lerCotacao } from "@/lib/cotacoes";
 import { fecharConversas } from "@/lib/conversa";
+import { getConfiguracao } from "@/lib/configuracao-db";
+import { cnpjValido } from "@/lib/documento";
+import { destinoDoPedido } from "@/lib/destino-do-pedido";
 
 /**
  * Faz o pedido: manda as peças escolhidas para cada loja de quem se escolheu alguma. A
@@ -14,7 +17,7 @@ import { fecharConversas } from "@/lib/conversa";
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guarda = await guardaPecaPeca();
   if (guarda.resposta) return guarda.resposta;
-  const { db, transacao } = guarda;
+  const { db, transacao, usuario } = guarda;
   const { id } = await params;
 
   const c = await lerCotacao(db, id);
@@ -27,6 +30,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Escolha ao menos uma peça antes de pedir" }, { status: 400 });
   }
 
+  // A autopeça só entrega, e cadastra a oficina, com CNPJ e endereço. Conta que nasceu
+  // antes dessa exigência completa os dados em Configurações, uma vez só.
+  const [config, chefe] = await Promise.all([
+    getConfiguracao(guarda),
+    db.usuario.findFirst({ where: { papel: "ADMIN", ativo: true }, orderBy: { createdAt: "asc" }, select: { nome: true } }),
+  ]);
+  const destino = destinoDoPedido(config, chefe?.nome ?? usuario.nome);
+  if (!destino || !cnpjValido(destino.cnpj)) {
+    return NextResponse.json(
+      { error: "Para fazer o pedido, complete o CNPJ e o endereço da oficina em Configurações. A autopeça precisa deles para entregar." },
+      { status: 422 }
+    );
+  }
+
   const feito = await transacao(async (tx) => {
     const marcada = await tx.cotacao.updateMany({ where: { id, pedidoEm: null }, data: { pedidoEm: new Date() } });
     if (marcada.count === 0) return false;
@@ -37,7 +54,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     // do pedido ficam presos a ela.
     await tx.cotacaoLoja.updateMany({
       where: { id: { in: comPedido } },
-      data: { entrega: "ENVIADO", formaPagamento: c.formaPagamento },
+      data: { entrega: "ENVIADO", formaPagamento: c.formaPagamento, destino },
     });
     // Com a loja que ficou de fora do pedido não há mais o que conversar.
     await fecharConversas(

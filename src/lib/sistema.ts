@@ -11,6 +11,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { DURACAO_MS, assinarToken, novoIdDeSessao, opcoesDoCookie, COOKIE_SESSAO } from "@/lib/sessao";
 import { validarSenha } from "@/lib/senha";
+import { cepValido, cnpjValido, enderecoEmUmaLinha, mascaraCep, mascaraCnpj } from "@/lib/documento";
 import { municipioOficial } from "@/lib/municipios-servidor";
 import { mesmaCidade } from "@/lib/municipios";
 import { CARENCIA_DIAS, fimDoTeste, situacaoDaOficina } from "@/lib/plano";
@@ -60,6 +61,8 @@ export async function criarOficinaComDono(
     /** Onde a oficina fica (município do IBGE) — é por ela que o Peça Peça mostra as lojas da região. */
     cidade?: string | null;
     estado?: string | null;
+    /** CNPJ e endereço de entrega — pedidos no Peça Peça. Vão para a configuração da oficina. */
+    entrega?: { cnpj: string; cep: string; endereco: string };
     administraPlataforma?: boolean;
     /** Só no cadastro público: a oficina nasce em teste grátis. */
     teste?: { whatsapp: string; origem: string | null };
@@ -90,7 +93,13 @@ export async function criarOficinaComDono(
   });
 
   await tx.configuracao.create({
-    data: { oficinaId: oficina.id, nome: dados.nomeOficina, cidade: dados.cidade ?? null, estado: dados.estado ?? null },
+    data: {
+      oficinaId: oficina.id,
+      nome: dados.nomeOficina,
+      cidade: dados.cidade ?? null,
+      estado: dados.estado ?? null,
+      ...(dados.entrega ?? {}),
+    },
   });
   await tx.categoriaDespesa.createMany({
     data: CATEGORIAS_PADRAO.map((c) => ({ ...c, oficinaId: oficina.id })),
@@ -119,6 +128,8 @@ export type DadosCadastro = {
   nome: string;
   email: string;
   senha: string;
+  /** Só no cadastro do Peça Peça. */
+  entrega?: { cnpj: string; cep: string; endereco: string };
 };
 
 /**
@@ -126,7 +137,9 @@ export type DadosCadastro = {
  * a mensagem de erro para a tela, ou os dados já limpos.
  */
 export function validarCadastroOficina(
-  corpo: Record<string, unknown> | null
+  corpo: Record<string, unknown> | null,
+  /** Peça Peça: só oficina com CNPJ, e o endereço é para onde a autopeça entrega. */
+  opcoes: { exigeEntrega?: boolean } = {}
 ): { erro: string; dados: null } | { erro: null; dados: DadosCadastro } {
   const { nomeOficina, cidade, estado, nome, email, senha } = corpo ?? {};
 
@@ -144,6 +157,22 @@ export function validarCadastroOficina(
   const problema = validarSenha(senha);
   if (problema) return { erro: problema, dados: null };
 
+  let entrega: DadosCadastro["entrega"];
+  if (opcoes.exigeEntrega) {
+    const { cnpj, cep, rua, numero, bairro } = corpo ?? {};
+    if (typeof cnpj !== "string" || !cnpjValido(cnpj)) return { erro: "Informe um CNPJ válido", dados: null };
+    if (typeof cep !== "string" || !cepValido(cep)) return { erro: "Informe o CEP da oficina", dados: null };
+    const texto = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    if (!texto(rua) || !texto(numero) || !texto(bairro)) {
+      return { erro: "Informe rua, número e bairro da oficina", dados: null };
+    }
+    entrega = {
+      cnpj: mascaraCnpj(cnpj),
+      cep: mascaraCep(cep),
+      endereco: enderecoEmUmaLinha(texto(rua).slice(0, 120), texto(numero).slice(0, 20), texto(bairro).slice(0, 80)),
+    };
+  }
+
   return {
     erro: null,
     dados: {
@@ -153,6 +182,7 @@ export function validarCadastroOficina(
       nome: nome.trim().slice(0, 120),
       email: email.trim().toLowerCase(),
       senha,
+      ...(entrega ? { entrega } : {}),
     },
   };
 }
@@ -199,6 +229,7 @@ export async function criarOficinaPeloCadastro(dados: {
   whatsapp: string;
   origem: string | null;
   produto: "boxos" | "peca-peca";
+  entrega?: { cnpj: string; cep: string; endereco: string };
 }) {
   const contato = { whatsapp: dados.whatsapp, origem: dados.origem };
   const criada = await prisma.$transaction(
@@ -212,6 +243,7 @@ export async function criarOficinaPeloCadastro(dados: {
         nome: dados.nome,
         email: dados.email,
         senhaHash: dados.senhaHash,
+        entrega: dados.entrega,
         ...(dados.produto === "peca-peca" ? { soPecaPeca: contato } : { teste: contato }),
       });
     },

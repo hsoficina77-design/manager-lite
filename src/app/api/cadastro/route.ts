@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Não foi possível criar o acesso" }, { status: 400 });
     }
 
-    const { erro, dados } = validarCadastroOficina(corpo);
+    const { erro, dados } = validarCadastroOficina(corpo, { exigeEntrega: true });
     if (!dados) return NextResponse.json({ error: erro }, { status: 400 });
 
     const whatsapp = typeof corpo?.whatsapp === "string" ? normalizarWhatsapp(corpo.whatsapp) : null;
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
       whatsapp,
       origem,
       produto: "peca-peca",
+      entrega: dados.entrega,
     });
 
     if (criada === "email") {

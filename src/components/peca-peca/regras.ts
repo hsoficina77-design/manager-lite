@@ -151,9 +151,23 @@ export type PecaNoBalcao = {
   pedida: string | null;
 };
 
+/** Para onde o pedido vai. Só existe depois que a oficina fecha o pedido com a loja — e sem telefone. */
+export type DestinoNoBalcao = {
+  oficina: string;
+  cnpj: string;
+  cep: string;
+  endereco: string;
+  cidade: string;
+  recebedor: string;
+  /** A primeira compra desta oficina com esta loja: a loja ainda não tem o cadastro dela. */
+  clienteNovo: boolean;
+};
+
 export type EnvioNoBalcao = {
   id: string;
   oficina: string;
+  /** Nulo até o pedido (a cotação é anônima) e nos pedidos feitos antes do destino existir. */
+  destino: DestinoNoBalcao | null;
   recebidoEm: string;
   respondidaEm: string | null;
   situacao: SituacaoNoBalcao;

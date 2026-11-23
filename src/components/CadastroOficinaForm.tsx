@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { SENHA_MIN } from "@/lib/senha-regras";
 import type { Municipio } from "@/lib/municipios";
 import { CampoCidade } from "@/components/ui/CampoCidade";
+import { mascaraCep, mascaraCnpj } from "@/lib/documento";
 
 // 16px no celular: abaixo disso o iPhone dá zoom ao focar o campo.
 const inputCls =
@@ -39,6 +40,12 @@ export default function CadastroOficinaForm({
     confirmacao: "",
     token: "",
     whatsapp: "",
+    // Só no Peça Peça: a autopeça precisa disto para cadastrar a oficina e entregar.
+    cnpj: "",
+    cep: "",
+    rua: "",
+    numero: "",
+    bairro: "",
     // Campo-armadilha: escondido de quem usa a tela; robô preenche e é recusado.
     site: "",
   });
@@ -95,6 +102,9 @@ export default function CadastroOficinaForm({
           nome: form.nome,
           email: form.email,
           senha: form.senha,
+          ...(pecaPeca
+            ? { cnpj: form.cnpj, cep: form.cep, rua: form.rua, numero: form.numero, bairro: form.bairro }
+            : {}),
           ...(exigeToken ? { token: form.token } : {}),
           ...(aberto ? { whatsapp: form.whatsapp, site: form.site, aceite, origem: aberto.origem } : {}),
         }),
@@ -165,6 +175,79 @@ export default function CadastroOficinaForm({
         <CampoCidade id="cidade" valor={municipio} onChange={setMunicipio} className="py-2.5 text-base sm:text-sm" />
         <p className="mt-1 text-xs text-tinta-3">Digite e escolha na lista. Serve para mostrar as autopeças da sua região.</p>
       </div>
+
+      {pecaPeca && (
+        <>
+          <div>
+            <label htmlFor="cnpj" className="mb-1 block text-sm font-medium text-tinta-2">
+              CNPJ da oficina
+            </label>
+            <input
+              id="cnpj"
+              required
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="00.000.000/0000-00"
+              value={form.cnpj}
+              onChange={(e) => setCampo("cnpj", mascaraCnpj(e.target.value))}
+              className={inputCls}
+            />
+            <p className="mt-1 text-xs text-tinta-3">
+              O Peça Peça atende oficinas com CNPJ. A autopeça usa o CNPJ para cadastrar você.
+            </p>
+          </div>
+
+          <fieldset className="space-y-3">
+            <legend className="mb-1 block text-sm font-medium text-tinta-2">Endereço de entrega</legend>
+            <div className="grid grid-cols-3 gap-3">
+              <input
+                aria-label="CEP"
+                required
+                inputMode="numeric"
+                autoComplete="postal-code"
+                placeholder="CEP"
+                value={form.cep}
+                onChange={(e) => setCampo("cep", mascaraCep(e.target.value))}
+                className={`${inputCls} col-span-1`}
+              />
+              <input
+                aria-label="Rua"
+                required
+                maxLength={120}
+                autoComplete="address-line1"
+                placeholder="Rua"
+                value={form.rua}
+                onChange={(e) => setCampo("rua", e.target.value)}
+                className={`${inputCls} col-span-2`}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <input
+                aria-label="Número"
+                required
+                maxLength={20}
+                placeholder="Número"
+                value={form.numero}
+                onChange={(e) => setCampo("numero", e.target.value)}
+                className={`${inputCls} col-span-1`}
+              />
+              <input
+                aria-label="Bairro"
+                required
+                maxLength={80}
+                autoComplete="address-level3"
+                placeholder="Bairro"
+                value={form.bairro}
+                onChange={(e) => setCampo("bairro", e.target.value)}
+                className={`${inputCls} col-span-2`}
+              />
+            </div>
+            <p className="text-xs text-tinta-3">
+              Só a autopeça que fechar um pedido com você vê o endereço, para fazer a entrega.
+            </p>
+          </fieldset>
+        </>
+      )}
 
       <div>
         <label htmlFor="nome" className="mb-1 block text-sm font-medium text-tinta-2">

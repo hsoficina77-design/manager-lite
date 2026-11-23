@@ -1035,6 +1035,9 @@ model CotacaoLoja {
   debitoAVista     Boolean   @default(true)
   /// Como a oficina paga esta loja — copiado da cotação no pedido. Nulo antes dele.
   formaPagamento   String?
+  /// Para onde o pedido vai, gravado quando ele é feito: nome, CNPJ, endereço e quem recebe.
+  /// Só a loja do pedido lê; mudar o endereço depois não mexe em pedido que já saiu.
+  destino          Json?
   createdAt        DateTime  @default(now())
 
   // ── Conversa (ver `Mensagem`): o resumo fica aqui para as caixas de entrada e os

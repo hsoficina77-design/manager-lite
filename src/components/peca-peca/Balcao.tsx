@@ -26,6 +26,7 @@ import {
   situacaoDaDevolucao,
   type CaixaDoBalcao,
   type DevolucaoVista,
+  type DestinoNoBalcao,
   type EnvioNoBalcao,
 } from "./regras";
 import { enviarJson, tocarAviso, useAoVivo, useTituloComContador } from "./aoVivo";
@@ -417,6 +418,85 @@ function eventosNoBalcao(envio: EnvioNoBalcao): EventoDaConversa[] {
   return eventos;
 }
 
+/**
+ * Para onde vai o pedido. Cliente novo vem aberto, com os dados prontos para a loja
+ * cadastrar a oficina; quem já comprou antes vem recolhido numa linha. Sem telefone:
+ * a conversa do app é o canal da loja com a oficina.
+ */
+function EntregarPara({ destino }: { destino: DestinoNoBalcao }) {
+  const avisar = useAvisar();
+  const completo = `${destino.endereco} - CEP ${destino.cep} - ${destino.cidade}`;
+  const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(completo)}`;
+
+  async function copiar() {
+    const texto = [
+      `Oficina: ${destino.oficina}`,
+      `CNPJ: ${destino.cnpj}`,
+      `Endereço: ${destino.endereco}`,
+      `CEP: ${destino.cep}`,
+      `Cidade: ${destino.cidade}`,
+      `Recebe: ${destino.recebedor}`,
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(texto);
+      avisar("Dados copiados. É só colar no cadastro da loja.", "ok");
+    } catch {
+      avisar("Não foi possível copiar. Selecione o texto e copie.", "erro");
+    }
+  }
+
+  return (
+    <details open={destino.clienteNovo} className="group rounded-lg border border-linha-forte bg-superficie-2">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-sm">
+        <span className="font-semibold text-tinta">Entregar para</span>
+        {destino.clienteNovo && <span className="status status-entregue">Cliente novo</span>}
+        <span className="min-w-0 flex-1 truncate text-tinta-2 group-open:hidden">
+          {destino.oficina} · {destino.endereco}
+        </span>
+        <span className="text-xs text-tinta-3 group-open:hidden">Ver</span>
+      </summary>
+      <div className="space-y-3 border-t border-linha px-3 py-3 text-sm">
+        <dl className="grid gap-3 sm:grid-cols-2">
+          {[
+            ["Oficina", destino.oficina],
+            ["CNPJ", destino.cnpj],
+            ["Endereço", `${destino.endereco} · CEP ${destino.cep}`],
+            ["Cidade", destino.cidade],
+            ["Quem recebe", destino.recebedor],
+          ].map(([rotulo, valor]) => (
+            <div key={rotulo}>
+              <dt className="text-xs text-tinta-3">{rotulo}</dt>
+              <dd className="font-medium text-tinta">{valor}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={mapa}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
+          >
+            Abrir no mapa
+          </a>
+          <button
+            type="button"
+            onClick={copiar}
+            className="rounded-lg border border-linha-forte bg-superficie px-3 py-2 text-sm font-medium text-tinta hover:bg-superficie-2"
+          >
+            {destino.clienteNovo ? "Copiar dados para cadastro" : "Copiar dados"}
+          </button>
+        </div>
+        {destino.clienteNovo && (
+          <p className="text-xs text-tinta-3">
+            É a primeira compra desta oficina na sua loja. Copie os dados e cadastre a oficina antes de entregar.
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function PedidoNoBalcao({
   envio,
   url,
@@ -469,6 +549,7 @@ function PedidoNoBalcao({
             : "A oficina ainda vai conferir as peças e confirmar o recebimento."}
         </p>
       )}
+      {envio.destino && <EntregarPara destino={envio.destino} />}
       <ul className="space-y-1 rounded-lg bg-superficie p-3 text-sm">
         {pedidas.map((p) => (
           <li key={p.id} className="text-tinta">

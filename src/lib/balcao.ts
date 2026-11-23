@@ -11,6 +11,7 @@
 //   - o que a loja grava (oferta, etapa da entrega) leva o `oficinaId` do próprio
 //     envio, e os gatilhos do banco recusam qualquer vínculo com outra oficina.
 
+import { lerDestino } from "@/lib/destino-do-pedido";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -364,6 +365,7 @@ const SELECAO_DO_ENVIO = {
   freteGratisAcima: true,
   debitoAVista: true,
   formaPagamento: true,
+  destino: true,
   ofertas: {
     orderBy: { createdAt: "asc" },
     select: { id: true, pecaId: true, marca: true, preco: true, precoCredito: true, prazoMin: true },
@@ -424,7 +426,26 @@ export async function nomesDasOficinas(ids: string[]) {
 
 const OFICINA_SEM_NOME: OficinaNoBalcao = { nome: "Oficina", cidade: null };
 
-function paraOBalcao(e: EnvioDoBanco, oficina: OficinaNoBalcao, regra: EntregaEPagamento): EnvioNoBalcao {
+/**
+ * Quando cada oficina fez o primeiro pedido nesta loja. A oficina cujo envio é esse é
+ * cliente novo: o balcão oferece os dados para a loja cadastrá-la.
+ */
+async function primeirosPedidos(lojaId: string, oficinaIds: string[]) {
+  const grupos = await prisma.cotacaoLoja.groupBy({
+    by: ["oficinaId"],
+    where: { lojaId, oficinaId: { in: oficinaIds }, entrega: { not: null } },
+    _min: { createdAt: true },
+  });
+  return new Map(grupos.map((g) => [g.oficinaId, g._min.createdAt]));
+}
+
+function paraOBalcao(
+  e: EnvioDoBanco,
+  oficina: OficinaNoBalcao,
+  regra: EntregaEPagamento,
+  primeiros: Map<string, Date | null>
+): EnvioNoBalcao {
+  const salvo = e.entrega ? lerDestino(e.destino) : null;
   const c = e.cotacao;
   // Respondida, valem a taxa e o pagamento que a loja mandou; antes, a regra dela agora.
   const respondida = Boolean(e.respondidaEm);
@@ -455,6 +476,9 @@ function paraOBalcao(e: EnvioDoBanco, oficina: OficinaNoBalcao, regra: EntregaEP
   return {
     id: e.id,
     oficina: oficina.nome,
+    destino: salvo
+      ? { ...salvo, clienteNovo: primeiros.get(e.oficinaId)?.getTime() === e.createdAt.getTime() }
+      : null,
     recebidoEm: e.createdAt.toISOString(),
     respondidaEm: e.respondidaEm?.toISOString() ?? null,
     situacao,
@@ -520,18 +544,22 @@ export async function caixaDaLoja(
 ): Promise<CaixaDoBalcao> {
   const [recentes, regra] = await Promise.all([lerEnvios({ lojaId: loja.id }), entregaEPagamentoDaLoja(loja.id)]);
   const envios = [...recentes, ...(await enviosComDevolucaoPendente(loja.id, recentes.map((e) => e.id)))];
-  const oficinas = await oficinasDosEnvios([...new Set(envios.map((e) => e.oficinaId))]);
+  const ids = [...new Set(envios.map((e) => e.oficinaId))];
+  const [oficinas, primeiros] = await Promise.all([oficinasDosEnvios(ids), primeirosPedidos(loja.id, ids)]);
   return {
     loja: { nome: loja.nome, cidade: loja.cidade, entregaMedia: loja.entregaMedia },
-    envios: envios.map((e) => paraOBalcao(e, oficinas.get(e.oficinaId) ?? OFICINA_SEM_NOME, regra)),
+    envios: envios.map((e) => paraOBalcao(e, oficinas.get(e.oficinaId) ?? OFICINA_SEM_NOME, regra, primeiros)),
   };
 }
 
 export async function envioDaLoja(lojaId: string, envioId: string): Promise<EnvioNoBalcao | null> {
   const [[envio], regra] = await Promise.all([lerEnvios({ lojaId, id: envioId }), entregaEPagamentoDaLoja(lojaId)]);
   if (!envio) return null;
-  const oficinas = await oficinasDosEnvios([envio.oficinaId]);
-  return paraOBalcao(envio, oficinas.get(envio.oficinaId) ?? OFICINA_SEM_NOME, regra);
+  const [oficinas, primeiros] = await Promise.all([
+    oficinasDosEnvios([envio.oficinaId]),
+    primeirosPedidos(lojaId, [envio.oficinaId]),
+  ]);
+  return paraOBalcao(envio, oficinas.get(envio.oficinaId) ?? OFICINA_SEM_NOME, regra, primeiros);
 }
 
 // ─── O que a loja grava ─────────────────────────────────────────────────────
