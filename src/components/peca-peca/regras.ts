@@ -736,6 +736,9 @@ export type ConversaNaLista = {
 /** Tamanho máximo de uma mensagem: o que cabe numa dúvida de balcão. */
 export const LIMITE_MENSAGEM = 1000;
 
+/** No máximo de carros numa nova cotação: o dia cheio de uma oficina pequena. */
+export const MAX_CARROS_POR_ENVIO = 10;
+
 /** Mensagens por página, ao abrir a conversa e ao buscar as mais antigas. */
 export const MENSAGENS_POR_PAGINA = 50;
 

@@ -29,42 +29,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Escolha ao menos uma loja que atenda a sua cidade" }, { status: 400 });
     }
 
-    const v = dados.veiculo;
-    const criada = await transacao(async (tx) => {
-      // O carro achado pela placa só entra se for desta oficina — o filtro devolve
-      // nulo para id de outra, e aí a cotação segue só com os dados digitados.
-      const doCadastro = dados.veiculoId
-        ? await tx.veiculo.findUnique({ where: { id: dados.veiculoId }, select: { id: true, clienteId: true } })
-        : null;
+    // Um carro, uma cotação: cada uma tem número, orçamento e entrega próprios.
+    // Tudo numa transação só — ou saem todas, ou nenhuma.
+    const criadas = await transacao(async (tx) => {
+      const feitas: { id: string; numero: number }[] = [];
+      for (const carro of dados.carros) {
+        const v = carro.veiculo;
+        // O carro achado pela placa só entra se for desta oficina — o filtro devolve
+        // nulo para id de outra, e aí a cotação segue só com os dados digitados.
+        const doCadastro = carro.veiculoId
+          ? await tx.veiculo.findUnique({ where: { id: carro.veiculoId }, select: { id: true, clienteId: true } })
+          : null;
 
-      const seq = await tx.sequencia.upsert({
-        where: { oficinaId_id: { oficinaId, id: "cotacao" } },
-        update: { ultimo: { increment: 1 } },
-        create: { id: "cotacao", ultimo: 1 },
-      });
+        const seq = await tx.sequencia.upsert({
+          where: { oficinaId_id: { oficinaId, id: "cotacao" } },
+          update: { ultimo: { increment: 1 } },
+          create: { id: "cotacao", ultimo: 1 },
+        });
 
-      return tx.cotacao.create({
-        data: {
-          numero: seq.ultimo,
-          placa: normalizarPlaca(v.placa) || null,
-          marca: v.marca,
-          modelo: v.modelo,
-          ano: v.ano,
-          motor: v.motor,
-          observacao: dados.observacao || null,
-          formaPagamento: dados.formaPagamento,
-          veiculoId: doCadastro?.id ?? null,
-          clienteId: doCadastro?.clienteId ?? null,
-          pecas: {
-            create: dados.pecas.map((p, ordem) => ({ ordem, descricao: p.descricao, quantidade: p.quantidade })),
-          },
-          envios: { create: lojas.map((lojaId) => ({ lojaId })) },
-        },
-        select: { id: true, numero: true },
-      });
+        feitas.push(
+          await tx.cotacao.create({
+            data: {
+              numero: seq.ultimo,
+              placa: normalizarPlaca(v.placa) || null,
+              marca: v.marca,
+              modelo: v.modelo,
+              ano: v.ano,
+              motor: v.motor,
+              observacao: carro.observacao || null,
+              formaPagamento: dados.formaPagamento,
+              veiculoId: doCadastro?.id ?? null,
+              clienteId: doCadastro?.clienteId ?? null,
+              pecas: {
+                create: carro.pecas.map((p, ordem) => ({ ordem, descricao: p.descricao, quantidade: p.quantidade })),
+              },
+              envios: { create: lojas.map((lojaId) => ({ lojaId })) },
+            },
+            select: { id: true, numero: true },
+          })
+        );
+      }
+      return feitas;
     });
 
-    return NextResponse.json(criada, { status: 201 });
+    // `id` e `numero` da primeira continuam no topo para quem manda um carro só.
+    return NextResponse.json({ ...criadas[0], cotacoes: criadas }, { status: 201 });
   } catch (err) {
     const invalido = respostaDeValidacao(err);
     if (invalido) return invalido;

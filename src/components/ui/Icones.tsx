@@ -173,6 +173,23 @@ export const Mais = (p: Props) => (
   </Base>
 );
 
+export const Menos = (p: Props) => (
+  <Base {...p}>
+    <path d="M5 12h14" />
+  </Base>
+);
+
+/** Carro de lado — um por carro que vai ser orçado na cotação. */
+export const Carro = (p: Props) => (
+  <Base {...p}>
+    <path d="M3 16.5v-3.2c0-.6.3-1.1.8-1.4L6 10.5l2.2-3.3c.3-.4.7-.7 1.2-.7h4.4c.5 0 1 .2 1.3.6l2.6 3.4 2.6.9c.6.2.9.7.9 1.3v3.8" />
+    <path d="M6 10.5h12" />
+    <path d="M10 16.5h4" />
+    <circle cx="7.5" cy="16.5" r="2" />
+    <circle cx="16.5" cy="16.5" r="2" />
+  </Base>
+);
+
 /** Balão de fala — a conversa entre oficina e loja no Peça Peça. */
 export const Conversa = (p: Props) => (
   <Base {...p}>

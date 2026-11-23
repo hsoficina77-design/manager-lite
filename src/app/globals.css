@@ -630,6 +630,34 @@
   to   { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes passo-entra {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--sentido, 1) * 32px));
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes carro-chega {
+  from { opacity: 0; transform: translateX(-18px) scale(0.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes linha-entra {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes linha-acende {
+  from { background-color: rgb(var(--gr-sem-resposta) / 0.18); }
+  to   { background-color: transparent; }
+}
+
 @layer utilities {
   .animate-in {
     animation: drawer-in 0.2s ease-out;
@@ -638,6 +666,36 @@
   /* Folha que sobe do pé da tela (o convite para instalar). */
   .animate-subir {
     animation: subir 0.25s ease-out;
+  }
+
+  /* Assistente da nova cotação: cada etapa entra pelo lado para onde a pessoa
+     andou (--sentido: 1 avançou, -1 voltou). Desacelera forte no fim, para a
+     etapa "assentar" sem demora; nada de mola. */
+  .passo-entra {
+    animation: passo-entra 380ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  /* Um carro novo na fila da tela "quantos carros". */
+  .carro-chega {
+    animation: carro-chega 420ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+  }
+  /* Linha que acabou de entrar numa lista (a peça adicionada). */
+  .linha-entra {
+    animation: linha-entra 240ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  /* A cotação que acabou de subir para "Precisa de você" (a loja respondeu, a peça
+     chegou): desliza para o lugar e acende em âmbar, que se apaga devagar. É o único
+     movimento da lista que acontece sem a pessoa tocar em nada, então é a novidade. */
+  .linha-chega {
+    animation:
+      linha-entra 320ms cubic-bezier(0.23, 1, 0.32, 1),
+      linha-acende 1200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  /* Botão afunda um pouco no toque: o dedo sente que apertou. */
+  .aperta {
+    transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 150ms, border-color 150ms, color 150ms;
+  }
+  .aperta:active:not(:disabled) {
+    transform: scale(0.97);
   }
 
   /* Área segura do iPhone: barras coladas no rodapé precisam do respiro do

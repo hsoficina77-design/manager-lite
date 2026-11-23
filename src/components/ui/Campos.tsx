@@ -40,7 +40,7 @@ export function Campo({
   );
 }
 
-export function Entrada(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export function Entrada(props: React.ComponentProps<"input">) {
   return <input {...props} className={cn(BASE_CAMPO, props.className)} />;
 }
 

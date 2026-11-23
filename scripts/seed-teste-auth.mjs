@@ -29,12 +29,22 @@ const contas = [
   { email: "op@teste.local", nome: "Operador de Teste", papel: "OPERADOR", senha: "TesteOper#2026" },
 ];
 
+// Desde o multi-oficina todo usuário pertence a uma oficina: as contas de teste ficam
+// na primeira do banco local (OFICINA_TESTE=<id> escolhe outra).
+const oficina = process.env.OFICINA_TESTE
+  ? await prisma.oficina.findUnique({ where: { id: process.env.OFICINA_TESTE } })
+  : await prisma.oficina.findFirst({ orderBy: { id: "asc" } });
+if (!oficina) {
+  console.error("Nenhuma oficina no banco local para pendurar as contas de teste.");
+  process.exit(1);
+}
+
 for (const conta of contas) {
   const senhaHash = await hashSenha(conta.senha);
   await prisma.usuario.upsert({
     where: { email: conta.email },
-    update: { senhaHash, papel: conta.papel, ativo: true },
-    create: { email: conta.email, nome: conta.nome, papel: conta.papel, senhaHash },
+    update: { senhaHash, papel: conta.papel, ativo: true, oficinaId: oficina.id },
+    create: { email: conta.email, nome: conta.nome, papel: conta.papel, senhaHash, oficinaId: oficina.id },
   });
   console.log(`ok ${conta.papel.padEnd(8)} ${conta.email}`);
 }

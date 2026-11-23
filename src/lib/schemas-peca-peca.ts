@@ -2,7 +2,7 @@
 // (rotas /api/balcao, públicas, então validadas com o mesmo rigor das outras).
 
 import { z } from "zod";
-import { LIMITE_MENSAGEM } from "@/components/peca-peca/regras";
+import { LIMITE_MENSAGEM, MAX_CARROS_POR_ENVIO } from "@/components/peca-peca/regras";
 import {
   LIMITES,
   dinheiro,
@@ -33,9 +33,8 @@ const formaDePagamento = z.enum(["PIX", "DEBITO", "CREDITO"], {
   errorMap: () => ({ message: "Escolha como vai pagar" }),
 });
 
-export const cotacaoCriarSchema = z.object({
-  /** Como a oficina pretende pagar: a loja lê no balcão. */
-  formaPagamento: formaDePagamento.optional().default("PIX"),
+/** Um carro do pedido: vira uma cotação própria, com número próprio. */
+const carroDaCotacao = z.object({
   veiculo: z.object({
     placa: texto("Placa", LIMITES.identidade),
     // O balconista precisa dos quatro para acertar a aplicação.
@@ -56,8 +55,27 @@ export const cotacaoCriarSchema = z.object({
     )
     .min(1, "Adicione ao menos uma peça")
     .max(50, "No máximo 50 peças por cotação"),
+});
+
+const loteDeCotacoes = z.object({
+  /** Como a oficina pretende pagar: a loja lê no balcão. Vale para todos os carros. */
+  formaPagamento: formaDePagamento.optional().default("PIX"),
+  carros: z
+    .array(carroDaCotacao)
+    .min(1, "Informe ao menos um carro")
+    .max(MAX_CARROS_POR_ENVIO, `No máximo ${MAX_CARROS_POR_ENVIO} carros por envio`),
   lojas: z.array(id("Loja")).min(1, "Escolha ao menos uma loja").max(20, "No máximo 20 lojas"),
 });
+
+/**
+ * Cria uma cotação por carro. Aceita também o formato antigo, de um carro só
+ * ({ veiculo, pecas, ... } no topo), que os scripts de teste e de vídeo ainda usam.
+ */
+export const cotacaoCriarSchema = z.preprocess((corpo) => {
+  if (!corpo || typeof corpo !== "object" || "carros" in corpo) return corpo;
+  const { veiculo, observacao, veiculoId, pecas, ...resto } = corpo as Record<string, unknown>;
+  return { ...resto, carros: [{ veiculo, observacao, veiculoId, pecas }] };
+}, loteDeCotacoes);
 
 /** Uma mudança por vez: a tela manda só o que a pessoa acabou de mexer. */
 export const cotacaoAlterarSchema = z.object({
