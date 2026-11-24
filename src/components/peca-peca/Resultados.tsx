@@ -124,7 +124,8 @@ function variacaoDaTaxa(atual: number, anterior: number, temBase: boolean): Comp
   if (!temBase) return null;
   const d = atual - anterior;
   if (d === 0) return { sobe: null, bom: null, texto: "igual" };
-  return { sobe: d > 0, bom: d > 0, texto: plural(Math.abs(d), "ponto", "pontos") };
+  // "Subiu" ou "caiu", com o número de antes ao lado: "75 pontos" era jargão de planilha.
+  return { sobe: d > 0, bom: d > 0, texto: d > 0 ? "subiu" : "caiu" };
 }
 
 /** A comparação com o período anterior, numa linha só. Sem base, não diz nada. */
@@ -497,10 +498,20 @@ export function Desfechos({ r }: { r: ResultadosDaLoja }) {
 
 // ─── Rapidez × vendas ───────────────────────────────────────────────────────
 
+/** Abaixo disso, comparar a rapidez com as vendas é chute: o bloco não aparece. */
+export const MINIMO_PARA_RAPIDEZ = 5;
+
+/** Quantas disputas a loja já teve decididas, para saber se o bloco da rapidez aparece. */
+export function disputasDecididas(r: ResultadosDaLoja) {
+  return r.porRapidez.reduce((s, f) => s + f.decididas, 0);
+}
+
 export function RapidezVende({ r }: { r: ResultadosDaLoja }) {
   const decididas = r.porRapidez.reduce((s, f) => s + f.decididas, 0);
   const taxas = r.porRapidez.map((f) => (f.decididas ? porcento(f.vendidas, f.decididas) : null));
   const melhor = Math.max(...taxas.map((t) => t ?? -1));
+  // Com poucas disputas o gráfico não diz nada: o bloco some, e a página avisa no pé.
+  if (decididas < MINIMO_PARA_RAPIDEZ) return null;
 
   return (
     <Bloco>
@@ -508,9 +519,7 @@ export function RapidezVende({ r }: { r: ResultadosDaLoja }) {
         titulo="Responder rápido vende mais?"
         ajuda="Quanto a loja ganhou das disputas, conforme o tempo que levou para responder."
       />
-      {decididas < 5 ? (
-        <SemDados>Ainda são poucas disputas decididas para comparar. Com mais algumas, este gráfico aparece.</SemDados>
-      ) : (
+      {(
         <div className="grid grid-cols-4 gap-2">
           {r.porRapidez.map((f, i) => {
             const t = taxas[i];
