@@ -49,4 +49,28 @@ for (const conta of contas) {
   console.log(`ok ${conta.papel.padEnd(8)} ${conta.email}`);
 }
 
+// Uma conta de balcão (dono da loja), na loja LOJA_TESTE=<id> ou na primeira do banco.
+const loja = process.env.LOJA_TESTE
+  ? await prisma.loja.findUnique({ where: { id: process.env.LOJA_TESTE } })
+  : await prisma.loja.findFirst({ orderBy: { id: "asc" } });
+if (loja) {
+  const conta = { email: "loja@teste.local", nome: "Balcão de Teste", senha: "TesteLoja#2026" };
+  const permissoes = [
+    "balcao.responder",
+    "balcao.entrega",
+    "balcao.devolucao",
+    "balcao.conversa",
+    "loja.resumo",
+    "loja.equipe",
+    "loja.dados",
+  ];
+  const senhaHash = await hashSenha(conta.senha);
+  await prisma.usuarioLoja.upsert({
+    where: { email: conta.email },
+    update: { senhaHash, perfil: "DONO", permissoes, ativo: true, lojaId: loja.id },
+    create: { email: conta.email, nome: conta.nome, perfil: "DONO", permissoes, senhaHash, lojaId: loja.id },
+  });
+  console.log(`ok LOJA     ${conta.email} (${loja.nome})`);
+}
+
 await prisma.$disconnect();

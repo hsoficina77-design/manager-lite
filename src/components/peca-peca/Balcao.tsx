@@ -7,7 +7,7 @@ import { Botao, BotaoLink } from "@/components/ui/Botao";
 import { Area, Aviso, Campo, CampoDinheiro, Entrada } from "@/components/ui/Campos";
 import { EsqueletoLista, Painel, Vazio } from "@/components/ui/Dados";
 import { useAvisar } from "@/components/ui/Avisos";
-import { Confere, Conversa as IconeConversa, Lixeira, Mais, Voltar } from "@/components/ui/Icones";
+import { Avancar, Chevron, Confere, Conversa as IconeConversa, Lixeira, Mais, Voltar } from "@/components/ui/Icones";
 import { LogoPecaPeca } from "@/components/marca/LogoPecaPeca";
 import {
   ETAPAS_ENTREGA,
@@ -89,6 +89,8 @@ function Moldura({
 
 export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalcao; loja: LojaDoBalcao }) {
   const avisar = useAvisar();
+  // As já respondidas ficam recolhidas: o balcão é para o que ainda espera a loja.
+  const [verRespondidas, setVerRespondidas] = useState(false);
   const { dados, semConexao } = useAoVivo<CaixaDoBalcao>(caminhos.api, 4000);
   const envios = dados?.envios ?? [];
 
@@ -135,15 +137,33 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dados]);
 
+  // O que espera a loja, em palavras, logo abaixo do nome.
+  const resumo = [
+    responder.length > 0 && `${responder.length} para responder`,
+    pedidosAbertos.length > 0 &&
+      `${pedidosAbertos.length} ${pedidosAbertos.length === 1 ? "pedido" : "pedidos"} para separar`,
+    devolucoes.length > 0 && `${devolucoes.length} ${devolucoes.length === 1 ? "devolução" : "devoluções"}`,
+  ].filter(Boolean);
+  const respondidas = [...outras, ...pedidos.filter((e) => e.entrega === "ENTREGUE")];
+
   return (
     <Moldura loja={loja} comCabecalho={caminhos.comCabecalho}>
       <div>
         {/* O nome sozinho: "da Yoshio", mas "do Bom Preço" — o artigo muda de loja para loja. */}
         <h1 className="text-xl font-bold text-tinta">{loja.nome}</h1>
-        <p className="mt-0.5 text-sm text-tinta-3">
-          Balcão da loja. Deixe esta tela aberta: ela se atualiza sozinha e avisa com som quando chega cotação,
-          pedido, devolução ou mensagem.
-        </p>
+        {dados && (
+          <p className="mt-0.5 text-sm text-tinta-2">
+            {resumo.length > 0 ? resumo.join(" · ") : "Nada esperando a loja agora."}
+            {decididas.length > 0 && (
+              // Quantas a loja ganhou das que a oficina já decidiu: o termômetro do balcão.
+              <span className="text-tinta-3">
+                {" "}
+                · fechou {pedidos.length} de {decididas.length}
+              </span>
+            )}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-tinta-3">Deixe aberta: atualiza sozinha e toca quando chega novidade.</p>
         {caminhos.push && (
           <div className="mt-2">
             <AvisoNoCelular api={caminhos.push} />
@@ -162,15 +182,23 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
         />
       ) : (
         <>
-          {decididas.length > 0 && (
-            <p className="rounded-xl border border-linha bg-superficie px-4 py-3 text-sm text-tinta-2">
-              A loja fechou <strong className="text-tinta">{pedidos.length}</strong> de {decididas.length}{" "}
-              {decididas.length === 1 ? "cotação decidida" : "cotações decididas"}.
-            </p>
+          {/* Primeiro o que pode virar venda: a cotação esperando preço. */}
+          <Secao titulo="Para responder" total={responder.length} destaque={responder.length > 0}>
+            {responder.length === 0 ? (
+              <p className="text-sm text-tinta-3">Nada esperando resposta.</p>
+            ) : (
+              <Lista envios={responder} telas={caminhos.telas} />
+            )}
+          </Secao>
+
+          {pedidosAbertos.length > 0 && (
+            <Secao titulo="Pedidos para separar" total={pedidosAbertos.length} destaque={pedidosNovos.length > 0}>
+              <Lista envios={pedidosAbertos} telas={caminhos.telas} />
+            </Secao>
           )}
 
           {devolucoes.length > 0 && (
-            <Secao titulo="Devoluções">
+            <Secao titulo="Devoluções" total={devolucoes.length} destaque>
               <div className="divide-y divide-linha overflow-hidden rounded-xl border border-atencao-linha bg-superficie">
                 {devolucoes.map(({ envio, d }) => {
                   const situacao = situacaoNoBalcao(d);
@@ -199,23 +227,14 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
             </Secao>
           )}
 
-          {pedidosAbertos.length > 0 && (
-            <Secao titulo="Pedidos para separar">
-              <Lista envios={pedidosAbertos} telas={caminhos.telas} />
-            </Secao>
-          )}
-
-          <Secao titulo="Para responder">
-            {responder.length === 0 ? (
-              <p className="text-sm text-tinta-3">Nada esperando resposta.</p>
-            ) : (
-              <Lista envios={responder} telas={caminhos.telas} />
-            )}
-          </Secao>
-
-          {(outras.length > 0 || pedidos.length > pedidosAbertos.length) && (
-            <Secao titulo="Respondidas">
-              <Lista envios={[...outras, ...pedidos.filter((e) => e.entrega === "ENTREGUE")]} telas={caminhos.telas} />
+          {respondidas.length > 0 && (
+            <Secao
+              titulo="Respondidas"
+              total={respondidas.length}
+              aberta={verRespondidas}
+              onAlternar={() => setVerRespondidas((v) => !v)}
+            >
+              <Lista envios={respondidas} telas={caminhos.telas} />
             </Secao>
           )}
         </>
@@ -224,50 +243,134 @@ export function CaixaDoBalcaoTela({ caminhos, loja }: { caminhos: CaminhosDoBalc
   );
 }
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Secao({
+  titulo,
+  total,
+  destaque = false,
+  aberta = true,
+  onAlternar,
+  children,
+}: {
+  titulo: string;
+  total?: number;
+  /** Tem coisa esperando a loja: o número fica âmbar. */
+  destaque?: boolean;
+  aberta?: boolean;
+  /** Com ele, o título vira botão de abrir e fechar. */
+  onAlternar?: () => void;
+  children: React.ReactNode;
+}) {
+  const cabeca = (
+    <>
+      <span className="font-semibold text-tinta">{titulo}</span>
+      {total !== undefined && total > 0 && (
+        <span
+          className={cn(
+            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums",
+            destaque ? "bg-[rgb(var(--gr-sem-resposta))] text-[rgb(20_14_0)]" : "bg-superficie-3 text-tinta-2"
+          )}
+        >
+          {total}
+        </span>
+      )}
+    </>
+  );
   return (
-    <section className="space-y-3">
-      <h2 className="font-semibold text-tinta">{titulo}</h2>
-      {children}
+    <section className="space-y-2">
+      {onAlternar ? (
+        <button
+          type="button"
+          onClick={onAlternar}
+          aria-expanded={aberta}
+          className="flex min-h-11 w-full items-center gap-2 text-left"
+        >
+          {cabeca}
+          <span className="ml-auto inline-flex items-center gap-1 text-sm text-tinta-3">
+            {aberta ? "Esconder" : "Mostrar"}
+            <Chevron
+              tamanho={16}
+              className={cn(
+                "transition-transform duration-200 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]",
+                aberta && "rotate-180"
+              )}
+            />
+          </span>
+        </button>
+      ) : (
+        <h2 className="flex items-center gap-2">{cabeca}</h2>
+      )}
+      {aberta && <div className={cn(onAlternar && "linha-entra")}>{children}</div>}
     </section>
   );
+}
+
+/** O próximo passo da loja naquela cotação, para virar o botão da linha. */
+function acaoNaLinha(e: EnvioNoBalcao): string | null {
+  if (e.situacao === "RESPONDER") return "Responder";
+  if (e.situacao === "PEDIDO" && e.entrega === "ENVIADO") return "Separar";
+  if (e.naoLidas > 0) return "Ler mensagem";
+  return null;
 }
 
 function Lista({ envios, telas }: { envios: EnvioNoBalcao[]; telas: string }) {
   return (
     <div className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
-      {envios.map((e) => (
-        <Link
-          key={e.id}
-          href={`${telas}/${e.id}`}
-          className="flex flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-superficie-2 sm:flex-row sm:items-center sm:gap-3"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-tinta">
-              {descricaoDoVeiculo(e.veiculo)}
-              {e.veiculo.motor && <span className="ml-2 font-normal text-tinta-3">{e.veiculo.motor}</span>}
-            </p>
-            <p className="flex flex-wrap gap-x-3 text-xs text-tinta-3">
-              <span className="text-tinta-2">{e.oficina}</span>
-              <span>
-                {e.pecas.length} {e.pecas.length === 1 ? "peça" : "peças"}
+      {envios.map((e) => {
+        const acao = acaoNaLinha(e);
+        return (
+          <Link
+            key={e.id}
+            href={`${telas}/${e.id}`}
+            className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-superficie-2 focus-visible:bg-superficie-2 focus-visible:outline-none"
+          >
+            <div className="min-w-0 flex-1">
+              {/* O carro e o motor primeiro: é o que o balconista confere na aplicação. */}
+              <p className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-semibold text-tinta">
+                  {descricaoDoVeiculo(e.veiculo)}
+                  {e.veiculo.motor && <span className="ml-1.5 font-normal text-tinta-2">{e.veiculo.motor}</span>}
+                </span>
+                {e.naoLidas > 0 && <ContadorDeMensagens total={e.naoLidas} className="shrink-0" />}
+              </p>
+              <p className="mt-0.5 truncate text-sm text-tinta-2">
+                {e.pecas.length <= 2
+                  ? e.pecas.map((p) => `${p.quantidade}× ${p.descricao}`).join(", ")
+                  : `${e.pecas.length} peças: ${e.pecas[0].descricao} e mais ${e.pecas.length - 1}`}
+              </p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-tinta-3">
+                {e.situacao !== "RESPONDER" && (
+                  <span className={SITUACOES_NO_BALCAO[e.situacao].cor}>
+                    {e.situacao === "PEDIDO" && e.entrega
+                      ? rotuloDaEntrega(e.entrega)
+                      : SITUACOES_NO_BALCAO[e.situacao].rotulo}
+                  </span>
+                )}
+                <span>
+                  {e.oficina} · {haQuanto(e.recebidoEm)}
+                </span>
+              </p>
+              {/* No celular o botão vai para baixo: ao lado, ele espremia o nome do carro. */}
+              {acao && (
+                <span className="mt-2.5 inline-flex min-h-9 items-center gap-1 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-brand-fg transition-colors group-hover:bg-brand-700 sm:hidden">
+                  {acao}
+                  <Avancar tamanho={16} />
+                </span>
+              )}
+            </div>
+            {acao ? (
+              <span className="hidden min-h-9 shrink-0 items-center gap-1 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-brand-fg transition-colors group-hover:bg-brand-700 sm:inline-flex">
+                {acao}
+                <Avancar tamanho={16} />
               </span>
-              <span>chegou {haQuanto(e.recebidoEm)}</span>
-            </p>
-          </div>
-          <span className="flex items-center gap-2 self-start sm:self-auto">
-            {e.naoLidas > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-tinta-2">
-                <IconeConversa tamanho={14} />
-                <ContadorDeMensagens total={e.naoLidas} />
-              </span>
+            ) : (
+              <Avancar
+                tamanho={18}
+                className="shrink-0 text-tinta-3 transition-transform duration-200 group-hover:translate-x-0.5"
+              />
             )}
-            <span className={SITUACOES_NO_BALCAO[e.situacao].cor}>
-              {e.situacao === "PEDIDO" && e.entrega ? rotuloDaEntrega(e.entrega) : SITUACOES_NO_BALCAO[e.situacao].rotulo}
-            </span>
-          </span>
-        </Link>
-      ))}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -326,9 +429,13 @@ export function EnvioDoBalcaoTela({
       {voltar}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-tinta">Cotação de {envio.oficina}</h1>
+          {/* O carro e o motor no título: é com eles que o balconista acha a aplicação. */}
+          <h1 className="text-xl font-bold text-tinta">
+            {descricaoDoVeiculo(envio.veiculo)}
+            {envio.veiculo.motor && <span className="ml-2 font-semibold text-tinta-2">{envio.veiculo.motor}</span>}
+          </h1>
           <p className="mt-0.5 text-sm text-tinta-3">
-            Chegou às {horaCurta(envio.recebidoEm)}
+            {envio.oficina} · chegou às {horaCurta(envio.recebidoEm)}
             {envio.respondidaEm && `, respondida às ${horaCurta(envio.respondidaEm)}`}
           </p>
         </div>
@@ -402,7 +509,15 @@ export function EnvioDoBalcaoTela({
       ) : (
         // A chave refaz o formulário se a cotação mudar de peças; as atualizações
         // automáticas não mexem no que o balconista está digitando.
-        <FormResposta key={envio.id} envio={envio} url={url} loja={loja} gravar={gravar} inicio={caminhos.inicio} />
+        <FormResposta
+          key={envio.id}
+          envio={envio}
+          url={url}
+          loja={loja}
+          gravar={gravar}
+          inicio={caminhos.inicio}
+          comBarraDeBaixo={!comCabecalho}
+        />
       )}
     </Moldura>
   );
@@ -535,7 +650,7 @@ function PedidoNoBalcao({
         {!proxima ? (
           <span className="status status-entregue">Entregue</span>
         ) : podeAvancar ? (
-          <Botao variante="sucesso" onClick={avancar} disabled={avancando}>
+          <Botao variante="sucesso" onClick={avancar} disabled={avancando} className="aperta w-full sm:w-auto">
             {avancando ? "Salvando..." : `Marcar: ${rotuloDaEntrega(proxima).toLowerCase()}`}
           </Botao>
         ) : (
@@ -984,6 +1099,7 @@ function FormResposta({
   loja,
   gravar,
   inicio,
+  comBarraDeBaixo,
 }: {
   envio: EnvioNoBalcao;
   url: string;
@@ -991,6 +1107,8 @@ function FormResposta({
   gravar: GravarEnvio;
   /** A caixa de entrada, para o "voltar às cotações". */
   inicio: string;
+  /** No painel da loja há a barra de navegação do celular: o botão de enviar para acima dela. */
+  comBarraDeBaixo: boolean;
 }) {
   const avisar = useAvisar();
   const prazoPadrao = String(prazoSugerido(loja));
@@ -1052,6 +1170,15 @@ function FormResposta({
       [pecaId]: { naoTem, ofertas: naoTem ? [] : r[pecaId].ofertas.length ? r[pecaId].ofertas : [vazia()] },
     }));
   }
+
+  // Pronta: "não tenho" marcado, ou ao menos uma marca com preço e nenhuma pela metade.
+  const pronta = (pecaId: string) => {
+    const r = rascunho[pecaId];
+    if (r.naoTem) return true;
+    const usadas = r.ofertas.filter((o) => o.marca.trim() || Number(o.preco) > 0);
+    return usadas.length > 0 && usadas.every((o) => o.marca.trim() && Number(o.preco) > 0);
+  };
+  const prontas = envio.pecas.filter((p) => pronta(p.id)).length;
 
   async function enviar() {
     const itens: Record<
@@ -1126,16 +1253,41 @@ function FormResposta({
       {envio.pecas.map((p) => {
         const r = rascunho[p.id];
         return (
-          <Painel key={p.id} titulo={`${p.quantidade}× ${p.descricao}`}>
-            <label className="mb-3 flex min-h-9 w-fit cursor-pointer items-center gap-2 text-sm text-tinta-2">
-              <input
-                type="checkbox"
-                checked={r.naoTem}
-                onChange={(e) => alternarNaoTem(p.id, e.target.checked)}
-                className="h-5 w-5 accent-brand-600"
-              />
-              Não tenho esta peça
-            </label>
+          <section key={p.id} className="rounded-xl border border-linha bg-superficie p-4 sm:p-5">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h2 className="font-semibold text-tinta">
+                <span className="text-tinta-3">{p.quantidade}×</span> {p.descricao}
+              </h2>
+              {pronta(p.id) && (
+                <span className="linha-entra inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-ok">
+                  <Confere tamanho={14} />
+                  {r.naoTem ? "Não tem" : "Pronta"}
+                </span>
+              )}
+            </div>
+            {/* Dois botões grandes em vez de uma caixinha: "não tenho" é resposta, não detalhe. */}
+            <div role="radiogroup" aria-label={`Tem ${p.descricao}?`} className="mb-3 grid grid-cols-2 gap-1.5">
+              {[
+                { valor: false, rotulo: "Tenho" },
+                { valor: true, rotulo: "Não tenho" },
+              ].map((opcao) => (
+                <button
+                  key={opcao.rotulo}
+                  type="button"
+                  role="radio"
+                  aria-checked={r.naoTem === opcao.valor}
+                  onClick={() => r.naoTem !== opcao.valor && alternarNaoTem(p.id, opcao.valor)}
+                  className={cn(
+                    "aperta min-h-11 rounded-lg border px-3 text-sm font-medium",
+                    r.naoTem === opcao.valor
+                      ? "border-brand-500 bg-brand-50 text-tinta"
+                      : "border-linha text-tinta-2 hover:border-brand-500"
+                  )}
+                >
+                  {opcao.rotulo}
+                </button>
+              ))}
+            </div>
 
             {!r.naoTem && (
               <div className="space-y-2">
@@ -1143,7 +1295,7 @@ function FormResposta({
                   <div
                     key={o.chave}
                     // No celular: marca; à vista e crédito lado a lado; prazo e lixeira embaixo.
-                    className="grid grid-cols-2 items-end gap-2 border-b border-linha pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_8rem_8rem_6rem_auto] sm:border-0 sm:pb-0"
+                    className="linha-entra grid grid-cols-2 items-end gap-2 border-b border-linha pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_8rem_8rem_6rem_auto] sm:border-0 sm:pb-0"
                   >
                     <Entrada
                       value={o.marca}
@@ -1211,7 +1363,7 @@ function FormResposta({
                 </Botao>
               </div>
             )}
-          </Painel>
+          </section>
         );
       })}
 
@@ -1228,12 +1380,37 @@ function FormResposta({
         </Campo>
       </Painel>
 
-      {erro && <Aviso>{erro}</Aviso>}
-
-      <div className="flex justify-end">
-        <Botao onClick={enviar} disabled={enviando} className="w-full sm:w-auto">
-          {enviando ? "Enviando..." : envio.respondidaEm ? "Enviar resposta corrigida" : "Enviar resposta para a oficina"}
-        </Botao>
+      {/* Barra presa embaixo: quanto falta e o botão, sempre à mão enquanto o balconista
+          desce pelas peças. No painel, para acima da barra de navegação do celular. */}
+      <div
+        className={cn(
+          "sticky z-20 -mx-4 border-t border-linha bg-fundo/95 px-4 py-3 backdrop-blur",
+          comBarraDeBaixo ? "bottom-[calc(3.25rem+env(safe-area-inset-bottom,0px))] md:bottom-0" : "bottom-0 pb-segura"
+        )}
+      >
+        {erro && (
+          <div className="mb-2" role="alert">
+            <Aviso>{erro}</Aviso>
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-tinta">
+              {prontas === envio.pecas.length
+                ? "Tudo pronto para mandar"
+                : `${prontas} de ${envio.pecas.length} ${envio.pecas.length === 1 ? "peça pronta" : "peças prontas"}`}
+            </p>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-superficie-3">
+              <div
+                className="h-full origin-left rounded-full bg-brand-600 transition-transform duration-500 [transition-timing-function:cubic-bezier(0.23,1,0.32,1)]"
+                style={{ transform: `scaleX(${envio.pecas.length ? prontas / envio.pecas.length : 0})` }}
+              />
+            </div>
+          </div>
+          <Botao onClick={enviar} disabled={enviando} className="aperta shrink-0">
+            {enviando ? "Enviando..." : envio.respondidaEm ? "Enviar correção" : "Enviar resposta"}
+          </Botao>
+        </div>
       </div>
     </>
   );
